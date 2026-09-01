@@ -43,3 +43,32 @@ partidas = respuesta_partidas.json()
 print(f"Encontradas {len(partidas)} partidas:")
 for partida in partidas:
     print(f"  {partida}")
+
+# --- Detalle de una partida ---
+
+primera_partida = partidas[0]
+
+url_detalle = f"https://europe.api.riotgames.com/lol/match/v5/matches/{primera_partida}"
+
+respuesta_detalle = requests.get(
+    url_detalle,
+    headers={"X-Riot-Token": api_key}
+)
+
+if respuesta_detalle.status_code != 200:
+    print(f"Error al obtener el detalle: {respuesta_detalle.status_code}")
+    sys.exit(1)
+
+detalle = respuesta_detalle.json()
+
+participantes = detalle["info"]["participants"]
+
+yo = None
+for participante in participantes:
+    if participante["puuid"] == puuid:
+        yo = participante
+        break
+
+print(f"\nCampeón: {yo['championName']}")
+print(f"KDA: {yo['kills']}/{yo['deaths']}/{yo['assists']}")
+print(f"Victoria: {yo['win']}")
