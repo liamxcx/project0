@@ -18,6 +18,8 @@ La aplicación, dado un Riot ID:
 4. Guarda invocador, partida y participación en PostgreSQL sin duplicar
 
 Incluye reintentos ante fallos de red y control del límite de peticiones.
+El arranque está ordenado: la aplicación espera a que PostgreSQL esté
+listo para aceptar conexiones.
 
 ## Requisitos
 
@@ -55,27 +57,20 @@ docker compose up
 Levanta la aplicación y PostgreSQL. El esquema de `schema.sql` se aplica
 automáticamente la primera vez que se inicializa la base de datos.
 
-Si se cambia el código o las dependencias, hay que reconstruir la imagen:
+Qué comando usar según lo que hayas cambiado:
 
 ```bash
-docker compose up --build
+docker compose up            # cambios en docker-compose.yml o .env
+docker compose up --build    # cambios en main.py o requirements.txt
+docker compose down -v       # cambios en schema.sql (borra los datos)
 ```
 
-Para parar:
+El `--build` hace falta porque `main.py` y `requirements.txt` se copian
+dentro de la imagen. El resto se lee al arrancar.
 
-```bash
-docker compose down
-```
-
-Para empezar de cero borrando también los datos:
-
-```bash
-docker compose down -v
-```
-
-Ese `-v` hace falta si se modifica `schema.sql`, porque el script solo se
-ejecuta cuando la base de datos está vacía. Más adelante habría que
-sustituirlo por migraciones para no perder el historial.
+El `-v` hace falta con `schema.sql` porque el script solo se ejecuta
+cuando la base de datos está vacía. Más adelante habría que sustituirlo
+por migraciones para no perder el historial.
 
 ## Base de datos
 
@@ -91,10 +86,10 @@ ejecutar las veces que haga falta: solo guarda lo que no tenía.
 
 Los datos viven en el volumen `datos_db`, que sobrevive a `docker compose down`.
 
-Para inspeccionar la base de datos:
+Para ver las partidas guardadas sin entrar en la base de datos:
 
 ```bash
-docker compose exec db psql -U lol -d lolstats
+docker compose exec db psql -U lol -d lolstats -c "SELECT * FROM participaciones;"
 ```
 
 ## Estructura
@@ -117,6 +112,11 @@ Otras, como LEAGUE-V4 para el rango, usan la plataforma:
 Dentro de la red de Compose los servicios se alcanzan por su nombre de
 servicio, no por `localhost`.
 
+El servicio `db` tiene un healthcheck con `pg_isready`, y `app` usa
+`depends_on` con `condition: service_healthy`. Sin eso, `depends_on`
+solo esperaría a que el contenedor arrancase, no a que PostgreSQL
+aceptase conexiones, y la aplicación podría fallar al conectar.
+
 Códigos de error habituales de la API:
 
 - `401` / `403` — clave inválida o caducada, hay que regenerarla
@@ -127,7 +127,6 @@ Tras regenerar la clave puede tardar unos segundos en ser válida.
 
 ## Pendiente
 
-- Healthcheck en PostgreSQL y `depends_on` con `condition`
 - Migraciones para modificar el esquema sin perder datos
 - API propia con FastAPI
 - Caché con Redis y actualización programada
