@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import psycopg
 from urllib.parse import quote
 
 import requests
@@ -13,6 +14,11 @@ game_name = os.getenv("RIOT_GAME_NAME")
 tag_line = os.getenv("RIOT_TAG_LINE")
 
 BASE = "https://europe.api.riotgames.com"
+
+DB_URL = (
+    f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
+    f"@{os.getenv('DB_HOST', 'db')}:5432/{os.getenv('POSTGRES_DB')}"
+)
 
 
 def pedir(url, params=None, intentos=3):
@@ -93,3 +99,8 @@ for identificador in partidas:
 
     # Sin pausa, Riot corta la conexión antes de llegar al 429
     time.sleep(0.1)
+
+with psycopg.connect(DB_URL) as conexion:
+    with conexion.cursor() as cursor:
+        cursor.execute("SELECT COUNT(*) FROM partidas")
+        print(f"Partidas en la base de datos: {cursor.fetchone()[0]}")
