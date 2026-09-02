@@ -1,9 +1,10 @@
 import os
 import sys
 import time
-import psycopg
+from datetime import datetime, timezone
 from urllib.parse import quote
 
+import psycopg
 import requests
 from dotenv import load_dotenv
 
@@ -79,28 +80,78 @@ partidas = respuesta_lista.json()
 
 print(f"Encontradas {len(partidas)} partidas\n")
 
-for identificador in partidas:
-    respuesta = pedir(f"{BASE}/lol/match/v5/matches/{identificador}")
-
-    if respuesta is None or respuesta.status_code != 200:
-        print(f"Error en {identificador}")
-        continue
-
-    participantes = respuesta.json()["info"]["participants"]
-
-    yo = None
-    for participante in participantes:
-        if participante["puuid"] == puuid:
-            yo = participante
-            break
-
-    kda = f"{yo['kills']}/{yo['deaths']}/{yo['assists']}"
-    print(f"{yo['championName']:<15} {kda:<10} {'Victoria' if yo['win'] else 'Derrota'}")
-
-    # Sin pausa, Riot corta la conexión antes de llegar al 429
-    time.sleep(0.1)
+nuevas = 0
 
 with psycopg.connect(DB_URL) as conexion:
     with conexion.cursor() as cursor:
-        cursor.execute("SELECT COUNT(*) FROM partidas")
-        print(f"Partidas en la base de datos: {cursor.fetchone()[0]}")
+
+        # El invocador va primero: las participaciones lo referencian
+        cursor.execute(
+            """
+            INSERT INTO invocadores (puuid, game_name, tag_line)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (puuid) DO NOTHING
+            """,
+            (puuid, game_name, tag_line),
+        )
+
+        for identificador in partidas:
+            respuesta = pedir(f"{BASE}/lol/match/v5/matches/{identificador}")
+
+            if respuesta is None or respuesta.status_code != 200:
+                print(f"Error en {identificador}")
+                continue
+
+            info = respuesta.json()["info"]
+
+            yo = None
+            for participante in info["participants"]:
+                if participante["puuid"] == puuid:
+                    yo = participante
+                    break
+
+            # Riot da la fecha en milisegundos desde 1970
+            fecha = datetime.fromtimestamp(info["gameCreation"] / 1000, timezone.utc)
+
+            cursor.execute(
+                """
+                INSERT INTO partidas (match_id, fecha, duracion_seg, cola_id)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (match_id) DO NOTHING
+                """,
+                (identificador, fecha, info["gameDuration"], info["queueId"]),
+            )
+
+            insertada = cursor.rowcount == 1
+
+            cursor.execute(
+                """
+                INSERT INTO participaciones
+                    (match_id, puuid, campeon, posicion, kills, deaths, assists, victoria)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (match_id, puuid) DO NOTHING
+                """,
+                (
+                    identificador,
+                    puuid,
+                    yo["championName"],
+                    yo["teamPosition"],
+                    yo["kills"],
+                    yo["deaths"],
+                    yo["assists"],
+                    yo["win"],
+                ),
+            )
+
+            if insertada:
+                nuevas += 1
+
+            kda = f"{yo['kills']}/{yo['deaths']}/{yo['assists']}"
+            marca = "nueva" if insertada else "ya estaba"
+            print(f"{yo['championName']:<15} {kda:<10} {'Victoria' if yo['win'] else 'Derrota':<10} {marca}")
+
+            time.sleep(0.1)
+
+        conexion.commit()
+
+print(f"\nGuardadas {nuevas} partidas nuevas")

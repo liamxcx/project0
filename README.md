@@ -1,7 +1,7 @@
 # Proyecto 0
 
 Herramienta personal de estadísticas de League of Legends.
-Consume la API de Riot Games y guarda el historial de partidas.
+Consume la API de Riot Games y guarda el historial de partidas en PostgreSQL.
 
 Proyecto de aprendizaje: el objetivo es llegar a una aplicación
 contenerizada con base de datos, API propia y frontend.
@@ -10,16 +10,14 @@ Solo se procesan partidas de Ranked Solo/Duo (queueId 420).
 
 ## Estado actual
 
-Script en Python que, dado un Riot ID:
+La aplicación, dado un Riot ID:
 
 1. Obtiene el PUUID de la cuenta (ACCOUNT-V1)
-2. Lista los identificadores de las últimas partidas (MATCH-V5)
-3. Descarga el detalle de cada partida y muestra campeón, KDA y resultado
+2. Lista los identificadores de las últimas partidas de ranked (MATCH-V5)
+3. Descarga el detalle de cada partida
+4. Guarda invocador, partida y participación en PostgreSQL sin duplicar
 
 Incluye reintentos ante fallos de red y control del límite de peticiones.
-
-Hay una base de datos PostgreSQL levantada con su esquema, pendiente
-de conectar con la aplicación.
 
 ## Requisitos
 
@@ -39,22 +37,31 @@ RIOT_TAG_LINE=EUW
 POSTGRES_USER=lol
 POSTGRES_PASSWORD=
 POSTGRES_DB=lolstats
+DB_HOST=db
 ```
 
 El Riot ID va separado: si eres `TuNombre#EUW`, el nombre va en
 `RIOT_GAME_NAME` y el tag en `RIOT_TAG_LINE`, sin almohadilla.
 
-## Ejecución con Docker Compose
+`DB_HOST` es `db` dentro de Compose. Para ejecutar el script fuera de
+Docker hay que ponerlo a `localhost`.
+
+## Ejecución
 
 ```bash
 docker compose up
 ```
 
-Levanta dos servicios: la aplicación y una base de datos PostgreSQL.
-El esquema de `schema.sql` se aplica automáticamente la primera vez
-que se inicializa la base de datos.
+Levanta la aplicación y PostgreSQL. El esquema de `schema.sql` se aplica
+automáticamente la primera vez que se inicializa la base de datos.
 
-Para parar y limpiar:
+Si se cambia el código o las dependencias, hay que reconstruir la imagen:
+
+```bash
+docker compose up --build
+```
+
+Para parar:
 
 ```bash
 docker compose down
@@ -66,22 +73,28 @@ Para empezar de cero borrando también los datos:
 docker compose down -v
 ```
 
-Ese `-v` hace falta si se modifica `schema.sql`, porque el script solo
-se ejecuta cuando la base de datos está vacía.
+Ese `-v` hace falta si se modifica `schema.sql`, porque el script solo se
+ejecuta cuando la base de datos está vacía. Más adelante habría que
+sustituirlo por migraciones para no perder el historial.
 
-## Ejecución en local sin Docker
+## Base de datos
+
+Tres tablas:
+
+- `invocadores` — traduce cada PUUID a un Riot ID legible
+- `partidas` — fecha, duración y tipo de cola de cada partida
+- `participaciones` — campeón, posición, KDA y resultado de un invocador
+  en una partida
+
+Las inserciones usan `ON CONFLICT DO NOTHING`, así que el script se puede
+ejecutar las veces que haga falta: solo guarda lo que no tenía.
+
+Los datos viven en el volumen `datos_db`, que sobrevive a `docker compose down`.
+
+Para inspeccionar la base de datos:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python main.py
-```
-
-Recordar activar el entorno antes de cada sesión:
-
-```bash
-source .venv/bin/activate
+docker compose exec db psql -U lol -d lolstats
 ```
 
 ## Estructura
@@ -101,8 +114,8 @@ Las rutas usan hosts distintos según la API. Las que usa este proyecto
 Otras, como LEAGUE-V4 para el rango, usan la plataforma:
 `euw1.api.riotgames.com`.
 
-Dentro de la red de Compose los servicios se alcanzan por su nombre,
-no por `localhost`. El host de la base de datos es `db`.
+Dentro de la red de Compose los servicios se alcanzan por su nombre de
+servicio, no por `localhost`.
 
 Códigos de error habituales de la API:
 
@@ -114,7 +127,8 @@ Tras regenerar la clave puede tardar unos segundos en ser válida.
 
 ## Pendiente
 
-- Conectar la aplicación con PostgreSQL y persistir las partidas
+- Healthcheck en PostgreSQL y `depends_on` con `condition`
+- Migraciones para modificar el esquema sin perder datos
 - API propia con FastAPI
 - Caché con Redis y actualización programada
 - Frontend para visualizar las estadísticas
