@@ -41,9 +41,24 @@ print(f"Consultando datos de {game_name}#{tag_line}")
 # ACCOUNT-V1 usa región grande (europe), no plataforma (euw1)
 respuesta_cuenta = pedir(f"{BASE}/riot/account/v1/accounts/by-riot-id/{quote(game_name)}/{tag_line}")
 
-# 401/403 = clave inválida o caducada. 404 = Riot ID incorrecto.
-if respuesta_cuenta is None or respuesta_cuenta.status_code != 200:
-    print("No se ha podido obtener la cuenta")
+if respuesta_cuenta is None:
+    print("No se ha podido conectar con la API tras varios intentos")
+    sys.exit(1)
+
+if respuesta_cuenta.status_code != 200:
+    codigos = {
+        401: "no autorizado",
+        403: "prohibido",
+        404: "no encontrado",
+        429: "demasiadas peticiones",
+        500: "error interno del servidor",
+        503: "servicio no disponible",
+    }
+    significado = codigos.get(respuesta_cuenta.status_code, "error desconocido")
+    print(f"Error al obtener la cuenta: {respuesta_cuenta.status_code} ({significado})")
+
+    if respuesta_cuenta.status_code in (401, 403):
+        print("La clave ha caducado. Regenérala en developer.riotgames.com")
     sys.exit(1)
 
 puuid = respuesta_cuenta.json()["puuid"]
