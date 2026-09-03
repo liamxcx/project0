@@ -21,8 +21,8 @@ Incluye reintentos ante fallos de red y control del límite de peticiones.
 El arranque está ordenado: la aplicación espera a que PostgreSQL esté
 listo para aceptar conexiones.
 
-Hay además una API propia con FastAPI. De momento solo expone un endpoint
-de salud: todavía no sirve datos.
+Hay además una API propia con FastAPI que sirve las partidas ya guardadas,
+leyendo de PostgreSQL y sin volver a llamar a Riot.
 
 ## Requisitos
 
@@ -91,9 +91,9 @@ por migraciones para no perder el historial.
 
 Tres tablas:
 
-- `invocadores` — traduce cada PUUID a un Riot ID legible
-- `partidas` — fecha, duración y tipo de cola de cada partida
-- `participaciones` — campeón, posición, KDA y resultado de un invocador
+- `summoners` — traduce cada PUUID a un Riot ID legible
+- `matches` — fecha, duración y tipo de cola de cada partida
+- `participants` — campeón, posición, KDA y resultado de un invocador
   en una partida
 
 Las inserciones usan `ON CONFLICT DO NOTHING`, así que el script se puede
@@ -104,7 +104,7 @@ Los datos viven en el volumen `datos_db`, que sobrevive a `docker compose down`.
 Para ver las partidas guardadas sin entrar en la base de datos:
 
 ```bash
-docker compose exec db psql -U lol -d lolstats -c "SELECT * FROM participaciones;"
+docker compose exec db psql -U loltest -d lolstats -c "SELECT * FROM participants;"
 ```
 
 ## API
@@ -116,6 +116,12 @@ Endpoints:
 
 - `GET /health` — devuelve `{"estado": "ok"}`. No consulta la base de
   datos: solo confirma que el servicio responde.
+- `GET /matches` — las 20 partidas más recientes, de la más nueva a la
+  más antigua. Cruza `participants` con `matches` y devuelve campeón,
+  posición, KDA, resultado, fecha y duración.
+
+Al levantar `api`, Compose arranca antes `db` y espera a su healthcheck,
+porque `/matches` no puede responder sin base de datos.
 
 FastAPI genera la documentación sola a partir de las rutas registradas:
 
@@ -126,6 +132,22 @@ Comprobación rápida:
 
 ```bash
 curl http://localhost:8000/health
+curl -s http://localhost:8000/matches | python3 -m json.tool
+```
+
+Una partida de `/matches`:
+
+```json
+{
+  "champion": "Zeri",
+  "position": "BOTTOM",
+  "kills": 12,
+  "deaths": 7,
+  "assists": 15,
+  "win": true,
+  "played_at": "2026-08-28T12:21:15.912000+00:00",
+  "duration_seconds": 2268
+}
 ```
 
 ## Estructura
@@ -162,6 +184,9 @@ El servicio `db` tiene un healthcheck con `pg_isready`, y `app` usa
 solo esperaría a que el contenedor arrancase, no a que PostgreSQL
 aceptase conexiones, y la aplicación podría fallar al conectar.
 
+Las tablas, las columnas y las rutas están en inglés; los mensajes de la
+consola, los comentarios y esta documentación, en español.
+
 Códigos de error habituales de la API:
 
 - `401` / `403` — clave inválida o caducada, hay que regenerarla
@@ -173,7 +198,7 @@ Tras regenerar la clave puede tardar unos segundos en ser válida.
 ## Pendiente
 
 - Migraciones para modificar el esquema sin perder datos
-- Endpoints de la API para consultar partidas y estadísticas
+- Estadísticas agregadas por campeón en la API
 - Caché con Redis y actualización programada
 - Frontend para visualizar las estadísticas
 - Despliegue en Kubernetes

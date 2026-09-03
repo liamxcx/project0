@@ -1,4 +1,16 @@
+import os
+
+import psycopg
+from dotenv import load_dotenv
 from fastapi import FastAPI
+from psycopg.rows import dict_row
+
+load_dotenv()
+
+DB_URL = (
+    f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
+    f"@{os.getenv('DB_HOST', 'db')}:5432/{os.getenv('POSTGRES_DB')}"
+)
 
 app = FastAPI(title="Estadísticas de LoL")
 
@@ -6,3 +18,26 @@ app = FastAPI(title="Estadísticas de LoL")
 @app.get("/health")
 def health():
     return {"estado": "ok"}
+
+
+@app.get("/matches")
+def matches():
+    with psycopg.connect(DB_URL, row_factory=dict_row) as conexion:
+        with conexion.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT p.champion,
+                       p.position,
+                       p.kills,
+                       p.deaths,
+                       p.assists,
+                       p.win,
+                       m.played_at,
+                       m.duration_seconds
+                FROM participants p
+                JOIN matches m ON m.match_id = p.match_id
+                ORDER BY m.played_at DESC
+                LIMIT 20
+                """
+            )
+            return cursor.fetchall()
