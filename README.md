@@ -1,4 +1,4 @@
-# Proyecto 0
+# Project 0
 
 Herramienta personal de estadísticas de League of Legends.
 Consume la API de Riot Games y guarda el historial de partidas en PostgreSQL.
