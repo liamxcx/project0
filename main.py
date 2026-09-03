@@ -88,7 +88,7 @@ with psycopg.connect(DB_URL) as conexion:
         # El invocador va primero: las participaciones lo referencian
         cursor.execute(
             """
-            INSERT INTO invocadores (puuid, game_name, tag_line)
+            INSERT INTO summoners (puuid, game_name, tag_line)
             VALUES (%s, %s, %s)
             ON CONFLICT (puuid) DO NOTHING
             """,
@@ -115,7 +115,7 @@ with psycopg.connect(DB_URL) as conexion:
 
             cursor.execute(
                 """
-                INSERT INTO partidas (match_id, fecha, duracion_seg, cola_id)
+                INSERT INTO matches (match_id, played_at, duration_seconds, queue_id)
                 VALUES (%s, %s, %s, %s)
                 ON CONFLICT (match_id) DO NOTHING
                 """,
@@ -126,8 +126,8 @@ with psycopg.connect(DB_URL) as conexion:
 
             cursor.execute(
                 """
-                INSERT INTO participaciones
-                    (match_id, puuid, campeon, posicion, kills, deaths, assists, victoria)
+                INSERT INTO participants
+                    (match_id, puuid, champion, position, kills, deaths, assists, win)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (match_id, puuid) DO NOTHING
                 """,
