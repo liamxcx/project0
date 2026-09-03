@@ -21,6 +21,9 @@ Incluye reintentos ante fallos de red y control del límite de peticiones.
 El arranque está ordenado: la aplicación espera a que PostgreSQL esté
 listo para aceptar conexiones.
 
+Hay además una API propia con FastAPI. De momento solo expone un endpoint
+de salud: todavía no sirve datos.
+
 ## Requisitos
 
 - Docker
@@ -54,19 +57,31 @@ Docker hay que ponerlo a `localhost`.
 docker compose up
 ```
 
-Levanta la aplicación y PostgreSQL. El esquema de `schema.sql` se aplica
+Levanta los tres servicios. El esquema de `schema.sql` se aplica
 automáticamente la primera vez que se inicializa la base de datos.
+
+Los servicios no se comportan igual:
+
+- `db` y `api` son procesos largos: se quedan corriendo hasta que se paran.
+- `app` es un script: descarga las partidas, las guarda y termina. En
+  `docker compose ps` aparece como `Exited (0)`, que no es un error.
+
+Para levantar solo la API, sin gastar peticiones a Riot:
+
+```bash
+docker compose up -d --build api
+```
 
 Qué comando usar según lo que hayas cambiado:
 
 ```bash
 docker compose up            # cambios en docker-compose.yml o .env
-docker compose up --build    # cambios en main.py o requirements.txt
+docker compose up --build    # cambios en main.py, api.py o requirements.txt
 docker compose down -v       # cambios en schema.sql (borra los datos)
 ```
 
-El `--build` hace falta porque `main.py` y `requirements.txt` se copian
-dentro de la imagen. El resto se lee al arrancar.
+El `--build` hace falta porque `main.py`, `api.py` y `requirements.txt`
+se copian dentro de la imagen. El resto se lee al arrancar.
 
 El `-v` hace falta con `schema.sql` porque el script solo se ejecuta
 cuando la base de datos está vacía. Más adelante habría que sustituirlo
@@ -92,10 +107,32 @@ Para ver las partidas guardadas sin entrar en la base de datos:
 docker compose exec db psql -U lol -d lolstats -c "SELECT * FROM participaciones;"
 ```
 
+## API
+
+Servicio `api`, con FastAPI y uvicorn. Escucha en `http://localhost:8000`,
+publicado solo en `127.0.0.1`.
+
+Endpoints:
+
+- `GET /health` — devuelve `{"estado": "ok"}`. No consulta la base de
+  datos: solo confirma que el servicio responde.
+
+FastAPI genera la documentación sola a partir de las rutas registradas:
+
+- `http://localhost:8000/docs` — documentación navegable
+- `http://localhost:8000/openapi.json` — el esquema en crudo
+
+Comprobación rápida:
+
+```bash
+curl http://localhost:8000/health
+```
+
 ## Estructura
 
 ```
-main.py              lógica de la aplicación
+main.py              descarga de partidas y guardado en la base de datos
+api.py               API con FastAPI
 schema.sql           definición de las tablas
 Dockerfile           imagen de la aplicación
 docker-compose.yml   orquestación de los servicios
@@ -111,6 +148,14 @@ Otras, como LEAGUE-V4 para el rango, usan la plataforma:
 
 Dentro de la red de Compose los servicios se alcanzan por su nombre de
 servicio, no por `localhost`.
+
+`api` arranca uvicorn con `--host 0.0.0.0`. Por defecto uvicorn escucha en
+`127.0.0.1`, que dentro del contenedor significa solo el propio contenedor:
+el puerto quedaría publicado sin nadie escuchando detrás.
+
+`app` y `api` comparten Dockerfile y se diferencian por el `command` del
+compose: `app` usa el `CMD` de la imagen (`python main.py`) y `api` lo
+sustituye por uvicorn.
 
 El servicio `db` tiene un healthcheck con `pg_isready`, y `app` usa
 `depends_on` con `condition: service_healthy`. Sin eso, `depends_on`
@@ -128,7 +173,7 @@ Tras regenerar la clave puede tardar unos segundos en ser válida.
 ## Pendiente
 
 - Migraciones para modificar el esquema sin perder datos
-- API propia con FastAPI
+- Endpoints de la API para consultar partidas y estadísticas
 - Caché con Redis y actualización programada
 - Frontend para visualizar las estadísticas
 - Despliegue en Kubernetes
