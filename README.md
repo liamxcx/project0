@@ -30,14 +30,14 @@ está guardado, así que consultar las estadísticas no gasta peticiones.
 
 ### Qué hay hecho
 
-- **Recolección** — dado un Riot ID: PUUID (ACCOUNT-V1), identificadores
+- **`collector`** — dado un Riot ID: PUUID (ACCOUNT-V1), identificadores
   de las últimas partidas de ranked (MATCH-V5), detalle de cada una y
   guardado de invocador, partida y participación sin duplicar. Con
   reintentos ante fallos de red y control del límite de peticiones.
-- **Base de datos** — tres tablas en PostgreSQL, volumen con nombre para
+- **`db`** — tres tablas en PostgreSQL, volumen con nombre para
   que los datos sobrevivan a los reinicios y arranque ordenado con
   healthcheck.
-- **API** — cuatro endpoints con FastAPI, agregados calculados en SQL y
+- **`api`** — cuatro endpoints con FastAPI, agregados calculados en SQL y
   documentación interactiva automática en `/docs`.
 
 ### Qué falta
