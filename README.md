@@ -10,19 +10,42 @@ Solo se procesan partidas de Ranked Solo/Duo (queueId 420).
 
 ## Estado actual
 
-La aplicación, dado un Riot ID:
+Recolección, base de datos y API propia funcionando. Falta la caché, el
+frontend y el despliegue.
 
-1. Obtiene el PUUID de la cuenta (ACCOUNT-V1)
-2. Lista los identificadores de las últimas partidas de ranked (MATCH-V5)
-3. Descarga el detalle de cada partida
-4. Guarda invocador, partida y participación en PostgreSQL sin duplicar
+### Cómo encajan las piezas
 
-Incluye reintentos ante fallos de red y control del límite de peticiones.
-El arranque está ordenado: la aplicación espera a que PostgreSQL esté
-listo para aceptar conexiones.
+```
+   API de Riot
+        │
+        │ HTTPS
+        ▼
+  collector.py  ──escribe──▶  PostgreSQL  ──lee──▶  api.py  ──HTTP──▶  cliente
+  servicio: collector          servicio: db      servicio: api        curl, /docs
+```
 
-Hay además una API propia con FastAPI que sirve las partidas ya guardadas,
-leyendo de PostgreSQL y sin volver a llamar a Riot.
+`collector` arranca, descarga, guarda y termina. `db` y `api` se quedan
+en marcha. Ningún endpoint de la API llama a Riot: sirve solo lo que ya
+está guardado, así que consultar las estadísticas no gasta peticiones.
+
+### Qué hay hecho
+
+- **Recolección** — dado un Riot ID: PUUID (ACCOUNT-V1), identificadores
+  de las últimas partidas de ranked (MATCH-V5), detalle de cada una y
+  guardado de invocador, partida y participación sin duplicar. Con
+  reintentos ante fallos de red y control del límite de peticiones.
+- **Base de datos** — tres tablas en PostgreSQL, volumen con nombre para
+  que los datos sobrevivan a los reinicios y arranque ordenado con
+  healthcheck.
+- **API** — cuatro endpoints con FastAPI, agregados calculados en SQL y
+  documentación interactiva automática en `/docs`.
+
+### Qué falta
+
+- Caché con Redis y refresco automático de las partidas
+- Frontend para ver las estadísticas y comparar invocadores
+- Copia de seguridad de la base de datos
+- Despliegue en Kubernetes
 
 ## Requisitos
 
@@ -176,13 +199,14 @@ Una partida de `/matches`:
 ## Estructura
 
 ```
-collector.py         descarga de partidas y guardado en la base de datos
-api.py               API con FastAPI
-config.py            configuración leída del .env, compartida por los dos
-schema.sql           definición de las tablas
-Dockerfile           imagen de la aplicación
-docker-compose.yml   orquestación de los servicios
-requirements.txt     dependencias de Python
+collector.py         baja partidas de Riot y las guarda    → servicio collector
+api.py               sirve lo guardado, cuatro endpoints   → servicio api
+config.py            la configuración, en un solo sitio    → lo importan los dos
+schema.sql           summoners, matches, participants      → servicio db
+Dockerfile           la imagen que comparten los dos servicios
+docker-compose.yml   los tres servicios, el volumen y los healthchecks
+requirements.txt     dependencias de Python, con versiones fijadas
+.env                 los valores reales (fuera del repo y de la imagen)
 ```
 
 ## Notas
@@ -230,9 +254,9 @@ Códigos de error habituales de la API:
 
 Tras regenerar la clave puede tardar unos segundos en ser válida.
 
-## Pendiente
+## Deuda técnica
 
-- Migraciones para modificar el esquema sin perder datos
-- Caché con Redis y actualización programada
-- Frontend para visualizar las estadísticas
-- Despliegue en Kubernetes
+- Migraciones para modificar el esquema sin perder datos. Ahora un cambio
+  en `schema.sql` obliga a `docker compose down -v`, que borra el historial.
+- Decidir si `/docs` y `/redoc` se desactivan al desplegar fuera de local.
+  Se hace con `docs_url=None` al crear la aplicación.
