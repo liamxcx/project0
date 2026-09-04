@@ -22,68 +22,74 @@ def health():
 
 @app.get("/matches")
 def matches():
-    with psycopg.connect(DB_URL, row_factory=dict_row) as conexion:
-        with conexion.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT p.champion,
-                       p.position,
-                       p.kills,
-                       p.deaths,
-                       p.assists,
-                       p.win,
-                       m.played_at,
-                       m.duration_seconds
-                FROM participants p
-                JOIN matches m ON m.match_id = p.match_id
-                ORDER BY m.played_at DESC
-                LIMIT 20
-                """
-            )
-            return cursor.fetchall()
+    with (
+        psycopg.connect(DB_URL, row_factory=dict_row) as conexion,
+        conexion.cursor() as cursor,
+    ):
+        cursor.execute(
+            """
+            SELECT p.champion,
+                   p.position,
+                   p.kills,
+                   p.deaths,
+                   p.assists,
+                   p.win,
+                   m.played_at,
+                   m.duration_seconds
+            FROM participants p
+            JOIN matches m ON m.match_id = p.match_id
+            ORDER BY m.played_at DESC
+            LIMIT 20
+            """
+        )
+        return cursor.fetchall()
 
 
 @app.get("/champions")
 def champions():
-    with psycopg.connect(DB_URL, row_factory=dict_row) as conexion:
-        with conexion.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT champion,
-                       COUNT(*) AS games,
-                       COUNT(*) FILTER (WHERE win) AS wins,
-                       ROUND(100.0 * COUNT(*) FILTER (WHERE win) / COUNT(*), 1) AS winrate,
-                       ROUND(AVG(kills), 1) AS avg_kills,
-                       ROUND(AVG(deaths), 1) AS avg_deaths,
-                       ROUND(AVG(assists), 1) AS avg_assists
-                FROM participants
-                GROUP BY champion
-                ORDER BY games DESC, champion
-                """
-            )
-            return cursor.fetchall()
+    with (
+        psycopg.connect(DB_URL, row_factory=dict_row) as conexion,
+        conexion.cursor() as cursor,
+    ):
+        cursor.execute(
+            """
+            SELECT champion,
+                   COUNT(*) AS games,
+                   COUNT(*) FILTER (WHERE win) AS wins,
+                   ROUND(100.0 * COUNT(*) FILTER (WHERE win) / COUNT(*), 1) AS winrate,
+                   ROUND(AVG(kills), 1) AS avg_kills,
+                   ROUND(AVG(deaths), 1) AS avg_deaths,
+                   ROUND(AVG(assists), 1) AS avg_assists
+            FROM participants
+            GROUP BY champion
+            ORDER BY games DESC, champion
+            """
+        )
+        return cursor.fetchall()
 
 
 @app.get("/champions/{champion}")
 def champion_stats(champion: str):
-    with psycopg.connect(DB_URL, row_factory=dict_row) as conexion:
-        with conexion.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT champion,
-                       COUNT(*) AS games,
-                       COUNT(*) FILTER (WHERE win) AS wins,
-                       ROUND(100.0 * COUNT(*) FILTER (WHERE win) / COUNT(*), 1) AS winrate,
-                       ROUND(AVG(kills), 1) AS avg_kills,
-                       ROUND(AVG(deaths), 1) AS avg_deaths,
-                       ROUND(AVG(assists), 1) AS avg_assists
-                FROM participants
-                WHERE LOWER(champion) = LOWER(%s)
-                GROUP BY champion
-                """,
-                (champion,),
-            )
-            fila = cursor.fetchone()
+    with (
+        psycopg.connect(DB_URL, row_factory=dict_row) as conexion,
+        conexion.cursor() as cursor,
+    ):
+        cursor.execute(
+            """
+            SELECT champion,
+                   COUNT(*) AS games,
+                   COUNT(*) FILTER (WHERE win) AS wins,
+                   ROUND(100.0 * COUNT(*) FILTER (WHERE win) / COUNT(*), 1) AS winrate,
+                   ROUND(AVG(kills), 1) AS avg_kills,
+                   ROUND(AVG(deaths), 1) AS avg_deaths,
+                   ROUND(AVG(assists), 1) AS avg_assists
+            FROM participants
+            WHERE LOWER(champion) = LOWER(%s)
+            GROUP BY champion
+            """,
+            (champion,),
+        )
+        fila = cursor.fetchone()
 
     if fila is None:
         raise HTTPException(status_code=404, detail=f"Sin partidas con {champion}")

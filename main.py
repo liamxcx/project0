@@ -82,76 +82,78 @@ print(f"Encontradas {len(partidas)} partidas\n")
 
 nuevas = 0
 
-with psycopg.connect(DB_URL) as conexion:
-    with conexion.cursor() as cursor:
+with (
+    psycopg.connect(DB_URL) as conexion,
+    conexion.cursor() as cursor,
+):
 
-        # El invocador va primero: las participaciones lo referencian
+    # El invocador va primero: las participaciones lo referencian
+    cursor.execute(
+        """
+        INSERT INTO summoners (puuid, game_name, tag_line)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (puuid) DO NOTHING
+        """,
+        (puuid, game_name, tag_line),
+    )
+
+    for identificador in partidas:
+        respuesta = pedir(f"{BASE}/lol/match/v5/matches/{identificador}")
+
+        if respuesta is None or respuesta.status_code != 200:
+            print(f"Error en {identificador}")
+            continue
+
+        info = respuesta.json()["info"]
+
+        yo = None
+        for participante in info["participants"]:
+            if participante["puuid"] == puuid:
+                yo = participante
+                break
+
+        # Riot da la fecha en milisegundos desde 1970
+        fecha = datetime.fromtimestamp(info["gameCreation"] / 1000, timezone.utc)
+
         cursor.execute(
             """
-            INSERT INTO summoners (puuid, game_name, tag_line)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (puuid) DO NOTHING
+            INSERT INTO matches (match_id, played_at, duration_seconds, queue_id)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (match_id) DO NOTHING
             """,
-            (puuid, game_name, tag_line),
+            (identificador, fecha, info["gameDuration"], info["queueId"]),
         )
 
-        for identificador in partidas:
-            respuesta = pedir(f"{BASE}/lol/match/v5/matches/{identificador}")
+        insertada = cursor.rowcount == 1
 
-            if respuesta is None or respuesta.status_code != 200:
-                print(f"Error en {identificador}")
-                continue
+        cursor.execute(
+            """
+            INSERT INTO participants
+                (match_id, puuid, champion, position, kills, deaths, assists, win)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (match_id, puuid) DO NOTHING
+            """,
+            (
+                identificador,
+                puuid,
+                yo["championName"],
+                yo["teamPosition"],
+                yo["kills"],
+                yo["deaths"],
+                yo["assists"],
+                yo["win"],
+            ),
+        )
 
-            info = respuesta.json()["info"]
+        if insertada:
+            nuevas += 1
 
-            yo = None
-            for participante in info["participants"]:
-                if participante["puuid"] == puuid:
-                    yo = participante
-                    break
+        kda = f"{yo['kills']}/{yo['deaths']}/{yo['assists']}"
+        marca = "nueva" if insertada else "ya estaba"
+        print(f"{yo['championName']:<15} {kda:<10} {'Victoria' if yo['win'] else 'Derrota':<10} {marca}")
 
-            # Riot da la fecha en milisegundos desde 1970
-            fecha = datetime.fromtimestamp(info["gameCreation"] / 1000, timezone.utc)
+        time.sleep(0.1)
 
-            cursor.execute(
-                """
-                INSERT INTO matches (match_id, played_at, duration_seconds, queue_id)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (match_id) DO NOTHING
-                """,
-                (identificador, fecha, info["gameDuration"], info["queueId"]),
-            )
-
-            insertada = cursor.rowcount == 1
-
-            cursor.execute(
-                """
-                INSERT INTO participants
-                    (match_id, puuid, champion, position, kills, deaths, assists, win)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (match_id, puuid) DO NOTHING
-                """,
-                (
-                    identificador,
-                    puuid,
-                    yo["championName"],
-                    yo["teamPosition"],
-                    yo["kills"],
-                    yo["deaths"],
-                    yo["assists"],
-                    yo["win"],
-                ),
-            )
-
-            if insertada:
-                nuevas += 1
-
-            kda = f"{yo['kills']}/{yo['deaths']}/{yo['assists']}"
-            marca = "nueva" if insertada else "ya estaba"
-            print(f"{yo['championName']:<15} {kda:<10} {'Victoria' if yo['win'] else 'Derrota':<10} {marca}")
-
-            time.sleep(0.1)
-
-        conexion.commit()
+    conexion.commit()
 
 print(f"\nGuardadas {nuevas} partidas nuevas")
