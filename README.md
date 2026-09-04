@@ -63,7 +63,7 @@ automáticamente la primera vez que se inicializa la base de datos.
 Los servicios no se comportan igual:
 
 - `db` y `api` son procesos largos: se quedan corriendo hasta que se paran.
-- `app` es un script: descarga las partidas, las guarda y termina. En
+- `collector` es un script: descarga las partidas, las guarda y termina. En
   `docker compose ps` aparece como `Exited (0)`, que no es un error.
 
 Para levantar solo la API, sin gastar peticiones a Riot:
@@ -80,7 +80,7 @@ docker compose up --build    # cambios en el código o en requirements.txt
 docker compose down -v       # cambios en schema.sql (borra los datos)
 ```
 
-El `--build` hace falta porque `main.py`, `api.py`, `config.py` y
+El `--build` hace falta porque `collector.py`, `api.py`, `config.py` y
 `requirements.txt` se copian dentro de la imagen. El resto se lee al
 arrancar.
 
@@ -176,7 +176,7 @@ Una partida de `/matches`:
 ## Estructura
 
 ```
-main.py              descarga de partidas y guardado en la base de datos
+collector.py         descarga de partidas y guardado en la base de datos
 api.py               API con FastAPI
 config.py            configuración leída del .env, compartida por los dos
 schema.sql           definición de las tablas
@@ -199,17 +199,18 @@ servicio, no por `localhost`.
 `127.0.0.1`, que dentro del contenedor significa solo el propio contenedor:
 el puerto quedaría publicado sin nadie escuchando detrás.
 
-`app` y `api` comparten Dockerfile y se diferencian por el `command` del
-compose: `app` usa el `CMD` de la imagen (`python main.py`) y `api` lo
+`collector` y `api` comparten Dockerfile y se diferencian por el `command`
+del compose: `collector` usa el `CMD` de la imagen (`python collector.py`)
+y `api` lo
 sustituye por uvicorn.
 
-El servicio `db` tiene un healthcheck con `pg_isready`, y `app` usa
+El servicio `db` tiene un healthcheck con `pg_isready`, y `collector` usa
 `depends_on` con `condition: service_healthy`. Sin eso, `depends_on`
 solo esperaría a que el contenedor arrancase, no a que PostgreSQL
 aceptase conexiones, y la aplicación podría fallar al conectar.
 
-`config.py` centraliza la lectura del `.env`: `main.py` y `api.py` importan
-de ahí en vez de construir cada uno su cadena de conexión.
+`config.py` centraliza la lectura del `.env`: `collector.py` y `api.py`
+importan de ahí en vez de construir cada uno su cadena de conexión.
 
 Los porcentajes viajan como números (`winrate_pct: 66.7`), sin el símbolo.
 El formato es cosa de quien los muestre.

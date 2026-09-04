@@ -16,7 +16,7 @@ services:
       timeout: 5s
       retries: 5
 
-  app:
+  collector:
     build: .
     env_file: .env
     depends_on:

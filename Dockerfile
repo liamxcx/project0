@@ -5,6 +5,6 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY main.py api.py config.py ./
+COPY collector.py api.py config.py ./
 
-CMD ["python", "main.py"]
+CMD ["python", "collector.py"]
