@@ -119,6 +119,12 @@ Endpoints:
 - `GET /matches` — las 20 partidas más recientes, de la más nueva a la
   más antigua. Cruza `participants` con `matches` y devuelve campeón,
   posición, KDA, resultado, fecha y duración.
+- `GET /champions` — un resumen por campeón: partidas jugadas, ganadas,
+  winrate y KDA medio. Los agregados los calcula PostgreSQL con
+  `GROUP BY`; ninguno de esos números está guardado en ninguna tabla.
+- `GET /champions/{champion}` — lo mismo para un solo campeón. No
+  distingue mayúsculas (`/champions/zeri` vale) y devuelve 404 si no hay
+  partidas con ese campeón.
 
 Al levantar `api`, Compose arranca antes `db` y espera a su healthcheck,
 porque `/matches` no puede responder sin base de datos.
@@ -133,6 +139,22 @@ Comprobación rápida:
 ```bash
 curl http://localhost:8000/health
 curl -s http://localhost:8000/matches | python3 -m json.tool
+curl -s http://localhost:8000/champions | python3 -m json.tool
+curl -s http://localhost:8000/champions/zeri | python3 -m json.tool
+```
+
+Un campeón de `/champions`:
+
+```json
+{
+  "champion": "Zeri",
+  "games": 2,
+  "wins": 2,
+  "winrate": 100.0,
+  "avg_kills": 9.5,
+  "avg_deaths": 5.0,
+  "avg_assists": 11.0
+}
 ```
 
 Una partida de `/matches`:
@@ -184,6 +206,10 @@ El servicio `db` tiene un healthcheck con `pg_isready`, y `app` usa
 solo esperaría a que el contenedor arrancase, no a que PostgreSQL
 aceptase conexiones, y la aplicación podría fallar al conectar.
 
+Los valores que llegan por la URL se pasan a la consulta como parámetros
+(`%s` y una tupla), nunca interpolados en el texto SQL. Interpolarlos
+abriría la puerta a la inyección SQL.
+
 Las tablas, las columnas y las rutas están en inglés; los mensajes de la
 consola, los comentarios y esta documentación, en español.
 
@@ -198,7 +224,6 @@ Tras regenerar la clave puede tardar unos segundos en ser válida.
 ## Pendiente
 
 - Migraciones para modificar el esquema sin perder datos
-- Estadísticas agregadas por campeón en la API
 - Caché con Redis y actualización programada
 - Frontend para visualizar las estadísticas
 - Despliegue en Kubernetes
