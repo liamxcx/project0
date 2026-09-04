@@ -76,12 +76,13 @@ Qué comando usar según lo que hayas cambiado:
 
 ```bash
 docker compose up            # cambios en docker-compose.yml o .env
-docker compose up --build    # cambios en main.py, api.py o requirements.txt
+docker compose up --build    # cambios en el código o en requirements.txt
 docker compose down -v       # cambios en schema.sql (borra los datos)
 ```
 
-El `--build` hace falta porque `main.py`, `api.py` y `requirements.txt`
-se copian dentro de la imagen. El resto se lee al arrancar.
+El `--build` hace falta porque `main.py`, `api.py`, `config.py` y
+`requirements.txt` se copian dentro de la imagen. El resto se lee al
+arrancar.
 
 El `-v` hace falta con `schema.sql` porque el script solo se ejecuta
 cuando la base de datos está vacía. Más adelante habría que sustituirlo
@@ -150,7 +151,7 @@ Un campeón de `/champions`:
   "champion": "Zeri",
   "games": 2,
   "wins": 2,
-  "winrate": 100.0,
+  "winrate_pct": 100.0,
   "avg_kills": 9.5,
   "avg_deaths": 5.0,
   "avg_assists": 11.0
@@ -177,6 +178,7 @@ Una partida de `/matches`:
 ```
 main.py              descarga de partidas y guardado en la base de datos
 api.py               API con FastAPI
+config.py            configuración leída del .env, compartida por los dos
 schema.sql           definición de las tablas
 Dockerfile           imagen de la aplicación
 docker-compose.yml   orquestación de los servicios
@@ -205,6 +207,12 @@ El servicio `db` tiene un healthcheck con `pg_isready`, y `app` usa
 `depends_on` con `condition: service_healthy`. Sin eso, `depends_on`
 solo esperaría a que el contenedor arrancase, no a que PostgreSQL
 aceptase conexiones, y la aplicación podría fallar al conectar.
+
+`config.py` centraliza la lectura del `.env`: `main.py` y `api.py` importan
+de ahí en vez de construir cada uno su cadena de conexión.
+
+Los porcentajes viajan como números (`winrate_pct: 66.7`), sin el símbolo.
+El formato es cosa de quien los muestre.
 
 Los valores que llegan por la URL se pasan a la consulta como parámetros
 (`%s` y una tupla), nunca interpolados en el texto SQL. Interpolarlos

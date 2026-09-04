@@ -1,4 +1,3 @@
-import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -6,54 +5,46 @@ from urllib.parse import quote
 
 import psycopg
 import requests
-from dotenv import load_dotenv
 
-load_dotenv()
-
-api_key = os.getenv("RIOT_API_KEY")
-game_name = os.getenv("RIOT_GAME_NAME")
-tag_line = os.getenv("RIOT_TAG_LINE")
-
-BASE = "https://europe.api.riotgames.com"
-
-DB_URL = (
-    f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
-    f"@{os.getenv('DB_HOST', 'db')}:5432/{os.getenv('POSTGRES_DB')}"
-)
+from config import DB_URL, RIOT_API_KEY, RIOT_BASE_URL, RIOT_GAME_NAME, RIOT_TAG_LINE
 
 
-def pedir(url, params=None, intentos=3):
-    for intento in range(intentos):
+def fetch(url, params=None, attempts=3):
+    for attempt in range(attempts):
         try:
-            respuesta = requests.get(url, headers={"X-Riot-Token": api_key}, params=params)
+            response = requests.get(
+                url, headers={"X-Riot-Token": RIOT_API_KEY}, params=params
+            )
         except requests.exceptions.RequestException as error:
-            espera = 2 ** intento
-            print(f"Fallo de red ({error.__class__.__name__}), reintento en {espera}s")
-            time.sleep(espera)
+            delay = 2**attempt
+            print(f"Fallo de red ({error.__class__.__name__}), reintento en {delay}s")
+            time.sleep(delay)
             continue
 
-        if respuesta.status_code == 429:
-            espera = int(respuesta.headers.get("Retry-After", 10))
-            print(f"Límite alcanzado, esperando {espera}s")
-            time.sleep(espera)
+        if response.status_code == 429:
+            delay = int(response.headers.get("Retry-After", 10))
+            print(f"Límite alcanzado, esperando {delay}s")
+            time.sleep(delay)
             continue
 
-        return respuesta
+        return response
 
     return None
 
 
-print(f"Consultando datos de {game_name}#{tag_line}")
+print(f"Consultando datos de {RIOT_GAME_NAME}#{RIOT_TAG_LINE}")
 
-# ACCOUNT-V1 usa región grande (europe), no plataforma (euw1)
-respuesta_cuenta = pedir(f"{BASE}/riot/account/v1/accounts/by-riot-id/{quote(game_name)}/{tag_line}")
+account_response = fetch(
+    f"{RIOT_BASE_URL}/riot/account/v1/accounts/by-riot-id/"
+    f"{quote(RIOT_GAME_NAME)}/{RIOT_TAG_LINE}"
+)
 
-if respuesta_cuenta is None:
+if account_response is None:
     print("No se ha podido conectar con la API tras varios intentos")
     sys.exit(1)
 
-if respuesta_cuenta.status_code != 200:
-    codigos = {
+if account_response.status_code != 200:
+    meanings = {
         401: "no autorizado",
         403: "prohibido",
         404: "no encontrado",
@@ -61,32 +52,33 @@ if respuesta_cuenta.status_code != 200:
         500: "error interno del servidor",
         503: "servicio no disponible",
     }
-    significado = codigos.get(respuesta_cuenta.status_code, "error desconocido")
-    print(f"Error al obtener la cuenta: {respuesta_cuenta.status_code} ({significado})")
+    meaning = meanings.get(account_response.status_code, "error desconocido")
+    print(f"Error al obtener la cuenta: {account_response.status_code} ({meaning})")
 
-    if respuesta_cuenta.status_code in (401, 403):
+    if account_response.status_code in (401, 403):
         print("La clave ha caducado. Regenérala en developer.riotgames.com")
     sys.exit(1)
 
-puuid = respuesta_cuenta.json()["puuid"]
+puuid = account_response.json()["puuid"]
 
-respuesta_lista = pedir(f"{BASE}/lol/match/v5/matches/by-puuid/{puuid}/ids", params={"count": 2})
+ids_response = fetch(
+    f"{RIOT_BASE_URL}/lol/match/v5/matches/by-puuid/{puuid}/ids", params={"count": 2}
+)
 
-if respuesta_lista is None or respuesta_lista.status_code != 200:
+if ids_response is None or ids_response.status_code != 200:
     print("No se ha podido obtener la lista de partidas")
     sys.exit(1)
 
-partidas = respuesta_lista.json()
+match_ids = ids_response.json()
 
-print(f"Encontradas {len(partidas)} partidas\n")
+print(f"Encontradas {len(match_ids)} partidas\n")
 
-nuevas = 0
+new_matches = 0
 
 with (
-    psycopg.connect(DB_URL) as conexion,
-    conexion.cursor() as cursor,
+    psycopg.connect(DB_URL) as connection,
+    connection.cursor() as cursor,
 ):
-
     # El invocador va primero: las participaciones lo referencian
     cursor.execute(
         """
@@ -94,26 +86,26 @@ with (
         VALUES (%s, %s, %s)
         ON CONFLICT (puuid) DO NOTHING
         """,
-        (puuid, game_name, tag_line),
+        (puuid, RIOT_GAME_NAME, RIOT_TAG_LINE),
     )
 
-    for identificador in partidas:
-        respuesta = pedir(f"{BASE}/lol/match/v5/matches/{identificador}")
+    for match_id in match_ids:
+        match_response = fetch(f"{RIOT_BASE_URL}/lol/match/v5/matches/{match_id}")
 
-        if respuesta is None or respuesta.status_code != 200:
-            print(f"Error en {identificador}")
+        if match_response is None or match_response.status_code != 200:
+            print(f"Error en {match_id}")
             continue
 
-        info = respuesta.json()["info"]
+        info = match_response.json()["info"]
 
-        yo = None
-        for participante in info["participants"]:
-            if participante["puuid"] == puuid:
-                yo = participante
+        me = None
+        for participant in info["participants"]:
+            if participant["puuid"] == puuid:
+                me = participant
                 break
 
         # Riot da la fecha en milisegundos desde 1970
-        fecha = datetime.fromtimestamp(info["gameCreation"] / 1000, timezone.utc)
+        played_at = datetime.fromtimestamp(info["gameCreation"] / 1000, timezone.utc)
 
         cursor.execute(
             """
@@ -121,10 +113,10 @@ with (
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (match_id) DO NOTHING
             """,
-            (identificador, fecha, info["gameDuration"], info["queueId"]),
+            (match_id, played_at, info["gameDuration"], info["queueId"]),
         )
 
-        insertada = cursor.rowcount == 1
+        inserted = cursor.rowcount == 1
 
         cursor.execute(
             """
@@ -134,26 +126,27 @@ with (
             ON CONFLICT (match_id, puuid) DO NOTHING
             """,
             (
-                identificador,
+                match_id,
                 puuid,
-                yo["championName"],
-                yo["teamPosition"],
-                yo["kills"],
-                yo["deaths"],
-                yo["assists"],
-                yo["win"],
+                me["championName"],
+                me["teamPosition"],
+                me["kills"],
+                me["deaths"],
+                me["assists"],
+                me["win"],
             ),
         )
 
-        if insertada:
-            nuevas += 1
+        if inserted:
+            new_matches += 1
 
-        kda = f"{yo['kills']}/{yo['deaths']}/{yo['assists']}"
-        marca = "nueva" if insertada else "ya estaba"
-        print(f"{yo['championName']:<15} {kda:<10} {'Victoria' if yo['win'] else 'Derrota':<10} {marca}")
+        kda = f"{me['kills']}/{me['deaths']}/{me['assists']}"
+        label = "nueva" if inserted else "ya estaba"
+        resultado = "Victoria" if me["win"] else "Derrota"
+        print(f"{me['championName']:<15} {kda:<10} {resultado:<10} {label}")
 
         time.sleep(0.1)
 
-    conexion.commit()
+    connection.commit()
 
-print(f"\nGuardadas {nuevas} partidas nuevas")
+print(f"\nGuardadas {new_matches} partidas nuevas")

@@ -1,18 +1,21 @@
-import os
-
 import psycopg
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from psycopg.rows import dict_row
 
-load_dotenv()
-
-DB_URL = (
-    f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
-    f"@{os.getenv('DB_HOST', 'db')}:5432/{os.getenv('POSTGRES_DB')}"
-)
+from config import DB_URL
 
 app = FastAPI(title="Estadísticas de LoL")
+
+CHAMPION_STATS_SELECT = """
+    SELECT champion,
+           COUNT(*) AS games,
+           COUNT(*) FILTER (WHERE win) AS wins,
+           ROUND(100.0 * COUNT(*) FILTER (WHERE win) / COUNT(*), 1) AS winrate_pct,
+           ROUND(AVG(kills), 1) AS avg_kills,
+           ROUND(AVG(deaths), 1) AS avg_deaths,
+           ROUND(AVG(assists), 1) AS avg_assists
+    FROM participants
+"""
 
 
 @app.get("/health")
@@ -23,8 +26,8 @@ def health():
 @app.get("/matches")
 def matches():
     with (
-        psycopg.connect(DB_URL, row_factory=dict_row) as conexion,
-        conexion.cursor() as cursor,
+        psycopg.connect(DB_URL, row_factory=dict_row) as connection,
+        connection.cursor() as cursor,
     ):
         cursor.execute(
             """
@@ -48,19 +51,12 @@ def matches():
 @app.get("/champions")
 def champions():
     with (
-        psycopg.connect(DB_URL, row_factory=dict_row) as conexion,
-        conexion.cursor() as cursor,
+        psycopg.connect(DB_URL, row_factory=dict_row) as connection,
+        connection.cursor() as cursor,
     ):
         cursor.execute(
-            """
-            SELECT champion,
-                   COUNT(*) AS games,
-                   COUNT(*) FILTER (WHERE win) AS wins,
-                   ROUND(100.0 * COUNT(*) FILTER (WHERE win) / COUNT(*), 1) AS winrate,
-                   ROUND(AVG(kills), 1) AS avg_kills,
-                   ROUND(AVG(deaths), 1) AS avg_deaths,
-                   ROUND(AVG(assists), 1) AS avg_assists
-            FROM participants
+            CHAMPION_STATS_SELECT
+            + """
             GROUP BY champion
             ORDER BY games DESC, champion
             """
@@ -71,27 +67,20 @@ def champions():
 @app.get("/champions/{champion}")
 def champion_stats(champion: str):
     with (
-        psycopg.connect(DB_URL, row_factory=dict_row) as conexion,
-        conexion.cursor() as cursor,
+        psycopg.connect(DB_URL, row_factory=dict_row) as connection,
+        connection.cursor() as cursor,
     ):
         cursor.execute(
-            """
-            SELECT champion,
-                   COUNT(*) AS games,
-                   COUNT(*) FILTER (WHERE win) AS wins,
-                   ROUND(100.0 * COUNT(*) FILTER (WHERE win) / COUNT(*), 1) AS winrate,
-                   ROUND(AVG(kills), 1) AS avg_kills,
-                   ROUND(AVG(deaths), 1) AS avg_deaths,
-                   ROUND(AVG(assists), 1) AS avg_assists
-            FROM participants
+            CHAMPION_STATS_SELECT
+            + """
             WHERE LOWER(champion) = LOWER(%s)
             GROUP BY champion
             """,
             (champion,),
         )
-        fila = cursor.fetchone()
+        row = cursor.fetchone()
 
-    if fila is None:
+    if row is None:
         raise HTTPException(status_code=404, detail=f"Sin partidas con {champion}")
 
-    return fila
+    return row
