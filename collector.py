@@ -89,7 +89,19 @@ with (
         (puuid, RIOT_GAME_NAME, RIOT_TAG_LINE),
     )
 
+    cursor.execute(
+        "SELECT match_id FROM matches WHERE match_id = ANY(%s)",
+        (match_ids,),
+    )
+    already_saved = {row[0] for row in cursor.fetchall()}
+
+    if already_saved:
+        print(f"{len(already_saved)} ya guardadas, no se piden a Riot")
+
     for match_id in match_ids:
+        if match_id in already_saved:
+            continue
+
         match_response = fetch(f"{RIOT_BASE_URL}/lol/match/v5/matches/{match_id}")
 
         if match_response is None or match_response.status_code != 200:
@@ -116,8 +128,6 @@ with (
             (match_id, played_at, info["gameDuration"], info["queueId"]),
         )
 
-        inserted = cursor.rowcount == 1
-
         cursor.execute(
             """
             INSERT INTO participants
@@ -137,13 +147,11 @@ with (
             ),
         )
 
-        if inserted:
-            new_matches += 1
+        new_matches += 1
 
         kda = f"{me['kills']}/{me['deaths']}/{me['assists']}"
-        label = "nueva" if inserted else "ya estaba"
         resultado = "Victoria" if me["win"] else "Derrota"
-        print(f"{me['championName']:<15} {kda:<10} {resultado:<10} {label}")
+        print(f"{me['championName']:<15} {kda:<10} {resultado}")
 
         time.sleep(0.1)
 
