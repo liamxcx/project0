@@ -10,7 +10,25 @@ from config import CACHE_TTL_SECONDS, DB_URL, REDIS_URL
 
 app = FastAPI(title="Estadísticas de LoL")
 
-cache = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+cache = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=1)
+
+
+def cache_get(key):
+    """Devuelve lo cacheado, o None si no está o si Redis falla."""
+    try:
+        return cache.get(key)
+    except redis.RedisError:
+        print(f"Redis no disponible al leer {key}")
+        return None
+
+
+def cache_set(key, value):
+    """Guarda en caché. Si Redis falla, sigue adelante sin guardar."""
+    try:
+        cache.setex(key, CACHE_TTL_SECONDS, value)
+    except redis.RedisError:
+        print(f"Redis no disponible al guardar {key}")
+
 
 CHAMPION_STATS_SELECT = """
     SELECT champion,
@@ -62,7 +80,7 @@ def matches():
 def champions():
     key = "champions:all"
 
-    cached = cache.get(key)
+    cached = cache_get(key)
     if cached is not None:
         return json.loads(cached)
 
@@ -79,7 +97,7 @@ def champions():
         )
         rows = jsonable_encoder(cursor.fetchall())
 
-    cache.setex(key, CACHE_TTL_SECONDS, json.dumps(rows))
+    cache_set(key, json.dumps(rows))
     return rows
 
 

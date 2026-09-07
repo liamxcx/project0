@@ -48,7 +48,9 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
   healthcheck.
 - **`api`** — cuatro endpoints con FastAPI, agregados calculados en SQL y
   documentación interactiva automática en `/docs`.
-- **`redis`** — caché de respuestas de la API, con caducidad automática.
+- **`redis`** — caché de respuestas de la API, con caducidad automática y
+  opcional: si Redis no responde, la API consulta PostgreSQL y sigue
+  funcionando.
 
 ### Qué falta
 
@@ -92,6 +94,7 @@ que ya tiene, subirlo solo cuesta peticiones la primera vez.
 
 `CACHE_TTL_SECONDS` es cuántos segundos vive cada respuesta cacheada. Es
 el desfase máximo entre lo que hay en PostgreSQL y lo que devuelve la API.
+Subirlo alivia a PostgreSQL a costa de servir datos más viejos.
 
 `DB_HOST` es `db` dentro de Compose. Para ejecutar el script fuera de
 Docker hay que ponerlo a `localhost`.
@@ -260,6 +263,13 @@ aceptase conexiones, y la aplicación podría fallar al conectar.
 
 `config.py` centraliza la lectura del `.env`: `collector.py` y `api.py`
 importan de ahí en vez de construir cada uno su cadena de conexión.
+
+Redis es una pieza opcional a propósito. Las llamadas a la caché van
+envueltas en `cache_get` y `cache_set`, que capturan cualquier error y lo
+tratan como "no hay nada cacheado": la API responde igual, más lenta, y
+deja un aviso en los logs. Una caché no debe tumbar el servicio. Por el
+mismo motivo el cliente lleva `socket_timeout=1`: un Redis colgado sería
+peor que un Redis caído.
 
 `game_version` es la numeración interna de Riot, la que da la API. No
 coincide con la que ve el jugador en el cliente: la pública va diez por
