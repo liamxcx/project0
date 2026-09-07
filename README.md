@@ -31,9 +31,11 @@ está guardado, así que consultar las estadísticas no gasta peticiones.
 ### Qué hay hecho
 
 - **`collector`** — dado un Riot ID: PUUID (ACCOUNT-V1), identificadores
-  de las últimas partidas de ranked (MATCH-V5), detalle de cada una y
-  guardado de invocador, partida y participación sin duplicar. Con
-  reintentos ante fallos de red y control del límite de peticiones.
+  de las últimas partidas (MATCH-V5), detalle de cada una y guardado de
+  invocador, partida y participación sin duplicar. Antes de descargar
+  consulta cuáles ya están en la base y se las salta, así que solo pide
+  a Riot lo que le falta. Con reintentos ante fallos de red y control del
+  límite de peticiones.
 - **`db`** — tres tablas en PostgreSQL, volumen con nombre para
   que los datos sobrevivan a los reinicios y arranque ordenado con
   healthcheck.
@@ -66,10 +68,16 @@ POSTGRES_USER=lol
 POSTGRES_PASSWORD=
 POSTGRES_DB=lolstats
 DB_HOST=db
+
+MATCH_COUNT=20
 ```
 
 El Riot ID va separado: si eres `TuNombre#EUW`, el nombre va en
 `RIOT_GAME_NAME` y el tag en `RIOT_TAG_LINE`, sin almohadilla.
+
+`MATCH_COUNT` es cuántas partidas recientes se le piden a Riot en cada
+ejecución. Si falta, se usan 20. Como el `collector` no vuelve a pedir las
+que ya tiene, subirlo solo cuesta peticiones la primera vez.
 
 `DB_HOST` es `db` dentro de Compose. Para ejecutar el script fuera de
 Docker hay que ponerlo a `localhost`.

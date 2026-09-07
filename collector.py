@@ -6,7 +6,14 @@ from urllib.parse import quote
 import psycopg
 import requests
 
-from config import DB_URL, RIOT_API_KEY, RIOT_BASE_URL, RIOT_GAME_NAME, RIOT_TAG_LINE
+from config import (
+    DB_URL,
+    MATCH_COUNT,
+    RIOT_API_KEY,
+    RIOT_BASE_URL,
+    RIOT_GAME_NAME,
+    RIOT_TAG_LINE,
+)
 
 
 def fetch(url, params=None, attempts=3):
@@ -62,7 +69,7 @@ if account_response.status_code != 200:
 puuid = account_response.json()["puuid"]
 
 ids_response = fetch(
-    f"{RIOT_BASE_URL}/lol/match/v5/matches/by-puuid/{puuid}/ids", params={"count": 2}
+    f"{RIOT_BASE_URL}/lol/match/v5/matches/by-puuid/{puuid}/ids", params={"count": MATCH_COUNT}
 )
 
 if ids_response is None or ids_response.status_code != 200:
