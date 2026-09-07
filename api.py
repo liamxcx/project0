@@ -49,6 +49,12 @@ def health():
 
 @app.get("/matches")
 def matches():
+    key = "matches:latest"
+
+    cached = cache_get(key)
+    if cached is not None:
+        return json.loads(cached)
+
     with (
         psycopg.connect(DB_URL, row_factory=dict_row) as connection,
         connection.cursor() as cursor,
@@ -73,7 +79,10 @@ def matches():
             LIMIT 20
             """
         )
-        return cursor.fetchall()
+        rows = jsonable_encoder(cursor.fetchall())
+
+    cache_set(key, json.dumps(rows))
+    return rows
 
 
 @app.get("/champions")
@@ -103,19 +112,27 @@ def champions():
 
 @app.get("/champions/{champion}")
 def champion_stats(champion: str):
-    with (
-        psycopg.connect(DB_URL, row_factory=dict_row) as connection,
-        connection.cursor() as cursor,
-    ):
-        cursor.execute(
-            CHAMPION_STATS_SELECT
-            + """
-            WHERE LOWER(champion) = LOWER(%s)
-            GROUP BY champion
-            """,
-            (champion,),
-        )
-        row = cursor.fetchone()
+    key = f"champions:{champion.lower()}"
+
+    cached = cache_get(key)
+    if cached is not None:
+        row = json.loads(cached)
+    else:
+        with (
+            psycopg.connect(DB_URL, row_factory=dict_row) as connection,
+            connection.cursor() as cursor,
+        ):
+            cursor.execute(
+                CHAMPION_STATS_SELECT
+                + """
+                WHERE LOWER(champion) = LOWER(%s)
+                GROUP BY champion
+                """,
+                (champion,),
+            )
+            row = jsonable_encoder(cursor.fetchone())
+
+        cache_set(key, json.dumps(row))
 
     if row is None:
         raise HTTPException(status_code=404, detail=f"Sin partidas con {champion}")

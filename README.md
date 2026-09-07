@@ -177,8 +177,20 @@ Endpoints:
   distingue mayúsculas (`/champions/zeri` vale) y devuelve 404 si no hay
   partidas con ese campeón.
 
-Al levantar `api`, Compose arranca antes `db` y espera a su healthcheck,
-porque `/matches` no puede responder sin base de datos.
+Al levantar `api`, Compose arranca antes `db` y `redis` y espera a sus
+healthchecks.
+
+Los tres endpoints de datos se cachean en Redis con estas claves:
+
+```
+GET /matches              →  matches:latest
+GET /champions            →  champions:all
+GET /champions/{champion} →  champions:<campeón en minúsculas>
+```
+
+`/health` no se cachea: devuelve una constante. Y las respuestas vacías
+también se guardan (`champions:garen` vale `null`), para que preguntar por
+un campeón que no existe no consulte PostgreSQL cada vez.
 
 FastAPI genera la documentación sola a partir de las rutas registradas:
 
