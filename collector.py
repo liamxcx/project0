@@ -128,11 +128,18 @@ with (
 
         cursor.execute(
             """
-            INSERT INTO matches (match_id, played_at, duration_seconds, queue_id)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO matches
+                (match_id, played_at, duration_seconds, queue_id, game_version)
+            VALUES (%s, %s, %s, %s, %s)
             ON CONFLICT (match_id) DO NOTHING
             """,
-            (match_id, played_at, info["gameDuration"], info["queueId"]),
+            (
+                match_id,
+                played_at,
+                info["gameDuration"],
+                info["queueId"],
+                info["gameVersion"],
+            ),
         )
 
         cursor.execute(

@@ -38,7 +38,8 @@ def matches():
                    p.assists,
                    p.win,
                    m.played_at,
-                   m.duration_seconds
+                   m.duration_seconds,
+                   m.game_version
             FROM participants p
             JOIN matches m ON m.match_id = p.match_id
             ORDER BY m.played_at DESC

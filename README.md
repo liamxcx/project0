@@ -124,7 +124,7 @@ por migraciones para no perder el historial.
 Tres tablas:
 
 - `summoners` — traduce cada PUUID a un Riot ID legible
-- `matches` — fecha, duración y tipo de cola de cada partida
+- `matches` — fecha, duración, tipo de cola y parche de cada partida
 - `participants` — campeón, posición, KDA y resultado de un invocador
   en una partida
 
@@ -150,7 +150,7 @@ Endpoints:
   datos: solo confirma que el servicio responde.
 - `GET /matches` — las 20 partidas más recientes, de la más nueva a la
   más antigua. Cruza `participants` con `matches` y devuelve campeón,
-  posición, KDA, resultado, fecha y duración.
+  posición, KDA, resultado, fecha, duración y parche.
 - `GET /champions` — un resumen por campeón: partidas jugadas, ganadas,
   winrate y KDA medio. Los agregados los calcula PostgreSQL con
   `GROUP BY`; ninguno de esos números está guardado en ninguna tabla.
@@ -200,7 +200,8 @@ Una partida de `/matches`:
   "assists": 15,
   "win": true,
   "played_at": "2026-08-28T12:21:15.912000+00:00",
-  "duration_seconds": 2268
+  "duration_seconds": 2268,
+  "game_version": "16.17.810.4348"
 }
 ```
 
@@ -243,6 +244,11 @@ aceptase conexiones, y la aplicación podría fallar al conectar.
 
 `config.py` centraliza la lectura del `.env`: `collector.py` y `api.py`
 importan de ahí en vez de construir cada uno su cadena de conexión.
+
+`game_version` es la numeración interna de Riot, la que da la API. No
+coincide con la que ve el jugador en el cliente: la pública va diez por
+delante en el primer número (interna `16.17` = pública `26.17`), porque
+cada serie interna corresponde a un año natural.
 
 Los porcentajes viajan como números (`winrate_pct: 66.7`), sin el símbolo.
 El formato es cosa de quien los muestre.
