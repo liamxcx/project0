@@ -15,18 +15,25 @@ frontend y el despliegue.
 
 ### Cómo encajan las piezas
 
+Recolección, de vez en cuando:
+
 ```
-   API de Riot
-        │
-        │ HTTPS
-        ▼
-  collector.py  ──escribe──▶  PostgreSQL  ──lee──▶  api.py  ──HTTP──▶  cliente
-  servicio: collector          servicio: db      servicio: api        curl, /docs
+API de Riot  ──▶  collector  ──▶  PostgreSQL
 ```
 
-`collector` arranca, descarga, guarda y termina. `db` y `api` se quedan
-en marcha. Ningún endpoint de la API llama a Riot: sirve solo lo que ya
-está guardado, así que consultar las estadísticas no gasta peticiones.
+Consulta, cada vez que alguien pregunta:
+
+```
+cliente  ──▶  api  ──▶  Redis        ¿está la respuesta cacheada?
+                   └──▶  PostgreSQL   solo si no lo está
+```
+
+`collector` arranca, descarga, guarda y termina. `db`, `redis` y `api` se
+quedan en marcha.
+
+Ningún endpoint de la API llama a Riot: sirve solo lo que ya está guardado,
+así que consultar las estadísticas no gasta peticiones. Y cuando la
+respuesta está en Redis, tampoco se consulta PostgreSQL.
 
 ### Qué hay hecho
 
@@ -41,10 +48,11 @@ está guardado, así que consultar las estadísticas no gasta peticiones.
   healthcheck.
 - **`api`** — cuatro endpoints con FastAPI, agregados calculados en SQL y
   documentación interactiva automática en `/docs`.
+- **`redis`** — caché de respuestas de la API, con caducidad automática.
 
 ### Qué falta
 
-- Caché con Redis y refresco automático de las partidas
+- Refresco automático de las partidas
 - Frontend para ver las estadísticas y comparar invocadores
 - Copia de seguridad de la base de datos
 - Despliegue en Kubernetes
@@ -70,6 +78,9 @@ POSTGRES_DB=lolstats
 DB_HOST=db
 
 MATCH_COUNT=20
+
+REDIS_URL=redis://redis:6379/0
+CACHE_TTL_SECONDS=60
 ```
 
 El Riot ID va separado: si eres `TuNombre#EUW`, el nombre va en
@@ -78,6 +89,9 @@ El Riot ID va separado: si eres `TuNombre#EUW`, el nombre va en
 `MATCH_COUNT` es cuántas partidas recientes se le piden a Riot en cada
 ejecución. Si falta, se usan 20. Como el `collector` no vuelve a pedir las
 que ya tiene, subirlo solo cuesta peticiones la primera vez.
+
+`CACHE_TTL_SECONDS` es cuántos segundos vive cada respuesta cacheada. Es
+el desfase máximo entre lo que hay en PostgreSQL y lo que devuelve la API.
 
 `DB_HOST` es `db` dentro de Compose. Para ejecutar el script fuera de
 Docker hay que ponerlo a `localhost`.
@@ -216,7 +230,7 @@ api.py               sirve lo guardado, cuatro endpoints   → servicio api
 config.py            la configuración, en un solo sitio    → lo importan los dos
 schema.sql           summoners, matches, participants      → servicio db
 Dockerfile           la imagen que comparten los dos servicios
-docker-compose.yml   los tres servicios, el volumen y los healthchecks
+docker-compose.yml   los cuatro servicios, el volumen y los healthchecks
 requirements.txt     dependencias de Python, con versiones fijadas
 .env                 los valores reales (fuera del repo y de la imagen)
 ```

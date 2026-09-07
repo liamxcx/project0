@@ -1,10 +1,16 @@
+import json
+
 import psycopg
+import redis
 from fastapi import FastAPI, HTTPException
+from fastapi.encoders import jsonable_encoder
 from psycopg.rows import dict_row
 
-from config import DB_URL
+from config import CACHE_TTL_SECONDS, DB_URL, REDIS_URL
 
 app = FastAPI(title="Estadísticas de LoL")
+
+cache = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 CHAMPION_STATS_SELECT = """
     SELECT champion,
@@ -54,6 +60,12 @@ def matches():
 
 @app.get("/champions")
 def champions():
+    key = "champions:all"
+
+    cached = cache.get(key)
+    if cached is not None:
+        return json.loads(cached)
+
     with (
         psycopg.connect(DB_URL, row_factory=dict_row) as connection,
         connection.cursor() as cursor,
@@ -65,7 +77,10 @@ def champions():
             ORDER BY games DESC, champion
             """
         )
-        return cursor.fetchall()
+        rows = jsonable_encoder(cursor.fetchall())
+
+    cache.setex(key, CACHE_TTL_SECONDS, json.dumps(rows))
+    return rows
 
 
 @app.get("/champions/{champion}")

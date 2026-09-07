@@ -18,3 +18,8 @@ DB_URL = (
     f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
     f"@{os.getenv('DB_HOST', 'db')}:5432/{os.getenv('POSTGRES_DB')}"
 )
+
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+
+# Segundos que vive cada respuesta cacheada
+CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "60"))
