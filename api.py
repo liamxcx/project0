@@ -39,7 +39,10 @@ def matches():
                    p.win,
                    m.played_at,
                    m.duration_seconds,
-                   m.game_version
+                   m.game_version,
+                   -- El parche público va 10 por delante del interno; ver el README
+                   (split_part(m.game_version, '.', 1)::int + 10)
+                       || '.' || split_part(m.game_version, '.', 2) AS patch
             FROM participants p
             JOIN matches m ON m.match_id = p.match_id
             ORDER BY m.played_at DESC

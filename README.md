@@ -150,7 +150,9 @@ Endpoints:
   datos: solo confirma que el servicio responde.
 - `GET /matches` — las 20 partidas más recientes, de la más nueva a la
   más antigua. Cruza `participants` con `matches` y devuelve campeón,
-  posición, KDA, resultado, fecha, duración y parche.
+  posición, KDA, resultado, fecha, duración y parche, este último en las
+  dos numeraciones: `game_version` tal como lo da Riot y `patch` como lo
+  ve el jugador.
 - `GET /champions` — un resumen por campeón: partidas jugadas, ganadas,
   winrate y KDA medio. Los agregados los calcula PostgreSQL con
   `GROUP BY`; ninguno de esos números está guardado en ninguna tabla.
@@ -201,7 +203,8 @@ Una partida de `/matches`:
   "win": true,
   "played_at": "2026-08-28T12:21:15.912000+00:00",
   "duration_seconds": 2268,
-  "game_version": "16.17.810.4348"
+  "game_version": "16.17.810.4348",
+  "patch": "26.17"
 }
 ```
 
@@ -234,8 +237,7 @@ el puerto quedaría publicado sin nadie escuchando detrás.
 
 `collector` y `api` comparten Dockerfile y se diferencian por el `command`
 del compose: `collector` usa el `CMD` de la imagen (`python collector.py`)
-y `api` lo
-sustituye por uvicorn.
+y `api` lo sustituye por uvicorn.
 
 El servicio `db` tiene un healthcheck con `pg_isready`, y `collector` usa
 `depends_on` con `condition: service_healthy`. Sin eso, `depends_on`
@@ -248,7 +250,9 @@ importan de ahí en vez de construir cada uno su cadena de conexión.
 `game_version` es la numeración interna de Riot, la que da la API. No
 coincide con la que ve el jugador en el cliente: la pública va diez por
 delante en el primer número (interna `16.17` = pública `26.17`), porque
-cada serie interna corresponde a un año natural.
+cada serie interna corresponde a un año natural. El campo `patch` de
+`/matches` hace esa conversión al vuelo; en la base solo se guarda el
+valor original.
 
 Los porcentajes viajan como números (`winrate_pct: 66.7`), sin el símbolo.
 El formato es cosa de quien los muestre.
