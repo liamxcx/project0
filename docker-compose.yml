@@ -31,6 +31,18 @@ services:
       db:
         condition: service_healthy
 
+  scheduler:
+    build: .
+    command:
+      - sh
+      - -c
+      - while true; do python collector.py; sleep ${REFRESH_INTERVAL_SECONDS}; done
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
   api:
     build: .
     command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]

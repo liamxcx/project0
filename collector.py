@@ -69,7 +69,8 @@ if account_response.status_code != 200:
 puuid = account_response.json()["puuid"]
 
 ids_response = fetch(
-    f"{RIOT_BASE_URL}/lol/match/v5/matches/by-puuid/{puuid}/ids", params={"count": MATCH_COUNT}
+    f"{RIOT_BASE_URL}/lol/match/v5/matches/by-puuid/{puuid}/ids",
+    params={"count": MATCH_COUNT},
 )
 
 if ids_response is None or ids_response.status_code != 200:
@@ -171,4 +172,4 @@ with (
 
     connection.commit()
 
-print(f"\nGuardadas {new_matches} partidas nuevas")
+print(f"\nPartidas nuevas guardadas: {new_matches}")

@@ -15,10 +15,12 @@ frontend y el despliegue.
 
 ### Cómo encajan las piezas
 
-Recolección, de vez en cuando:
+Recolección, cada hora sin que nadie la lance:
 
 ```
-API de Riot  ──▶  collector  ──▶  PostgreSQL
+scheduler  ──cada hora──▶  collector  ──▶  API de Riot
+                               │
+                               └──▶  PostgreSQL
 ```
 
 Consulta, cada vez que alguien pregunta:
@@ -28,8 +30,9 @@ cliente  ──▶  api  ──▶  Redis        ¿está la respuesta cacheada?
                    └──▶  PostgreSQL   solo si no lo está
 ```
 
-`collector` arranca, descarga, guarda y termina. `db`, `redis` y `api` se
-quedan en marcha.
+`collector` arranca, descarga, guarda y termina; lo lanza `scheduler`, que
+es lo único que hace: ejecutarlo y volver a dormirse. `db`, `redis`, `api` y
+`scheduler` se quedan en marcha.
 
 Ningún endpoint de la API llama a Riot: sirve solo lo que ya está guardado,
 así que consultar las estadísticas no gasta peticiones. Y cuando la
@@ -51,10 +54,11 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
 - **`redis`** — caché de respuestas de la API, con caducidad automática y
   opcional: si Redis no responde, la API consulta PostgreSQL y sigue
   funcionando.
+- **`scheduler`** — ejecuta el `collector` cada cierto tiempo, así que las
+  partidas nuevas aparecen solas.
 
 ### Qué falta
 
-- Refresco automático de las partidas
 - Frontend para ver las estadísticas y comparar invocadores
 - Copia de seguridad de la base de datos
 - Despliegue en Kubernetes
@@ -83,6 +87,7 @@ MATCH_COUNT=20
 
 REDIS_URL=redis://redis:6379/0
 CACHE_TTL_SECONDS=60
+REFRESH_INTERVAL_SECONDS=3600
 ```
 
 El Riot ID va separado: si eres `TuNombre#EUW`, el nombre va en
@@ -91,6 +96,11 @@ El Riot ID va separado: si eres `TuNombre#EUW`, el nombre va en
 `MATCH_COUNT` es cuántas partidas recientes se le piden a Riot en cada
 ejecución. Si falta, se usan 20. Como el `collector` no vuelve a pedir las
 que ya tiene, subirlo solo cuesta peticiones la primera vez.
+
+`REFRESH_INTERVAL_SECONDS` es cada cuánto el `scheduler` vuelve a ejecutar
+el `collector`. Una hora es razonable: las partidas no aparecen más rápido
+que eso, y como el `collector` no vuelve a pedir las que ya tiene, un
+intervalo corto tampoco gastaría peticiones de más.
 
 `CACHE_TTL_SECONDS` es cuántos segundos vive cada respuesta cacheada. Es
 el desfase máximo entre lo que hay en PostgreSQL y lo que devuelve la API.
@@ -245,7 +255,7 @@ api.py               sirve lo guardado, cuatro endpoints   → servicio api
 config.py            la configuración, en un solo sitio    → lo importan los dos
 schema.sql           summoners, matches, participants      → servicio db
 Dockerfile           la imagen que comparten los dos servicios
-docker-compose.yml   los cuatro servicios, el volumen y los healthchecks
+docker-compose.yml   los cinco servicios, el volumen y los healthchecks
 requirements.txt     dependencias de Python, con versiones fijadas
 .env                 los valores reales (fuera del repo y de la imagen)
 ```
@@ -275,6 +285,11 @@ aceptase conexiones, y la aplicación podría fallar al conectar.
 
 `config.py` centraliza la lectura del `.env`: `collector.py` y `api.py`
 importan de ahí en vez de construir cada uno su cadena de conexión.
+
+`scheduler` usa la misma imagen que `collector` y lo único que cambia es el
+comando: un bucle de shell que ejecuta `collector.py` y duerme. El script no
+sabe que se le está repitiendo, lo que deja el camino abierto a sustituir el
+bucle por un CronJob cuando toque desplegar en Kubernetes.
 
 Redis es una pieza opcional a propósito. Las llamadas a la caché van
 envueltas en `cache_get` y `cache_set`, que capturan cualquier error y lo
