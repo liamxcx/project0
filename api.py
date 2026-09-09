@@ -1,4 +1,5 @@
 import json
+import logging
 
 import psycopg
 import redis
@@ -7,6 +8,13 @@ from fastapi.encoders import jsonable_encoder
 from psycopg.rows import dict_row
 
 from config import CACHE_TTL_SECONDS, DB_URL, REDIS_URL
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-7s  %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+log = logging.getLogger("api")
 
 app = FastAPI(title="Estadísticas de LoL")
 
@@ -18,7 +26,7 @@ def cache_get(key):
     try:
         return cache.get(key)
     except redis.RedisError:
-        print(f"Redis no disponible al leer {key}")
+        log.warning("Redis no disponible al leer %s", key)
         return None
 
 
@@ -27,7 +35,7 @@ def cache_set(key, value):
     try:
         cache.setex(key, CACHE_TTL_SECONDS, value)
     except redis.RedisError:
-        print(f"Redis no disponible al guardar {key}")
+        log.warning("Redis no disponible al guardar %s", key)
 
 
 CHAMPION_STATS_SELECT = """

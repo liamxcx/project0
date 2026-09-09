@@ -88,6 +88,7 @@ MATCH_COUNT=20
 REDIS_URL=redis://redis:6379/0
 CACHE_TTL_SECONDS=60
 REFRESH_INTERVAL_SECONDS=3600
+TZ=Europe/Madrid
 ```
 
 El Riot ID va separado: si eres `TuNombre#EUW`, el nombre va en
@@ -96,6 +97,10 @@ El Riot ID va separado: si eres `TuNombre#EUW`, el nombre va en
 `MATCH_COUNT` es cuántas partidas recientes se le piden a Riot en cada
 ejecución. Si falta, se usan 20. Como el `collector` no vuelve a pedir las
 que ya tiene, subirlo solo cuesta peticiones la primera vez.
+
+`TZ` es la zona horaria de los contenedores, y es la que sale en los logs.
+La convención en servidores es `UTC`; aquí está en hora local porque el
+proyecto se lee desde Madrid.
 
 `REFRESH_INTERVAL_SECONDS` es cada cuánto el `scheduler` vuelve a ejecutar
 el `collector`. Una hora es razonable: las partidas no aparecen más rápido
@@ -247,6 +252,30 @@ Una partida de `/matches`:
 }
 ```
 
+## Logs
+
+Todo se registra con `logging`, con hora, nivel y mensaje:
+
+```
+2026-09-09 03:38:41  INFO     Partidas encontradas: 6
+2026-09-09 03:42:50  WARNING  Redis no disponible al leer champions:all
+```
+
+Los niveles: `INFO` para el curso normal, `WARNING` para lo que va mal pero
+no impide seguir (un reintento, Redis caído), y `ERROR` para lo que corta la
+ejecución (clave caducada, API inalcanzable).
+
+```bash
+docker compose logs -f scheduler              # seguir en directo
+docker compose logs --tail 20 api             # las últimas 20 líneas
+docker compose logs --since 3h scheduler      # las últimas 3 horas
+docker compose logs scheduler | grep WARNING  # solo los problemas
+```
+
+El `Dockerfile` define `PYTHONUNBUFFERED=1`. Sin eso Python acumula la
+salida en un buffer y la suelta al terminar, así que los mensajes de un
+servicio que no termina nunca, como `api`, llegarían tarde.
+
 ## Estructura
 
 ```
@@ -285,6 +314,10 @@ aceptase conexiones, y la aplicación podría fallar al conectar.
 
 `config.py` centraliza la lectura del `.env`: `collector.py` y `api.py`
 importan de ahí en vez de construir cada uno su cadena de conexión.
+
+`api.py` y `collector.py` llaman los dos a `logging.basicConfig`. uvicorn
+configura solo sus propios loggers, así que sin esa llamada los mensajes de
+la API saldrían sin formato y los de nivel `INFO` no se verían.
 
 `scheduler` usa la misma imagen que `collector` y lo único que cambia es el
 comando: un bucle de shell que ejecuta `collector.py` y duerme. El script no

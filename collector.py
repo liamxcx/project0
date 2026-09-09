@@ -1,3 +1,4 @@
+import logging
 import sys
 import time
 from datetime import datetime, timezone
@@ -15,6 +16,13 @@ from config import (
     RIOT_TAG_LINE,
 )
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-7s  %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+log = logging.getLogger("collector")
+
 
 def fetch(url, params=None, attempts=3):
     for attempt in range(attempts):
@@ -24,13 +32,15 @@ def fetch(url, params=None, attempts=3):
             )
         except requests.exceptions.RequestException as error:
             delay = 2**attempt
-            print(f"Fallo de red ({error.__class__.__name__}), reintento en {delay}s")
+            log.warning(
+                "Fallo de red (%s), reintento en %ss", error.__class__.__name__, delay
+            )
             time.sleep(delay)
             continue
 
         if response.status_code == 429:
             delay = int(response.headers.get("Retry-After", 10))
-            print(f"Límite alcanzado, esperando {delay}s")
+            log.warning("Límite alcanzado, esperando %ss", delay)
             time.sleep(delay)
             continue
 
@@ -39,7 +49,7 @@ def fetch(url, params=None, attempts=3):
     return None
 
 
-print(f"Consultando datos de {RIOT_GAME_NAME}#{RIOT_TAG_LINE}")
+log.info("Consultando datos de %s#%s", RIOT_GAME_NAME, RIOT_TAG_LINE)
 
 account_response = fetch(
     f"{RIOT_BASE_URL}/riot/account/v1/accounts/by-riot-id/"
@@ -47,7 +57,7 @@ account_response = fetch(
 )
 
 if account_response is None:
-    print("No se ha podido conectar con la API tras varios intentos")
+    log.error("No se ha podido conectar con la API tras varios intentos")
     sys.exit(1)
 
 if account_response.status_code != 200:
@@ -60,10 +70,12 @@ if account_response.status_code != 200:
         503: "servicio no disponible",
     }
     meaning = meanings.get(account_response.status_code, "error desconocido")
-    print(f"Error al obtener la cuenta: {account_response.status_code} ({meaning})")
+    log.error(
+        "Error al obtener la cuenta: %s (%s)", account_response.status_code, meaning
+    )
 
     if account_response.status_code in (401, 403):
-        print("La clave ha caducado. Regenérala en developer.riotgames.com")
+        log.error("La clave ha caducado. Regenérala en developer.riotgames.com")
     sys.exit(1)
 
 puuid = account_response.json()["puuid"]
@@ -74,12 +86,12 @@ ids_response = fetch(
 )
 
 if ids_response is None or ids_response.status_code != 200:
-    print("No se ha podido obtener la lista de partidas")
+    log.error("No se ha podido obtener la lista de partidas")
     sys.exit(1)
 
 match_ids = ids_response.json()
 
-print(f"Encontradas {len(match_ids)} partidas\n")
+log.info("Partidas encontradas: %s", len(match_ids))
 
 new_matches = 0
 
@@ -104,7 +116,7 @@ with (
     already_saved = {row[0] for row in cursor.fetchall()}
 
     if already_saved:
-        print(f"{len(already_saved)} ya guardadas, no se piden a Riot")
+        log.info("Ya guardadas, no se piden a Riot: %s", len(already_saved))
 
     for match_id in match_ids:
         if match_id in already_saved:
@@ -113,7 +125,7 @@ with (
         match_response = fetch(f"{RIOT_BASE_URL}/lol/match/v5/matches/{match_id}")
 
         if match_response is None or match_response.status_code != 200:
-            print(f"Error en {match_id}")
+            log.warning("No se ha podido descargar %s", match_id)
             continue
 
         info = match_response.json()["info"]
@@ -166,10 +178,10 @@ with (
 
         kda = f"{me['kills']}/{me['deaths']}/{me['assists']}"
         resultado = "Victoria" if me["win"] else "Derrota"
-        print(f"{me['championName']:<15} {kda:<10} {resultado}")
+        log.info("%-15s %-10s %s", me["championName"], kda, resultado)
 
         time.sleep(0.1)
 
     connection.commit()
 
-print(f"\nPartidas nuevas guardadas: {new_matches}")
+log.info("Partidas nuevas guardadas: %s", new_matches)
