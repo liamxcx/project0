@@ -276,6 +276,20 @@ El `Dockerfile` define `PYTHONUNBUFFERED=1`. Sin eso Python acumula la
 salida en un buffer y la suelta al terminar, así que los mensajes de un
 servicio que no termina nunca, como `api`, llegarían tarde.
 
+Los logs se rotan para que no crezcan sin límite: cada servicio guarda
+como mucho 3 ficheros de 10 MB, y al abrir el cuarto se borra el más
+viejo. Son 30 MB por servicio como techo. Sin esto el `scheduler`, que
+escribe cada hora y no termina nunca, acabaría llenando el disco.
+
+La configuración está en el bloque `x-logging` del `docker-compose.yml`,
+y cada servicio la referencia con `logging: *default-logging`. Los
+cambios ahí solo afectan a contenedores nuevos:
+
+```bash
+docker compose up -d --force-recreate
+docker inspect project0-scheduler-1 --format '{{json .HostConfig.LogConfig}}'
+```
+
 ## Estructura
 
 ```
