@@ -3,21 +3,130 @@
   <head>
     <meta charset="utf-8" />
     <title>Estadísticas de LoL</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem auto;
+        max-width: 60rem;
+        padding: 0 1rem;
+        color: #1a1a1a;
+      }
+      h1 {
+        font-size: 1.5rem;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      th,
+      td {
+        padding: 0.5rem 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid #e0e0e0;
+      }
+      th {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: #666;
+      }
+      td.num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .win {
+        color: #1a7f37;
+        font-weight: 600;
+      }
+      .loss {
+        color: #b42318;
+        font-weight: 600;
+      }
+      .aviso {
+        color: #666;
+      }
+    </style>
   </head>
   <body>
-    <h1>Estadísticas de LoL</h1>
-    <pre id="salida">Cargando...</pre>
+    <h1>Últimas partidas</h1>
+    <div id="salida" class="aviso">Cargando...</div>
 
     <script>
       const salida = document.getElementById("salida");
 
-      fetch("http://localhost:8000/champions")
-        .then((r) => r.json())
-        .then((datos) => {
-          salida.textContent = JSON.stringify(datos, null, 2);
+      // "2026-09-09T22:14:03+02:00" → "9 sept, 22:14"
+      function fecha(iso) {
+        return new Date(iso).toLocaleString("es-ES", {
+          day: "numeric",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+
+      // 1834 → "30:34"
+      function duracion(segundos) {
+        const minutos = Math.floor(segundos / 60);
+        const resto = String(segundos % 60).padStart(2, "0");
+        return `${minutos}:${resto}`;
+      }
+
+      // 8 muertes no puede dividir entre 0: con 0 muertes el KDA es "perfecto"
+      function kda(kills, deaths, assists) {
+        if (deaths === 0) return "Perfect";
+        return ((kills + assists) / deaths).toFixed(2);
+      }
+
+      function tabla(partidas) {
+        const filas = partidas
+          .map(
+            (p) => `
+        <tr>
+          <td>${p.champion}</td>
+          <td>${p.position ?? "—"}</td>
+          <td class="num">${p.kills} / ${p.deaths} / ${p.assists}</td>
+          <td class="num">${kda(p.kills, p.deaths, p.assists)}</td>
+          <td class="num">${duracion(p.duration_seconds)}</td>
+          <td class="${p.win ? "win" : "loss"}">${p.win ? "Victoria" : "Derrota"}</td>
+          <td>${fecha(p.played_at)}</td>
+          <td class="num">${p.patch}</td>
+        </tr>`,
+          )
+          .join("");
+
+        return `
+      <table>
+        <thead>
+          <tr>
+            <th>Campeón</th>
+            <th>Posición</th>
+            <th>KDA</th>
+            <th>Ratio</th>
+            <th>Duración</th>
+            <th>Resultado</th>
+            <th>Fecha</th>
+            <th>Parche</th>
+          </tr>
+        </thead>
+        <tbody>${filas}</tbody>
+      </table>`;
+      }
+
+      fetch("http://localhost:8000/matches")
+        .then((r) => {
+          if (!r.ok) throw new Error(`La API respondió ${r.status}`);
+          return r.json();
+        })
+        .then((partidas) => {
+          if (partidas.length === 0) {
+            salida.textContent = "No hay partidas guardadas todavía.";
+            return;
+          }
+          salida.className = "";
+          salida.innerHTML = tabla(partidas);
         })
         .catch((error) => {
-          salida.textContent = "Error: " + error;
+          salida.textContent = `No se pudieron cargar las partidas: ${error.message}`;
         });
     </script>
   </body>
