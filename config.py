@@ -23,3 +23,7 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 
 # Segundos que vive cada respuesta cacheada
 CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "60"))
+
+# Orígenes que pueden leer las respuestas de la API desde un navegador.
+# Varios se separan por comas.
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:8080").split(",")

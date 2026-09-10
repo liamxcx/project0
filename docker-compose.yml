@@ -66,5 +66,13 @@ services:
         condition: service_healthy
     logging: *default-logging
 
+  frontend:
+    image: nginx:alpine
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    logging: *default-logging
+
 volumes:
   datos_db:

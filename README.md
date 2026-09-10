@@ -10,8 +10,8 @@ Solo se procesan partidas de Ranked Solo/Duo (queueId 420).
 
 ## Estado actual
 
-Recolección, base de datos y API propia funcionando. Falta la caché, el
-frontend y el despliegue.
+Recolección, base de datos, API propia y una página que la consume,
+todo funcionando. Falta el despliegue.
 
 ### Cómo encajan las piezas
 
@@ -26,9 +26,15 @@ scheduler  ──cada hora──▶  collector  ──▶  API de Riot
 Consulta, cada vez que alguien pregunta:
 
 ```
-cliente  ──▶  api  ──▶  Redis        ¿está la respuesta cacheada?
-                   └──▶  PostgreSQL   solo si no lo está
+navegador  ──▶  frontend   :8080   la página (nginx, ficheros estáticos)
+     │
+     └────────▶  api       :8000  ──▶  Redis        ¿está cacheada?
+                                  └──▶  PostgreSQL   solo si no lo está
 ```
+
+El navegador hace dos viajes: uno al `frontend` a por la página y otro a
+la `api` a por los datos. Son dos puertos distintos, o sea dos orígenes
+distintos, y por eso la API tiene que autorizar al frontend (ver CORS).
 
 `collector` arranca, descarga, guarda y termina; lo lanza `scheduler`, que
 es lo único que hace: ejecutarlo y volver a dormirse. `db`, `redis`, `api` y
@@ -56,10 +62,12 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
   funcionando.
 - **`scheduler`** — ejecuta el `collector` cada cierto tiempo, así que las
   partidas nuevas aparecen solas.
+- **`frontend`** — nginx sirviendo una página estática que pide los datos
+  a la API desde el navegador.
 
 ### Qué falta
 
-- Frontend para ver las estadísticas y comparar invocadores
+- Tabla de partidas, gráfica de winrate y comparar invocadores
 - Copia de seguridad de la base de datos
 - Despliegue en Kubernetes
 
@@ -89,6 +97,7 @@ REDIS_URL=redis://redis:6379/0
 CACHE_TTL_SECONDS=60
 REFRESH_INTERVAL_SECONDS=3600
 TZ=Europe/Madrid
+CORS_ORIGINS=http://localhost:8080
 ```
 
 El Riot ID va separado: si eres `TuNombre#EUW`, el nombre va en
@@ -111,6 +120,10 @@ intervalo corto tampoco gastaría peticiones de más.
 el desfase máximo entre lo que hay en PostgreSQL y lo que devuelve la API.
 Subirlo alivia a PostgreSQL a costa de servir datos más viejos.
 
+`CORS_ORIGINS` son los orígenes que pueden leer las respuestas de la API
+desde un navegador. Varios se separan por comas, y van sin barra final.
+Cambia según dónde se despliegue, por eso es configuración y no código.
+
 `DB_HOST` es `db` dentro de Compose. Para ejecutar el script fuera de
 Docker hay que ponerlo a `localhost`.
 
@@ -120,7 +133,7 @@ Docker hay que ponerlo a `localhost`.
 docker compose up
 ```
 
-Levanta los tres servicios. El esquema de `schema.sql` se aplica
+Levanta los seis servicios. El esquema de `schema.sql` se aplica
 automáticamente la primera vez que se inicializa la base de datos.
 
 Los servicios no se comportan igual:
@@ -252,6 +265,34 @@ Una partida de `/matches`:
 }
 ```
 
+## Frontend
+
+Una página en `frontend/index.html` que pide los datos a la API y los
+pinta. Se abre en `http://localhost:8080`.
+
+La sirve nginx, no la API: son dos servicios y dos puertos. Servir los
+estáticos con un servidor web dedicado es lo estándar, y deja el camino
+abierto a ponerle delante un reverse proxy más adelante.
+
+La carpeta entra en el contenedor como un bind mount de solo lectura, así
+que editar el HTML y recargar el navegador basta: no hay que reconstruir
+ni reiniciar nada. Si el cambio no se ve, suele ser la caché del
+navegador (`Cmd + Shift + R`).
+
+### CORS
+
+La página vive en `http://localhost:8080` y la API en
+`http://localhost:8000`. Distinto puerto es distinto origen, y por defecto
+el navegador no deja que una página lea respuestas de otro origen.
+
+La API lo autoriza con `CORSMiddleware`, que añade la cabecera
+`Access-Control-Allow-Origin` a sus respuestas. Se comprueba en la pestaña
+Network del navegador, en las cabeceras de respuesta de `/champions`.
+
+Solo se autoriza el método `GET`, que es lo único que hace la API. Y esto
+no protege la API: `curl` y cualquier cosa que no sea un navegador siguen
+accediendo igual. CORS protege al usuario, no al servidor.
+
 ## Logs
 
 Todo se registra con `logging`, con hora, nivel y mensaje:
@@ -295,10 +336,11 @@ docker inspect project0-scheduler-1 --format '{{json .HostConfig.LogConfig}}'
 ```
 collector.py         baja partidas de Riot y las guarda    → servicio collector
 api.py               sirve lo guardado, cuatro endpoints   → servicio api
+frontend/index.html  la página que consume la API          → servicio frontend
 config.py            la configuración, en un solo sitio    → lo importan los dos
 schema.sql           summoners, matches, participants      → servicio db
 Dockerfile           la imagen que comparten los dos servicios
-docker-compose.yml   los cinco servicios, el volumen y los healthchecks
+docker-compose.yml   los seis servicios, el volumen y los healthchecks
 requirements.txt     dependencias de Python, con versiones fijadas
 .env                 los valores reales (fuera del repo y de la imagen)
 ```
