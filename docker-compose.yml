@@ -14,7 +14,6 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
       - datos_db:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
@@ -32,12 +31,27 @@ services:
       retries: 5
     logging: *default-logging
 
+  flyway:
+    image: flyway/flyway:13-alpine
+    command: migrate
+    environment:
+      FLYWAY_URL: jdbc:postgresql://db:5432/${POSTGRES_DB}
+      FLYWAY_USER: ${POSTGRES_USER}
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
+      FLYWAY_LOCATIONS: filesystem:/flyway/migrations
+    volumes:
+      - ./migrations:/flyway/migrations:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    logging: *default-logging
+
   collector:
     build: .
     env_file: .env
     depends_on:
-      db:
-        condition: service_healthy
+      flyway:
+        condition: service_completed_successfully
     logging: *default-logging
 
   scheduler:
@@ -48,8 +62,8 @@ services:
       - while true; do python collector.py; sleep ${REFRESH_INTERVAL_SECONDS}; done
     env_file: .env
     depends_on:
-      db:
-        condition: service_healthy
+      flyway:
+        condition: service_completed_successfully
     restart: unless-stopped
     logging: *default-logging
 
@@ -60,8 +74,8 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
-      db:
-        condition: service_healthy
+      flyway:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     logging: *default-logging

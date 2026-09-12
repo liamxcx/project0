@@ -133,8 +133,8 @@ Docker hay que ponerlo a `localhost`.
 docker compose up
 ```
 
-Levanta los seis servicios. El esquema de `schema.sql` se aplica
-automáticamente la primera vez que se inicializa la base de datos.
+Levanta los siete servicios. El esquema lo aplica `flyway` antes de que
+arranquen `collector`, `scheduler` y `api`.
 
 Los servicios no se comportan igual:
 
@@ -153,16 +153,16 @@ Qué comando usar según lo que hayas cambiado:
 ```bash
 docker compose up            # cambios en docker-compose.yml o .env
 docker compose up --build    # cambios en el código o en requirements.txt
-docker compose down -v       # cambios en schema.sql (borra los datos)
+docker compose up            # cambios en el esquema (una migración nueva)
 ```
 
 El `--build` hace falta porque `collector.py`, `api.py`, `config.py` y
 `requirements.txt` se copian dentro de la imagen. El resto se lee al
 arrancar.
 
-El `-v` hace falta con `schema.sql` porque el script solo se ejecuta
-cuando la base de datos está vacía. Más adelante habría que sustituirlo
-por migraciones para no perder el historial.
+Los cambios de esquema ya no necesitan `down -v`: se escriben como una
+migración nueva y `flyway` la aplica al arrancar, sin tocar los datos.
+Ver [Migraciones](#migraciones).
 
 ## Base de datos
 
@@ -265,6 +265,69 @@ Una partida de `/matches`:
 }
 ```
 
+## Migraciones
+
+El esquema de la base vive en `migrations/`, un fichero por cambio:
+
+```
+migrations/
+  V1__initial_schema.sql            summoners, matches, participants
+  V2__index_matches_played_at.sql   índice para el ORDER BY de /matches
+```
+
+El nombre es la convención de Flyway: `V`, el número, **dos** guiones
+bajos y la descripción. Con un solo guion el fichero se ignora.
+
+Cada fichero lleva solo su cambio, no el esquema entero. El estado de la
+base es la suma de todos, como los commits de un repositorio.
+
+### Cómo se aplican
+
+El servicio `flyway` se ejecuta al arrancar, aplica lo que falte y
+termina. `collector`, `scheduler` y `api` esperan a que acabe bien
+(`service_completed_successfully`), así que si una migración falla la
+aplicación no arranca, en vez de trabajar sobre una base a medias.
+
+Flyway lleva la cuenta en una tabla de la propia base,
+`flyway_schema_history`, que se puede consultar como cualquier otra.
+
+### Añadir un cambio
+
+Crear el fichero con el número siguiente y levantar:
+
+```bash
+docker compose up -d
+docker compose logs flyway
+```
+
+Comandos sueltos, sin levantar nada:
+
+```bash
+docker compose run --rm flyway info      # en qué versión está la base
+docker compose run --rm flyway migrate   # aplicar lo que falte
+docker compose run --rm flyway validate  # comprobar que nada ha cambiado
+```
+
+### Una migración aplicada no se toca
+
+Flyway guarda el checksum de cada fichero ejecutado y lo recalcula en cada
+arranque. Cambiar una migración ya aplicada, aunque sea un comentario, da
+error y no se ejecuta nada.
+
+No es una manía: si se editara una migración que lleva meses en
+producción, un entorno nuevo aplicaría la versión corregida y producción
+se quedaría con la vieja, sin que nadie se entere. ¿Hay que corregir algo?
+Se escribe la migración siguiente.
+
+### La base actual se incorporó con baseline
+
+Cuando se montó Flyway, las tablas ya existían con partidas dentro. En vez
+de vaciar la base se usó `flyway baseline -baselineVersion=1`, que crea la
+tabla de control y apunta la V1 como aplicada sin ejecutarla.
+
+Hace falta solo al meter Flyway en una base que ya existe. Una base vacía
+ejecuta las migraciones desde la V1 y llega al mismo esquema.
+
 ## Frontend
 
 Una página en `frontend/index.html` que pide los datos a la API y los
@@ -338,7 +401,7 @@ collector.py         baja partidas de Riot y las guarda    → servicio collecto
 api.py               sirve lo guardado, cuatro endpoints   → servicio api
 frontend/index.html  la página que consume la API          → servicio frontend
 config.py            la configuración, en un solo sitio    → lo importan los dos
-schema.sql           summoners, matches, participants      → servicio db
+migrations/          el esquema, versionado paso a paso      → servicio flyway
 Dockerfile           la imagen que comparten los dos servicios
 docker-compose.yml   los seis servicios, el volumen y los healthchecks
 requirements.txt     dependencias de Python, con versiones fijadas
@@ -414,7 +477,5 @@ Tras regenerar la clave puede tardar unos segundos en ser válida.
 
 ## Deuda técnica
 
-- Migraciones para modificar el esquema sin perder datos. Ahora un cambio
-  en `schema.sql` obliga a `docker compose down -v`, que borra el historial.
 - Decidir si `/docs` y `/redoc` se desactivan al desplegar fuera de local.
   Se hace con `docs_url=None` al crear la aplicación.
