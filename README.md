@@ -176,19 +176,69 @@ Tres tablas:
 
 - `summoners` — traduce cada PUUID a un Riot ID legible
 - `matches` — fecha, duración, tipo de cola y parche de cada partida
-- `participants` — campeón, posición, KDA y resultado de un invocador
-  en una partida
+- `participants` — todo lo de un invocador en una partida: campeón,
+  posición, KDA, resultado, oro, daño hecho y recibido, CS, visión,
+  objetos finales y hechizos de invocador
 
-Las inserciones usan `ON CONFLICT DO NOTHING`, así que el script se puede
-ejecutar las veces que haga falta: solo guarda lo que no tenía.
+Todos esos datos vienen en la misma respuesta de MATCH-V5, así que
+guardarlos no cuesta ninguna petición extra a Riot.
+
+El CS va en dos columnas, `minions_killed` y `neutral_minions_killed`,
+porque Riot lo da así. Sumarlas es cosa de la consulta:
+
+```sql
+SELECT champion, minions_killed + neutral_minions_killed AS cs
+FROM participants;
+```
+
+Los objetos y los hechizos se guardan como identificadores numéricos; los
+nombres y los iconos salen de Data Dragon, igual que con los campeones.
+
+### Insertar sin duplicar
+
+Las inserciones usan `ON CONFLICT ... DO UPDATE`: si la fila no está se
+inserta, y si está se actualiza con los valores nuevos. El script se puede
+ejecutar las veces que haga falta y el resultado es siempre el mismo.
+
+`DO NOTHING` no valdría: ignoraría la fila entera y nunca se podrían
+rellenar columnas añadidas más tarde.
+
+### Rellenar datos hacia atrás
+
+El `collector` se salta las partidas que ya tiene, para no gastar
+peticiones. Con `--refetch` las vuelve a pedir y reescribe las filas:
+
+```bash
+docker compose run --rm collector python collector.py --refetch
+```
+
+Hace falta al añadir una columna nueva (las partidas viejas la tendrían a
+`NULL`) y al corregir un fallo del `collector` que haya guardado algo mal.
+
+Solo alcanza a las partidas que Riot todavía sirve, unas cien hacia atrás.
+Las más antiguas no se pueden volver a pedir, así que una columna añadida
+tarde se queda con `NULL` para siempre en esas.
+
+### El ciclo completo para añadir un dato
+
+1. Escribir la migración con la columna nueva (`V4__...sql`)
+2. Añadirla al `INSERT` del `collector`, en la lista de columnas, en los
+   `%s` y en la tupla de valores
+3. `docker compose up -d --build`, que aplica la migración y reconstruye
+4. `--refetch` para rellenar el historial
+5. Exponerla en `api.py` si el frontend la necesita
 
 Los datos viven en el volumen `datos_db`, que sobrevive a `docker compose down`.
 
 Para ver las partidas guardadas sin entrar en la base de datos:
 
 ```bash
-docker compose exec db psql -U loltest -d lolstats -c "SELECT * FROM participants;"
+docker compose exec db psql -U loltest -d lolstats -P pager=off \
+  -c "SELECT champion, kills, gold_earned, damage_to_champions FROM participants;"
 ```
+
+`-P pager=off` evita que la salida se abra en un paginador y deje el
+terminal esperando.
 
 ## API
 

@@ -77,7 +77,8 @@ def matches():
     ):
         cursor.execute(
             """
-            SELECT p.champion,
+            SELECT m.match_id,
+                   p.champion,
                    p.position,
                    p.kills,
                    p.deaths,

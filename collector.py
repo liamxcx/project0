@@ -23,6 +23,10 @@ logging.basicConfig(
 )
 log = logging.getLogger("collector")
 
+# Con --refetch se vuelven a pedir a Riot las partidas ya guardadas, para
+# rellenar columnas añadidas después. Sin él, las que ya están se saltan.
+refetch = "--refetch" in sys.argv
+
 
 def fetch(url, params=None, attempts=3):
     for attempt in range(attempts):
@@ -93,7 +97,7 @@ match_ids = ids_response.json()
 
 log.info("Partidas encontradas: %s", len(match_ids))
 
-new_matches = 0
+saved = 0
 
 with (
     psycopg.connect(DB_URL) as connection,
@@ -115,7 +119,10 @@ with (
     )
     already_saved = {row[0] for row in cursor.fetchall()}
 
-    if already_saved:
+    if refetch:
+        log.info("Modo --refetch: se vuelven a pedir las %s guardadas", len(already_saved))
+        already_saved = set()
+    elif already_saved:
         log.info("Ya guardadas, no se piden a Riot: %s", len(already_saved))
 
     for match_id in match_ids:
@@ -144,7 +151,11 @@ with (
             INSERT INTO matches
                 (match_id, played_at, duration_seconds, queue_id, game_version)
             VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (match_id) DO NOTHING
+            ON CONFLICT (match_id) DO UPDATE SET
+                played_at        = EXCLUDED.played_at,
+                duration_seconds = EXCLUDED.duration_seconds,
+                queue_id         = EXCLUDED.queue_id,
+                game_version     = EXCLUDED.game_version
             """,
             (
                 match_id,
@@ -158,9 +169,41 @@ with (
         cursor.execute(
             """
             INSERT INTO participants
-                (match_id, puuid, champion, position, kills, deaths, assists, win)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (match_id, puuid) DO NOTHING
+                (match_id, puuid, champion, position, kills, deaths, assists, win,
+                 damage_to_champions, damage_taken, gold_earned,
+                 minions_killed, neutral_minions_killed,
+                 vision_score, wards_placed,
+                 item0, item1, item2, item3, item4, item5, item6,
+                 summoner1_id, summoner2_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s,
+                    %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s)
+            ON CONFLICT (match_id, puuid) DO UPDATE SET
+                champion               = EXCLUDED.champion,
+                position               = EXCLUDED.position,
+                kills                  = EXCLUDED.kills,
+                deaths                 = EXCLUDED.deaths,
+                assists                = EXCLUDED.assists,
+                win                    = EXCLUDED.win,
+                damage_to_champions    = EXCLUDED.damage_to_champions,
+                damage_taken           = EXCLUDED.damage_taken,
+                gold_earned            = EXCLUDED.gold_earned,
+                minions_killed         = EXCLUDED.minions_killed,
+                neutral_minions_killed = EXCLUDED.neutral_minions_killed,
+                vision_score           = EXCLUDED.vision_score,
+                wards_placed           = EXCLUDED.wards_placed,
+                item0 = EXCLUDED.item0,
+                item1 = EXCLUDED.item1,
+                item2 = EXCLUDED.item2,
+                item3 = EXCLUDED.item3,
+                item4 = EXCLUDED.item4,
+                item5 = EXCLUDED.item5,
+                item6 = EXCLUDED.item6,
+                summoner1_id = EXCLUDED.summoner1_id,
+                summoner2_id = EXCLUDED.summoner2_id
             """,
             (
                 match_id,
@@ -171,10 +214,26 @@ with (
                 me["deaths"],
                 me["assists"],
                 me["win"],
+                me["totalDamageDealtToChampions"],
+                me["totalDamageTaken"],
+                me["goldEarned"],
+                me["totalMinionsKilled"],
+                me["neutralMinionsKilled"],
+                me["visionScore"],
+                me["wardsPlaced"],
+                me["item0"],
+                me["item1"],
+                me["item2"],
+                me["item3"],
+                me["item4"],
+                me["item5"],
+                me["item6"],
+                me["summoner1Id"],
+                me["summoner2Id"],
             ),
         )
 
-        new_matches += 1
+        saved += 1
 
         kda = f"{me['kills']}/{me['deaths']}/{me['assists']}"
         resultado = "Victoria" if me["win"] else "Derrota"
@@ -184,4 +243,7 @@ with (
 
     connection.commit()
 
-log.info("Partidas nuevas guardadas: %s", new_matches)
+if refetch:
+    log.info("Partidas actualizadas: %s", saved)
+else:
+    log.info("Partidas nuevas guardadas: %s", saved)
