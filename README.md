@@ -160,6 +160,12 @@ El `--build` hace falta porque `collector.py`, `api.py`, `config.py` y
 `requirements.txt` se copian dentro de la imagen. El resto se lee al
 arrancar.
 
+Y va sin nombrar servicio a propósito. `collector`, `scheduler` y `api`
+comparten el `Dockerfile`, pero Compose construye una imagen por servicio:
+`docker compose up --build api` reconstruye solo esa y deja a las otras dos
+con el código anterior, sin dar ningún error. Para levantar uno suelto sí
+vale nombrarlo; para reconstruir, no.
+
 Los cambios de esquema ya no necesitan `down -v`: se escriben como una
 migración nueva y `flyway` la aplica al arrancar, sin tocar los datos.
 Ver [Migraciones](#migraciones).
