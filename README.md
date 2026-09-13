@@ -179,6 +179,8 @@ Tres tablas:
 - `participants` — todo lo de un invocador en una partida: campeón,
   posición, KDA, resultado, oro, daño hecho y recibido, CS, visión,
   objetos finales y hechizos de invocador
+- `item_purchases` — cada compra de cada jugador, con su minuto
+- `skill_levelups` — cada subida de habilidad, con su minuto
 
 Todos esos datos vienen en la misma respuesta de MATCH-V5, así que
 guardarlos no cuesta ninguna petición extra a Riot.
@@ -193,6 +195,62 @@ FROM participants;
 
 Los objetos y los hechizos se guardan como identificadores numéricos; los
 nombres y los iconos salen de Data Dragon, igual que con los campeones.
+
+### El timeline
+
+Los objetos finales (`item0`…`item6`) dicen cómo acabó la build, no en qué
+orden se llegó ahí. El orden está en otro endpoint, el *timeline*, que es
+una petición más por partida:
+
+```
+/lol/match/v5/matches/{id}          detalle    → matches, participants
+/lol/match/v5/matches/{id}/timeline eventos    → item_purchases, skill_levelups
+```
+
+Viene partido en frames, uno por minuto, y cada frame trae sus eventos:
+compras, muertes, torres, guardianes. De todos ellos se guardan dos tipos,
+`ITEM_PURCHASED` y `SKILL_LEVEL_UP`, de los diez jugadores. Son unas 300 y
+180 filas por partida.
+
+La respuesta pesa cerca de 1 MB, así que no se guarda entera: extraer los
+cuatro campos que importan la deja en unos 19 KB por partida, cincuenta
+veces menos.
+
+Tres cosas que hace el `collector` al procesarlo:
+
+- **Descarta los eventos con `participantId` 0.** Los jugadores van del 1
+  al 10; los del 0 son artefactos del arranque de la partida.
+- **Aplica los `ITEM_UNDO`.** Comprar algo y deshacerlo en la tienda genera
+  un evento de compra y otro de deshacer. Sin esto, el primer objeto de una
+  build podría ser uno que se devolvió.
+- **Borra antes de insertar.** La clave de estas tablas es un id
+  automático, así que un `--refetch` duplicaría las filas en vez de
+  reemplazarlas.
+
+Los jugadores se identifican por su número dentro de la partida (1-10), no
+por PUUID: para analizar builds basta, y así no se guarda la identidad de
+nadie más. `participants.participant_id` guarda ese número para el propio
+invocador, que es lo que permite filtrar sus compras:
+
+```sql
+SELECT ip.timestamp_ms / 60000 AS minuto, ip.item_id
+FROM item_purchases ip
+JOIN participants p
+  ON p.match_id = ip.match_id AND p.participant_id = ip.participant_id
+WHERE ip.match_id = 'EUW1_...'
+ORDER BY ip.timestamp_ms;
+```
+
+Los `item_id` son números; la traducción a nombre e icono sale de Data
+Dragon, igual que con los campeones. Se guarda el número a propósito: si
+Riot renombra un objeto, el historial no queda con un nombre que ya no
+existe.
+
+Y un aviso sobre lo que se puede concluir: comparar winrates por build
+necesita decenas de partidas *en cada rama*, y una ventana de parche son
+dos semanas. Con pocas partidas esos porcentajes son ruido. Lo que sí
+vale es el historial propio — "con esta build llevo 12-4" — enseñando
+siempre sobre cuántas partidas se calcula.
 
 ### Insertar sin duplicar
 
@@ -221,7 +279,7 @@ tarde se queda con `NULL` para siempre en esas.
 
 ### El ciclo completo para añadir un dato
 
-1. Escribir la migración con la columna nueva (`V4__...sql`)
+1. Escribir la migración con la columna nueva (`V6__...sql`)
 2. Añadirla al `INSERT` del `collector`, en la lista de columnas, en los
    `%s` y en la tupla de valores
 3. `docker compose up -d --build`, que aplica la migración y reconstruye

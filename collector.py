@@ -53,6 +53,82 @@ def fetch(url, params=None, attempts=3):
     return None
 
 
+def guardar_timeline(cursor, match_id):
+    """Descarga el timeline de una partida y guarda compras y habilidades.
+
+    Es una petición extra por partida: el detalle y el timeline son dos
+    endpoints distintos. Devuelve cuántas filas ha guardado de cada cosa.
+    """
+    response = fetch(f"{RIOT_BASE_URL}/lol/match/v5/matches/{match_id}/timeline")
+
+    if response is None or response.status_code != 200:
+        log.warning("Sin timeline para %s", match_id)
+        return 0, 0
+
+    compras = []
+    habilidades = []
+
+    for frame in response.json()["info"]["frames"]:
+        for event in frame["events"]:
+            # El participante 0 no existe: son artefactos del arranque
+            participant_id = event.get("participantId", 0)
+            if participant_id < 1:
+                continue
+
+            tipo = event["type"]
+
+            if tipo == "ITEM_PURCHASED":
+                compras.append(
+                    [match_id, participant_id, event["itemId"], event["timestamp"]]
+                )
+
+            elif tipo == "ITEM_UNDO" and event["afterId"] == 0:
+                # Deshacer una compra: se busca la última de ese objeto y se
+                # quita, porque esa compra no llegó a ocurrir. Con afterId
+                # distinto de 0 sería deshacer una venta, que no afecta aquí.
+                for i in range(len(compras) - 1, -1, -1):
+                    if (
+                        compras[i][1] == participant_id
+                        and compras[i][2] == event["beforeId"]
+                    ):
+                        del compras[i]
+                        break
+
+            elif tipo == "SKILL_LEVEL_UP":
+                habilidades.append(
+                    [
+                        match_id,
+                        participant_id,
+                        event["skillSlot"],
+                        event["levelUpType"],
+                        event["timestamp"],
+                    ]
+                )
+
+    # Con --refetch la partida puede tener filas de una pasada anterior. Como
+    # la clave es un id automático, insertar sin más las duplicaría.
+    cursor.execute("DELETE FROM item_purchases WHERE match_id = %s", (match_id,))
+    cursor.execute("DELETE FROM skill_levelups WHERE match_id = %s", (match_id,))
+
+    cursor.executemany(
+        """
+        INSERT INTO item_purchases (match_id, participant_id, item_id, timestamp_ms)
+        VALUES (%s, %s, %s, %s)
+        """,
+        compras,
+    )
+    cursor.executemany(
+        """
+        INSERT INTO skill_levelups
+            (match_id, participant_id, skill_slot, level_up_type, timestamp_ms)
+        VALUES (%s, %s, %s, %s, %s)
+        """,
+        habilidades,
+    )
+
+    return len(compras), len(habilidades)
+
+
 log.info("Consultando datos de %s#%s", RIOT_GAME_NAME, RIOT_TAG_LINE)
 
 account_response = fetch(
@@ -174,13 +250,13 @@ with (
                  minions_killed, neutral_minions_killed,
                  vision_score, wards_placed,
                  item0, item1, item2, item3, item4, item5, item6,
-                 summoner1_id, summoner2_id)
+                 summoner1_id, summoner2_id, participant_id)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s,
                     %s, %s,
                     %s, %s,
                     %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s)
+                    %s, %s, %s)
             ON CONFLICT (match_id, puuid) DO UPDATE SET
                 champion               = EXCLUDED.champion,
                 position               = EXCLUDED.position,
@@ -203,7 +279,8 @@ with (
                 item5 = EXCLUDED.item5,
                 item6 = EXCLUDED.item6,
                 summoner1_id = EXCLUDED.summoner1_id,
-                summoner2_id = EXCLUDED.summoner2_id
+                summoner2_id = EXCLUDED.summoner2_id,
+                participant_id = EXCLUDED.participant_id
             """,
             (
                 match_id,
@@ -230,14 +307,24 @@ with (
                 me["item6"],
                 me["summoner1Id"],
                 me["summoner2Id"],
+                me["participantId"],
             ),
         )
+
+        n_compras, n_habilidades = guardar_timeline(cursor, match_id)
 
         saved += 1
 
         kda = f"{me['kills']}/{me['deaths']}/{me['assists']}"
         resultado = "Victoria" if me["win"] else "Derrota"
-        log.info("%-15s %-10s %s", me["championName"], kda, resultado)
+        log.info(
+            "%-15s %-10s %-9s %s compras, %s habilidades",
+            me["championName"],
+            kda,
+            resultado,
+            n_compras,
+            n_habilidades,
+        )
 
         time.sleep(0.1)
 
