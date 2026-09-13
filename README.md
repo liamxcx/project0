@@ -176,9 +176,9 @@ Tres tablas:
 
 - `summoners` — traduce cada PUUID a un Riot ID legible
 - `matches` — fecha, duración, tipo de cola y parche de cada partida
-- `participants` — todo lo de un invocador en una partida: campeón,
-  posición, KDA, resultado, oro, daño hecho y recibido, CS, visión,
-  objetos finales y hechizos de invocador
+- `participants` — los diez jugadores de cada partida: campeón, posición,
+  KDA, resultado, oro, daño hecho y recibido, CS, visión, objetos finales,
+  hechizos de invocador y equipo
 - `item_purchases` — cada compra de cada jugador, con su minuto
 - `skill_levelups` — cada subida de habilidad, con su minuto
 
@@ -195,6 +195,56 @@ FROM participants;
 
 Los objetos y los hechizos se guardan como identificadores numéricos; los
 nombres y los iconos salen de Data Dragon, igual que con los campeones.
+
+### Los diez jugadores
+
+`participants` guarda a los diez de cada partida, no solo al invocador
+propio. De los demás se guarda todo lo de la partida y **nada de su
+identidad**: el PUUID solo se rellena para los invocadores seguidos.
+
+La clave primaria es `(match_id, participant_id)`, el número de jugador
+dentro de la partida (1-10), que existe siempre. Antes era
+`(match_id, puuid)`, que dejaba fuera a quien no tuviera PUUID.
+
+El `puuid` quedó opcional, y eso basta para que su referencia a `summoners`
+no estorbe: en SQL, una clave ajena nula no se comprueba.
+
+Para enseñar el marcador, un `LEFT JOIN` — normal descartaría a los nueve
+sin PUUID:
+
+```sql
+SELECT p.team_id, p.champion, s.game_name,
+       p.kills || '/' || p.deaths || '/' || p.assists AS kda
+FROM participants p
+LEFT JOIN summoners s ON s.puuid = p.puuid
+WHERE p.match_id = 'EUW1_...'
+ORDER BY p.team_id, p.participant_id;
+```
+
+Sale una fila con nombre y nueve sin él; esas se muestran con el nombre
+del campeón. Al añadir un invocador a los seguidos, sus filas anteriores se
+rellenan con un `--refetch`.
+
+`team_id` es 100 (azul) o 200 (rojo), como lo da Riot. Separa aliados de
+rivales y permite calcular la participación en asesinatos, que necesita las
+kills de todo el equipo:
+
+```sql
+SELECT champion,
+       ROUND(100.0 * (kills + assists)
+             / NULLIF(SUM(kills) OVER (PARTITION BY team_id), 0), 1) AS kp_pct
+FROM participants
+WHERE match_id = 'EUW1_...'
+ORDER BY kp_pct DESC;
+```
+
+El `SUM(...) OVER (PARTITION BY ...)` es una función de ventana: suma por
+equipo sin agrupar las filas, así que cada jugador conserva la suya y ve
+además el total.
+
+Al cambiar la clave primaria se perdió el índice que daba la anterior para
+buscar por `puuid`, así que `V6` lo crea aparte. Es la trampa del cambio:
+una clave primaria trae un índice de regalo, y cambiarla se lo lleva.
 
 ### El timeline
 

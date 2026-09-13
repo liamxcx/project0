@@ -213,12 +213,6 @@ with (
 
         info = match_response.json()["info"]
 
-        me = None
-        for participant in info["participants"]:
-            if participant["puuid"] == puuid:
-                me = participant
-                break
-
         # Riot da la fecha en milisegundos desde 1970
         played_at = datetime.fromtimestamp(info["gameCreation"] / 1000, timezone.utc)
 
@@ -242,74 +236,85 @@ with (
             ),
         )
 
-        cursor.execute(
-            """
-            INSERT INTO participants
-                (match_id, puuid, champion, position, kills, deaths, assists, win,
-                 damage_to_champions, damage_taken, gold_earned,
-                 minions_killed, neutral_minions_killed,
-                 vision_score, wards_placed,
-                 item0, item1, item2, item3, item4, item5, item6,
-                 summoner1_id, summoner2_id, participant_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s,
-                    %s, %s,
-                    %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s)
-            ON CONFLICT (match_id, puuid) DO UPDATE SET
-                champion               = EXCLUDED.champion,
-                position               = EXCLUDED.position,
-                kills                  = EXCLUDED.kills,
-                deaths                 = EXCLUDED.deaths,
-                assists                = EXCLUDED.assists,
-                win                    = EXCLUDED.win,
-                damage_to_champions    = EXCLUDED.damage_to_champions,
-                damage_taken           = EXCLUDED.damage_taken,
-                gold_earned            = EXCLUDED.gold_earned,
-                minions_killed         = EXCLUDED.minions_killed,
-                neutral_minions_killed = EXCLUDED.neutral_minions_killed,
-                vision_score           = EXCLUDED.vision_score,
-                wards_placed           = EXCLUDED.wards_placed,
-                item0 = EXCLUDED.item0,
-                item1 = EXCLUDED.item1,
-                item2 = EXCLUDED.item2,
-                item3 = EXCLUDED.item3,
-                item4 = EXCLUDED.item4,
-                item5 = EXCLUDED.item5,
-                item6 = EXCLUDED.item6,
-                summoner1_id = EXCLUDED.summoner1_id,
-                summoner2_id = EXCLUDED.summoner2_id,
-                participant_id = EXCLUDED.participant_id
-            """,
-            (
-                match_id,
-                puuid,
-                me["championName"],
-                me["teamPosition"],
-                me["kills"],
-                me["deaths"],
-                me["assists"],
-                me["win"],
-                me["totalDamageDealtToChampions"],
-                me["totalDamageTaken"],
-                me["goldEarned"],
-                me["totalMinionsKilled"],
-                me["neutralMinionsKilled"],
-                me["visionScore"],
-                me["wardsPlaced"],
-                me["item0"],
-                me["item1"],
-                me["item2"],
-                me["item3"],
-                me["item4"],
-                me["item5"],
-                me["item6"],
-                me["summoner1Id"],
-                me["summoner2Id"],
-                me["participantId"],
-            ),
-        )
+        me = None
+
+        for participant in info["participants"]:
+            # Solo se guarda el PUUID de los invocadores seguidos. Del resto
+            # basta el número de jugador: su identidad no hace falta.
+            seguido = participant["puuid"] == puuid
+            if seguido:
+                me = participant
+
+            cursor.execute(
+                """
+                INSERT INTO participants
+                    (match_id, puuid, champion, position, kills, deaths, assists, win,
+                     damage_to_champions, damage_taken, gold_earned,
+                     minions_killed, neutral_minions_killed,
+                     vision_score, wards_placed,
+                     item0, item1, item2, item3, item4, item5, item6,
+                     summoner1_id, summoner2_id, participant_id, team_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s,
+                        %s, %s,
+                        %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s)
+                ON CONFLICT (match_id, participant_id) DO UPDATE SET
+                    puuid                  = EXCLUDED.puuid,
+                    champion               = EXCLUDED.champion,
+                    position               = EXCLUDED.position,
+                    kills                  = EXCLUDED.kills,
+                    deaths                 = EXCLUDED.deaths,
+                    assists                = EXCLUDED.assists,
+                    win                    = EXCLUDED.win,
+                    damage_to_champions    = EXCLUDED.damage_to_champions,
+                    damage_taken           = EXCLUDED.damage_taken,
+                    gold_earned            = EXCLUDED.gold_earned,
+                    minions_killed         = EXCLUDED.minions_killed,
+                    neutral_minions_killed = EXCLUDED.neutral_minions_killed,
+                    vision_score           = EXCLUDED.vision_score,
+                    wards_placed           = EXCLUDED.wards_placed,
+                    item0 = EXCLUDED.item0,
+                    item1 = EXCLUDED.item1,
+                    item2 = EXCLUDED.item2,
+                    item3 = EXCLUDED.item3,
+                    item4 = EXCLUDED.item4,
+                    item5 = EXCLUDED.item5,
+                    item6 = EXCLUDED.item6,
+                    summoner1_id = EXCLUDED.summoner1_id,
+                    summoner2_id = EXCLUDED.summoner2_id,
+                    team_id      = EXCLUDED.team_id
+                """,
+                (
+                    match_id,
+                    puuid if seguido else None,
+                    participant["championName"],
+                    participant["teamPosition"],
+                    participant["kills"],
+                    participant["deaths"],
+                    participant["assists"],
+                    participant["win"],
+                    participant["totalDamageDealtToChampions"],
+                    participant["totalDamageTaken"],
+                    participant["goldEarned"],
+                    participant["totalMinionsKilled"],
+                    participant["neutralMinionsKilled"],
+                    participant["visionScore"],
+                    participant["wardsPlaced"],
+                    participant["item0"],
+                    participant["item1"],
+                    participant["item2"],
+                    participant["item3"],
+                    participant["item4"],
+                    participant["item5"],
+                    participant["item6"],
+                    participant["summoner1Id"],
+                    participant["summoner2Id"],
+                    participant["participantId"],
+                    participant["teamId"],
+                ),
+            )
 
         n_compras, n_habilidades = guardar_timeline(cursor, match_id)
 
