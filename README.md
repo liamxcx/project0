@@ -669,5 +669,16 @@ Tras regenerar la clave puede tardar unos segundos en ser válida.
 
 ## Deuda técnica
 
+- Un pool de conexiones en la API. Hoy cada endpoint abre su propia
+  conexión a PostgreSQL y la cierra al terminar, y abrir una conexión es de
+  lo más caro que hay. Con un usuario no se nota; con varias réplicas, sí.
+  `psycopg` trae uno. Aplazado hasta tener tests que comprueben que las
+  respuestas no cambian.
+- `ON DELETE CASCADE` en las claves ajenas de `participants`,
+  `item_purchases` y `skill_levelups`. Hoy borrar una partida de `matches`
+  falla porque esas tablas la referencian. Pendiente hasta que haga falta
+  borrar partidas viejas.
+- Invalidar la caché desde el `collector` cuando guarde partidas nuevas, en
+  vez de esperar a que caduque el TTL.
 - Decidir si `/docs` y `/redoc` se desactivan al desplegar fuera de local.
   Se hace con `docs_url=None` al crear la aplicación.
