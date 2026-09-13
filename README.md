@@ -10,16 +10,24 @@ Solo se procesan partidas de Ranked Solo/Duo (queueId 420).
 
 ## Estado actual
 
-Recolección, base de datos, API propia y una página que la consume,
-todo funcionando. Falta el despliegue.
+Recolección, base de datos con migraciones, API propia y una página que la
+consume, todo funcionando. Faltan los tests y el despliegue.
 
 ### Cómo encajan las piezas
+
+Al arrancar, `flyway` pone el esquema al día y solo entonces arrancan los
+servicios que usan la base:
+
+```
+db ──sano──▶ flyway ──termina──▶ collector / scheduler / api
+```
 
 Recolección, cada hora sin que nadie la lance:
 
 ```
 scheduler  ──cada hora──▶  collector  ──▶  API de Riot
-                               │
+                               │              detalle de la partida
+                               │              y su timeline
                                └──▶  PostgreSQL
 ```
 
@@ -36,9 +44,9 @@ El navegador hace dos viajes: uno al `frontend` a por la página y otro a
 la `api` a por los datos. Son dos puertos distintos, o sea dos orígenes
 distintos, y por eso la API tiene que autorizar al frontend (ver CORS).
 
-`collector` arranca, descarga, guarda y termina; lo lanza `scheduler`, que
-es lo único que hace: ejecutarlo y volver a dormirse. `db`, `redis`, `api` y
-`scheduler` se quedan en marcha.
+`collector` arranca, descarga, guarda y termina. Lo lanza `scheduler`, que
+solo hace eso: ejecutarlo y esperar hasta la siguiente vez. `db`, `redis`,
+`api`, `frontend` y `scheduler` se quedan en marcha.
 
 Ningún endpoint de la API llama a Riot: sirve solo lo que ya está guardado,
 así que consultar las estadísticas no gasta peticiones. Y cuando la
@@ -47,14 +55,17 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
 ### Qué hay hecho
 
 - **`collector`** — dado un Riot ID: PUUID (ACCOUNT-V1), identificadores
-  de las últimas partidas (MATCH-V5), detalle de cada una y guardado de
-  invocador, partida y participación sin duplicar. Antes de descargar
-  consulta cuáles ya están en la base y se las salta, así que solo pide
-  a Riot lo que le falta. Con reintentos ante fallos de red y control del
-  límite de peticiones.
-- **`db`** — tres tablas en PostgreSQL, volumen con nombre para
+  de las últimas partidas (MATCH-V5), y de cada una su detalle y su
+  timeline. Guarda la partida, los diez participantes y los eventos de
+  compra y de habilidades, sin duplicar. Antes de descargar consulta
+  cuáles ya están en la base y se las salta, así que solo pide a Riot lo
+  que le falta. Con reintentos ante fallos de red y control del límite de
+  peticiones.
+- **`db`** — cinco tablas en PostgreSQL, volumen con nombre para
   que los datos sobrevivan a los reinicios y arranque ordenado con
   healthcheck.
+- **`flyway`** — aplica las migraciones pendientes al arrancar y termina.
+  Los servicios que usan la base esperan a que acabe.
 - **`api`** — cuatro endpoints con FastAPI, agregados calculados en SQL y
   documentación interactiva automática en `/docs`.
 - **`redis`** — caché de respuestas de la API, con caducidad automática y
@@ -67,7 +78,8 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
 
 ### Qué falta
 
-- Tabla de partidas, gráfica de winrate y comparar invocadores
+- Tests y CI
+- Gráfica de winrate y comparar varios invocadores
 - Copia de seguridad de la base de datos
 - Despliegue en Kubernetes
 
@@ -75,7 +87,8 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
 
 - Docker
 - Una clave de la API de Riot: https://developer.riotgames.com
-  (la Development Key caduca cada 24 horas)
+  La Development Key caduca cada 24 horas. Una personal key, que se pide
+  registrando el proyecto en el portal, no caduca.
 
 ## Configuración
 
@@ -86,7 +99,7 @@ RIOT_API_KEY=RGAPI-...
 RIOT_GAME_NAME=TuNombre
 RIOT_TAG_LINE=EUW
 
-POSTGRES_USER=lol
+POSTGRES_USER=loltest
 POSTGRES_PASSWORD=
 POSTGRES_DB=lolstats
 DB_HOST=db
@@ -138,33 +151,27 @@ arranquen `collector`, `scheduler` y `api`.
 
 Los servicios no se comportan igual:
 
-- `db` y `api` son procesos largos: se quedan corriendo hasta que se paran.
-- `collector` es un script: descarga las partidas, las guarda y termina. En
-  `docker compose ps` aparece como `Exited (0)`, que no es un error.
-
-Para levantar solo la API, sin gastar peticiones a Riot:
-
-```bash
-docker compose up -d --build api
-```
+- `db`, `redis`, `api`, `frontend` y `scheduler` son procesos largos: se
+  quedan corriendo hasta que se paran.
+- `collector` y `flyway` terminan cuando acaban su trabajo. En
+  `docker compose ps` aparecen como `Exited (0)`, que no es un error.
 
 Qué comando usar según lo que hayas cambiado:
 
 ```bash
-docker compose up            # cambios en docker-compose.yml o .env
-docker compose up --build    # cambios en el código o en requirements.txt
-docker compose up            # cambios en el esquema (una migración nueva)
+docker compose up            # docker-compose.yml, .env o una migración nueva
+docker compose up --build    # el código o requirements.txt
 ```
 
 El `--build` hace falta porque `collector.py`, `api.py`, `config.py` y
-`requirements.txt` se copian dentro de la imagen. El resto se lee al
-arrancar.
+`requirements.txt` se copian dentro de la imagen. El `.env` y las
+migraciones se leen al arrancar, así que esos no lo necesitan.
 
-Y va sin nombrar servicio a propósito. `collector`, `scheduler` y `api`
-comparten el `Dockerfile`, pero Compose construye una imagen por servicio:
+Va sin nombrar servicio. `collector`, `scheduler` y `api` comparten el
+`Dockerfile`, pero Compose construye una imagen por servicio:
 `docker compose up --build api` reconstruye solo esa y deja a las otras dos
-con el código anterior, sin dar ningún error. Para levantar uno suelto sí
-vale nombrarlo; para reconstruir, no.
+con el código anterior, sin dar ningún error. Nombrar un servicio vale para
+levantarlo suelto, no para reconstruir.
 
 Los cambios de esquema ya no necesitan `down -v`: se escriben como una
 migración nueva y `flyway` la aplica al arrancar, sin tocar los datos.
@@ -172,7 +179,7 @@ Ver [Migraciones](#migraciones).
 
 ## Base de datos
 
-Tres tablas:
+Cinco tablas:
 
 - `summoners` — traduce cada PUUID a un Riot ID legible
 - `matches` — fecha, duración, tipo de cola y parche de cada partida
@@ -209,8 +216,8 @@ dentro de la partida (1-10), que existe siempre. Antes era
 El `puuid` quedó opcional, y eso basta para que su referencia a `summoners`
 no estorbe: en SQL, una clave ajena nula no se comprueba.
 
-Para enseñar el marcador, un `LEFT JOIN` — normal descartaría a los nueve
-sin PUUID:
+Para enseñar el marcador hace falta un `LEFT JOIN`; uno normal descartaría
+las nueve filas sin PUUID:
 
 ```sql
 SELECT p.team_id, p.champion, s.game_name,
@@ -242,9 +249,10 @@ El `SUM(...) OVER (PARTITION BY ...)` es una función de ventana: suma por
 equipo sin agrupar las filas, así que cada jugador conserva la suya y ve
 además el total.
 
-Al cambiar la clave primaria se perdió el índice que daba la anterior para
-buscar por `puuid`, así que `V6` lo crea aparte. Es la trampa del cambio:
-una clave primaria trae un índice de regalo, y cambiarla se lo lleva.
+Una clave primaria crea su índice automáticamente. La anterior,
+`(match_id, puuid)`, servía además para buscar por `puuid`; la nueva no,
+porque esa columna ya no está. Por eso `V6` crea `idx_participants_puuid`
+aparte.
 
 ### El timeline
 
@@ -292,15 +300,14 @@ ORDER BY ip.timestamp_ms;
 ```
 
 Los `item_id` son números; la traducción a nombre e icono sale de Data
-Dragon, igual que con los campeones. Se guarda el número a propósito: si
-Riot renombra un objeto, el historial no queda con un nombre que ya no
-existe.
+Dragon, igual que con los campeones. Se guarda el número porque si Riot
+renombra un objeto, el historial no queda con un nombre que ya no existe.
 
-Y un aviso sobre lo que se puede concluir: comparar winrates por build
-necesita decenas de partidas *en cada rama*, y una ventana de parche son
-dos semanas. Con pocas partidas esos porcentajes son ruido. Lo que sí
-vale es el historial propio — "con esta build llevo 12-4" — enseñando
-siempre sobre cuántas partidas se calcula.
+Sobre lo que se puede concluir con estos datos: comparar winrates por
+build necesita decenas de partidas en cada rama, y un parche dura dos
+semanas. Con pocas partidas esos porcentajes no son fiables. El historial
+propio sí vale ("con esta build llevo 12-4"), siempre que se enseñe sobre
+cuántas partidas está calculado.
 
 ### Insertar sin duplicar
 
@@ -358,10 +365,10 @@ Endpoints:
 - `GET /health` — devuelve `{"estado": "ok"}`. No consulta la base de
   datos: solo confirma que el servicio responde.
 - `GET /matches` — las 20 partidas más recientes, de la más nueva a la
-  más antigua. Cruza `participants` con `matches` y devuelve campeón,
-  posición, KDA, resultado, fecha, duración y parche, este último en las
-  dos numeraciones: `game_version` tal como lo da Riot y `patch` como lo
-  ve el jugador.
+  más antigua. Cruza `participants` con `matches` y devuelve identificador,
+  campeón, posición, KDA, resultado, fecha, duración y parche, este último
+  en las dos numeraciones: `game_version` tal como lo da Riot y `patch`
+  como lo ve el jugador.
 - `GET /champions` — un resumen por campeón: partidas jugadas, ganadas,
   winrate y KDA medio. Los agregados los calcula PostgreSQL con
   `GROUP BY`; ninguno de esos números está guardado en ninguna tabla.
@@ -369,8 +376,14 @@ Endpoints:
   distingue mayúsculas (`/champions/zeri` vale) y devuelve 404 si no hay
   partidas con ese campeón.
 
-Al levantar `api`, Compose arranca antes `db` y `redis` y espera a sus
-healthchecks.
+Todos los endpoints de datos filtran por `puuid IS NOT NULL`. `participants`
+guarda a los diez jugadores de cada partida y solo los invocadores seguidos
+tienen PUUID, así que sin ese filtro los agregados incluirían a rivales y
+compañeros. Cuando haya varios invocadores seguidos habrá que añadir un
+parámetro para elegir de cuál.
+
+Al levantar `api`, Compose arranca antes `db`, `flyway` y `redis`: espera
+al healthcheck de los dos primeros y a que `flyway` termine bien.
 
 Los tres endpoints de datos se cachean en Redis con estas claves:
 
@@ -403,12 +416,12 @@ Un campeón de `/champions`:
 ```json
 {
   "champion": "Zeri",
-  "games": 2,
-  "wins": 2,
-  "winrate_pct": 100.0,
-  "avg_kills": 9.5,
-  "avg_deaths": 5.0,
-  "avg_assists": 11.0
+  "games": 6,
+  "wins": 3,
+  "winrate_pct": 50.0,
+  "avg_kills": 9.3,
+  "avg_deaths": 4.8,
+  "avg_assists": 6.3
 }
 ```
 
@@ -416,14 +429,15 @@ Una partida de `/matches`:
 
 ```json
 {
+  "match_id": "EUW1_7979729853",
   "champion": "Zeri",
   "position": "BOTTOM",
   "kills": 12,
-  "deaths": 7,
-  "assists": 15,
-  "win": true,
-  "played_at": "2026-08-28T12:21:15.912000+00:00",
-  "duration_seconds": 2268,
+  "deaths": 8,
+  "assists": 7,
+  "win": false,
+  "played_at": "2026-09-09T22:14:03+02:00",
+  "duration_seconds": 2520,
   "game_version": "16.17.810.4348",
   "patch": "26.17"
 }
@@ -435,15 +449,19 @@ El esquema de la base vive en `migrations/`, un fichero por cambio:
 
 ```
 migrations/
-  V1__initial_schema.sql            summoners, matches, participants
-  V2__index_matches_played_at.sql   índice para el ORDER BY de /matches
+  V1__initial_schema.sql               summoners, matches, participants
+  V2__index_matches_played_at.sql      índice para el ORDER BY de /matches
+  V3__participant_match_details.sql    oro, daño, CS, visión, objetos
+  V4__timeline_events.sql              item_purchases y skill_levelups
+  V5__participants_participant_id.sql  el número de jugador (1-10)
+  V6__all_ten_participants.sql         los diez jugadores y la clave nueva
 ```
 
 El nombre es la convención de Flyway: `V`, el número, **dos** guiones
 bajos y la descripción. Con un solo guion el fichero se ignora.
 
 Cada fichero lleva solo su cambio, no el esquema entero. El estado de la
-base es la suma de todos, como los commits de un repositorio.
+base es el resultado de aplicarlos todos en orden.
 
 ### Cómo se aplican
 
@@ -478,10 +496,10 @@ Flyway guarda el checksum de cada fichero ejecutado y lo recalcula en cada
 arranque. Cambiar una migración ya aplicada, aunque sea un comentario, da
 error y no se ejecuta nada.
 
-No es una manía: si se editara una migración que lleva meses en
-producción, un entorno nuevo aplicaría la versión corregida y producción
-se quedaría con la vieja, sin que nadie se entere. ¿Hay que corregir algo?
-Se escribe la migración siguiente.
+El motivo: si se editara una migración que lleva meses aplicada en
+producción, un entorno nuevo ejecutaría la versión corregida y producción
+se quedaría con la vieja, sin avisar a nadie. Para corregir algo se escribe
+la migración siguiente.
 
 ### La base actual se incorporó con baseline
 
@@ -498,8 +516,8 @@ Una página en `frontend/index.html` que pide los datos a la API y los
 pinta. Se abre en `http://localhost:8080`.
 
 La sirve nginx, no la API: son dos servicios y dos puertos. Servir los
-estáticos con un servidor web dedicado es lo estándar, y deja el camino
-abierto a ponerle delante un reverse proxy más adelante.
+estáticos con un servidor web dedicado es lo estándar, y permite añadir un
+reverse proxy delante más adelante.
 
 La carpeta entra en el contenedor como un bind mount de solo lectura, así
 que editar el HTML y recargar el navegador basta: no hay que reconstruir
@@ -516,9 +534,11 @@ La API lo autoriza con `CORSMiddleware`, que añade la cabecera
 `Access-Control-Allow-Origin` a sus respuestas. Se comprueba en la pestaña
 Network del navegador, en las cabeceras de respuesta de `/champions`.
 
-Solo se autoriza el método `GET`, que es lo único que hace la API. Y esto
-no protege la API: `curl` y cualquier cosa que no sea un navegador siguen
-accediendo igual. CORS protege al usuario, no al servidor.
+Solo se autoriza el método `GET`, que es lo único que hace la API.
+
+CORS no protege la API: `curl` y cualquier cosa que no sea un navegador
+acceden igual. Lo que evita es que una página de otro origen lea respuestas
+aprovechando la sesión del usuario.
 
 ## Logs
 
@@ -561,15 +581,17 @@ docker inspect project0-scheduler-1 --format '{{json .HostConfig.LogConfig}}'
 ## Estructura
 
 ```
-collector.py         baja partidas de Riot y las guarda    → servicio collector
+collector.py         baja partidas de Riot y las guarda   → servicio collector
 api.py               sirve lo guardado, cuatro endpoints   → servicio api
-frontend/index.html  la página que consume la API          → servicio frontend
 config.py            la configuración, en un solo sitio    → lo importan los dos
-migrations/          el esquema, versionado paso a paso      → servicio flyway
-Dockerfile           la imagen que comparten los dos servicios
-docker-compose.yml   los seis servicios, el volumen y los healthchecks
+migrations/          el esquema, versionado paso a paso    → servicio flyway
+frontend/index.html  la página que consume la API          → servicio frontend
+frontend/borrador/   notas para trabajar el diseño aparte
+Dockerfile           la imagen de collector, scheduler y api
+docker-compose.yml   los siete servicios, el volumen y los healthchecks
 requirements.txt     dependencias de Python, con versiones fijadas
 .env                 los valores reales (fuera del repo y de la imagen)
+.env.example         las mismas claves, sin valores
 ```
 
 ## Notas
@@ -603,16 +625,15 @@ configura solo sus propios loggers, así que sin esa llamada los mensajes de
 la API saldrían sin formato y los de nivel `INFO` no se verían.
 
 `scheduler` usa la misma imagen que `collector` y lo único que cambia es el
-comando: un bucle de shell que ejecuta `collector.py` y duerme. El script no
-sabe que se le está repitiendo, lo que deja el camino abierto a sustituir el
-bucle por un CronJob cuando toque desplegar en Kubernetes.
+comando: un bucle de shell que ejecuta `collector.py` y duerme. Como el
+script en sí no contiene nada del bucle, al desplegar en Kubernetes se puede
+sustituir por un CronJob sin tocar el código.
 
-Redis es una pieza opcional a propósito. Las llamadas a la caché van
-envueltas en `cache_get` y `cache_set`, que capturan cualquier error y lo
-tratan como "no hay nada cacheado": la API responde igual, más lenta, y
-deja un aviso en los logs. Una caché no debe tumbar el servicio. Por el
-mismo motivo el cliente lleva `socket_timeout=1`: un Redis colgado sería
-peor que un Redis caído.
+Redis es opcional por diseño. Las llamadas a la caché van envueltas en
+`cache_get` y `cache_set`, que capturan cualquier error y lo tratan como
+"no hay nada cacheado": la API responde igual, más lenta, y deja un aviso
+en los logs. El cliente lleva además `socket_timeout=1`, para que un Redis
+que acepta la conexión pero no contesta no deje la petición esperando.
 
 `game_version` es la numeración interna de Riot, la que da la API. No
 coincide con la que ve el jugador en el cliente: la pública va diez por
@@ -622,7 +643,7 @@ cada serie interna corresponde a un año natural. El campo `patch` de
 valor original.
 
 Los porcentajes viajan como números (`winrate_pct: 66.7`), sin el símbolo.
-El formato es cosa de quien los muestre.
+Del formato se encarga quien los muestra.
 
 Los valores que llegan por la URL se pasan a la consulta como parámetros
 (`%s` y una tupla), nunca interpolados en el texto SQL. Interpolarlos

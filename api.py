@@ -55,6 +55,7 @@ CHAMPION_STATS_SELECT = """
            ROUND(AVG(deaths), 1) AS avg_deaths,
            ROUND(AVG(assists), 1) AS avg_assists
     FROM participants
+    WHERE puuid IS NOT NULL
 """
 
 
@@ -92,6 +93,9 @@ def matches():
                        || '.' || split_part(m.game_version, '.', 2) AS patch
             FROM participants p
             JOIN matches m ON m.match_id = p.match_id
+            -- participants guarda a los diez jugadores; solo los invocadores
+            -- seguidos tienen puuid, y son los únicos que salen por la API
+            WHERE p.puuid IS NOT NULL
             ORDER BY m.played_at DESC
             LIMIT 20
             """
@@ -142,7 +146,7 @@ def champion_stats(champion: str):
             cursor.execute(
                 CHAMPION_STATS_SELECT
                 + """
-                WHERE LOWER(champion) = LOWER(%s)
+                  AND LOWER(champion) = LOWER(%s)
                 GROUP BY champion
                 """,
                 (champion,),
