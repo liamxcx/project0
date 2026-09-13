@@ -1,7 +1,7 @@
 -- Hasta ahora participants solo guardaba al propio invocador, así que la
 -- clave (match_id, puuid) valía. Para guardar a los diez jugadores hace
--- falta otra clave: los otros nueve no tienen PUUID guardado y no se les
--- va a guardar, porque su identidad no hace falta para nada.
+-- falta otra clave, porque los otros nueve no tienen PUUID guardado y no se
+-- les va a guardar. Su identidad no hace falta para nada.
 
 -- El número de jugador dentro de la partida (1-10) sí existe siempre, y es
 -- único dentro de cada partida. Ese pasa a ser la clave.
@@ -16,10 +16,10 @@ ALTER TABLE participants
     DROP CONSTRAINT participants_pkey,
     ADD PRIMARY KEY (match_id, participant_id);
 
--- 3. El PUUID pasa a ser opcional: lleno para los invocadores seguidos,
---    vacío para los otros nueve. La referencia a summoners se mantiene y
---    sigue protegiendo los que sí lo tengan: en SQL, una clave ajena nula
---    no se comprueba.
+-- 3. El PUUID pasa a ser opcional. Se rellena para los invocadores seguidos
+--    y queda vacío para los otros nueve. La referencia a summoners se
+--    mantiene y sigue protegiendo a los que sí lo tengan, porque en SQL una
+--    clave ajena nula no se comprueba.
 ALTER TABLE participants
     ALTER COLUMN puuid DROP NOT NULL;
 

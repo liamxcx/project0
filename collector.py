@@ -32,7 +32,12 @@ def fetch(url, params=None, attempts=3):
     for attempt in range(attempts):
         try:
             response = requests.get(
-                url, headers={"X-Riot-Token": RIOT_API_KEY}, params=params
+                url,
+                headers={"X-Riot-Token": RIOT_API_KEY},
+                params=params,
+                # Sin timeout, una petición que Riot acepta pero no contesta
+                # deja el proceso esperando para siempre, sin error ni log.
+                timeout=15,
             )
         except requests.exceptions.RequestException as error:
             delay = 2**attempt
@@ -45,6 +50,14 @@ def fetch(url, params=None, attempts=3):
         if response.status_code == 429:
             delay = int(response.headers.get("Retry-After", 10))
             log.warning("Límite alcanzado, esperando %ss", delay)
+            time.sleep(delay)
+            continue
+
+        # Los 5xx suelen ser temporales, así que se reintenta
+        if response.status_code >= 500:
+            delay = 2**attempt
+            log.warning("Riot devolvió %s, reintento en %ss",
+                        response.status_code, delay)
             time.sleep(delay)
             continue
 
@@ -62,15 +75,14 @@ def guardar_timeline(cursor, match_id):
     response = fetch(f"{RIOT_BASE_URL}/lol/match/v5/matches/{match_id}/timeline")
 
     if response is None or response.status_code != 200:
-        log.warning("Sin timeline para %s", match_id)
-        return 0, 0
+        raise RuntimeError(f"Sin timeline para {match_id}")
 
     compras = []
     habilidades = []
 
     for frame in response.json()["info"]["frames"]:
         for event in frame["events"]:
-            # El participante 0 no existe: son artefactos del arranque
+            # El participante 0 no existe, son artefactos del arranque
             participant_id = event.get("participantId", 0)
             if participant_id < 1:
                 continue
@@ -83,9 +95,9 @@ def guardar_timeline(cursor, match_id):
                 )
 
             elif tipo == "ITEM_UNDO" and event["afterId"] == 0:
-                # Deshacer una compra: se busca la última de ese objeto y se
-                # quita, porque esa compra no llegó a ocurrir. Con afterId
-                # distinto de 0 sería deshacer una venta, que no afecta aquí.
+                # Se busca la última compra de ese objeto y se quita, porque
+                # esa compra no llegó a ocurrir. Con afterId distinto de 0
+                # sería deshacer una venta, que no afecta aquí.
                 for i in range(len(compras) - 1, -1, -1):
                     if (
                         compras[i][1] == participant_id
@@ -179,7 +191,7 @@ with (
     psycopg.connect(DB_URL) as connection,
     connection.cursor() as cursor,
 ):
-    # El invocador va primero: las participaciones lo referencian
+    # El invocador va primero porque las participaciones lo referencian
     cursor.execute(
         """
         INSERT INTO summoners (puuid, game_name, tag_line)
@@ -189,8 +201,13 @@ with (
         (puuid, RIOT_GAME_NAME, RIOT_TAG_LINE),
     )
 
+    # Se comprueba sobre item_purchases, que es la última tabla que se
+    # rellena. Una partida que esté ahí se guardó entera. Mirando matches se
+    # daría por buena una partida cuyos participantes o timeline fallaran.
     cursor.execute(
-        "SELECT match_id FROM matches WHERE match_id = ANY(%s)",
+        """
+        SELECT DISTINCT match_id FROM item_purchases WHERE match_id = ANY(%s)
+        """,
         (match_ids,),
     )
     already_saved = {row[0] for row in cursor.fetchall()}
@@ -205,118 +222,135 @@ with (
         if match_id in already_saved:
             continue
 
-        match_response = fetch(f"{RIOT_BASE_URL}/lol/match/v5/matches/{match_id}")
+        try:
+            match_response = fetch(f"{RIOT_BASE_URL}/lol/match/v5/matches/{match_id}")
 
-        if match_response is None or match_response.status_code != 200:
-            log.warning("No se ha podido descargar %s", match_id)
-            continue
+            if match_response is None or match_response.status_code != 200:
+                log.warning("No se ha podido descargar %s", match_id)
+                continue
 
-        info = match_response.json()["info"]
+            info = match_response.json()["info"]
 
-        # Riot da la fecha en milisegundos desde 1970
-        played_at = datetime.fromtimestamp(info["gameCreation"] / 1000, timezone.utc)
-
-        cursor.execute(
-            """
-            INSERT INTO matches
-                (match_id, played_at, duration_seconds, queue_id, game_version)
-            VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (match_id) DO UPDATE SET
-                played_at        = EXCLUDED.played_at,
-                duration_seconds = EXCLUDED.duration_seconds,
-                queue_id         = EXCLUDED.queue_id,
-                game_version     = EXCLUDED.game_version
-            """,
-            (
-                match_id,
-                played_at,
-                info["gameDuration"],
-                info["queueId"],
-                info["gameVersion"],
-            ),
-        )
-
-        me = None
-
-        for participant in info["participants"]:
-            # Solo se guarda el PUUID de los invocadores seguidos. Del resto
-            # basta el número de jugador: su identidad no hace falta.
-            seguido = participant["puuid"] == puuid
-            if seguido:
-                me = participant
+            # Riot da la fecha en milisegundos desde 1970
+            played_at = datetime.fromtimestamp(info["gameCreation"] / 1000, timezone.utc)
 
             cursor.execute(
                 """
-                INSERT INTO participants
-                    (match_id, puuid, champion, position, kills, deaths, assists, win,
-                     damage_to_champions, damage_taken, gold_earned,
-                     minions_killed, neutral_minions_killed,
-                     vision_score, wards_placed,
-                     item0, item1, item2, item3, item4, item5, item6,
-                     summoner1_id, summoner2_id, participant_id, team_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s,
-                        %s, %s,
-                        %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s)
-                ON CONFLICT (match_id, participant_id) DO UPDATE SET
-                    puuid                  = EXCLUDED.puuid,
-                    champion               = EXCLUDED.champion,
-                    position               = EXCLUDED.position,
-                    kills                  = EXCLUDED.kills,
-                    deaths                 = EXCLUDED.deaths,
-                    assists                = EXCLUDED.assists,
-                    win                    = EXCLUDED.win,
-                    damage_to_champions    = EXCLUDED.damage_to_champions,
-                    damage_taken           = EXCLUDED.damage_taken,
-                    gold_earned            = EXCLUDED.gold_earned,
-                    minions_killed         = EXCLUDED.minions_killed,
-                    neutral_minions_killed = EXCLUDED.neutral_minions_killed,
-                    vision_score           = EXCLUDED.vision_score,
-                    wards_placed           = EXCLUDED.wards_placed,
-                    item0 = EXCLUDED.item0,
-                    item1 = EXCLUDED.item1,
-                    item2 = EXCLUDED.item2,
-                    item3 = EXCLUDED.item3,
-                    item4 = EXCLUDED.item4,
-                    item5 = EXCLUDED.item5,
-                    item6 = EXCLUDED.item6,
-                    summoner1_id = EXCLUDED.summoner1_id,
-                    summoner2_id = EXCLUDED.summoner2_id,
-                    team_id      = EXCLUDED.team_id
+                INSERT INTO matches
+                    (match_id, played_at, duration_seconds, queue_id, game_version)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (match_id) DO UPDATE SET
+                    played_at        = EXCLUDED.played_at,
+                    duration_seconds = EXCLUDED.duration_seconds,
+                    queue_id         = EXCLUDED.queue_id,
+                    game_version     = EXCLUDED.game_version
                 """,
                 (
                     match_id,
-                    puuid if seguido else None,
-                    participant["championName"],
-                    participant["teamPosition"],
-                    participant["kills"],
-                    participant["deaths"],
-                    participant["assists"],
-                    participant["win"],
-                    participant["totalDamageDealtToChampions"],
-                    participant["totalDamageTaken"],
-                    participant["goldEarned"],
-                    participant["totalMinionsKilled"],
-                    participant["neutralMinionsKilled"],
-                    participant["visionScore"],
-                    participant["wardsPlaced"],
-                    participant["item0"],
-                    participant["item1"],
-                    participant["item2"],
-                    participant["item3"],
-                    participant["item4"],
-                    participant["item5"],
-                    participant["item6"],
-                    participant["summoner1Id"],
-                    participant["summoner2Id"],
-                    participant["participantId"],
-                    participant["teamId"],
+                    played_at,
+                    info["gameDuration"],
+                    info["queueId"],
+                    info["gameVersion"],
                 ),
             )
 
-        n_compras, n_habilidades = guardar_timeline(cursor, match_id)
+            me = None
+
+            for participant in info["participants"]:
+                # Solo se guarda el PUUID de los invocadores seguidos. Del
+                # resto basta el número de jugador, su identidad no hace falta.
+                seguido = participant["puuid"] == puuid
+                if seguido:
+                    me = participant
+
+                cursor.execute(
+                    """
+                    INSERT INTO participants
+                        (match_id, puuid, champion, position, kills, deaths, assists, win,
+                         damage_to_champions, damage_taken, gold_earned,
+                         minions_killed, neutral_minions_killed,
+                         vision_score, wards_placed,
+                         item0, item1, item2, item3, item4, item5, item6,
+                         summoner1_id, summoner2_id, participant_id, team_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
+                            %s, %s, %s,
+                            %s, %s,
+                            %s, %s,
+                            %s, %s, %s, %s, %s, %s, %s,
+                            %s, %s, %s, %s)
+                    ON CONFLICT (match_id, participant_id) DO UPDATE SET
+                        puuid                  = EXCLUDED.puuid,
+                        champion               = EXCLUDED.champion,
+                        position               = EXCLUDED.position,
+                        kills                  = EXCLUDED.kills,
+                        deaths                 = EXCLUDED.deaths,
+                        assists                = EXCLUDED.assists,
+                        win                    = EXCLUDED.win,
+                        damage_to_champions    = EXCLUDED.damage_to_champions,
+                        damage_taken           = EXCLUDED.damage_taken,
+                        gold_earned            = EXCLUDED.gold_earned,
+                        minions_killed         = EXCLUDED.minions_killed,
+                        neutral_minions_killed = EXCLUDED.neutral_minions_killed,
+                        vision_score           = EXCLUDED.vision_score,
+                        wards_placed           = EXCLUDED.wards_placed,
+                        item0 = EXCLUDED.item0,
+                        item1 = EXCLUDED.item1,
+                        item2 = EXCLUDED.item2,
+                        item3 = EXCLUDED.item3,
+                        item4 = EXCLUDED.item4,
+                        item5 = EXCLUDED.item5,
+                        item6 = EXCLUDED.item6,
+                        summoner1_id = EXCLUDED.summoner1_id,
+                        summoner2_id = EXCLUDED.summoner2_id,
+                        team_id      = EXCLUDED.team_id
+                    """,
+                    (
+                        match_id,
+                        puuid if seguido else None,
+                        participant["championName"],
+                        participant["teamPosition"],
+                        participant["kills"],
+                        participant["deaths"],
+                        participant["assists"],
+                        participant["win"],
+                        participant["totalDamageDealtToChampions"],
+                        participant["totalDamageTaken"],
+                        participant["goldEarned"],
+                        participant["totalMinionsKilled"],
+                        participant["neutralMinionsKilled"],
+                        participant["visionScore"],
+                        participant["wardsPlaced"],
+                        participant["item0"],
+                        participant["item1"],
+                        participant["item2"],
+                        participant["item3"],
+                        participant["item4"],
+                        participant["item5"],
+                        participant["item6"],
+                        participant["summoner1Id"],
+                        participant["summoner2Id"],
+                        participant["participantId"],
+                        participant["teamId"],
+                    ),
+                )
+
+            if me is None:
+                # Pasa en partidas raras, como los remakes. Sin el
+                # participante propio la partida no sirve para nada.
+                raise RuntimeError("el invocador no aparece entre los participantes")
+
+            n_compras, n_habilidades = guardar_timeline(cursor, match_id)
+
+            # Se hace un commit por partida. Si una falla, las anteriores
+            # ya están guardadas en vez de perderse todas en el rollback.
+            connection.commit()
+
+        except Exception as error:
+            # Una partida que falla no debe tumbar la ejecución entera.
+            # Se deshace lo suyo y se sigue con la siguiente.
+            connection.rollback()
+            log.warning("Partida %s no guardada: %s", match_id, error)
+            continue
 
         saved += 1
 
@@ -332,8 +366,6 @@ with (
         )
 
         time.sleep(0.1)
-
-    connection.commit()
 
 if refetch:
     log.info("Partidas actualizadas: %s", saved)

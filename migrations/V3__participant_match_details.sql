@@ -1,7 +1,7 @@
 -- Todo esto ya viene en la respuesta de MATCH-V5 que el collector descarga,
 -- así que no cuesta ni una petición más a Riot.
--- Se dejan NULL a propósito en las partidas guardadas antes de este cambio:
--- NULL es "no lo sé", y un 0 diría "jugó y no hizo nada", que es falso.
+-- En las partidas guardadas antes de este cambio se quedan a NULL, que es
+-- lo correcto. Un 0 diría que jugó y no consiguió nada, y eso es falso.
 
 ALTER TABLE participants
     -- totalDamageDealtToChampions y totalDamageTaken

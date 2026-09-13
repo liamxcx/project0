@@ -93,8 +93,8 @@ def matches():
                        || '.' || split_part(m.game_version, '.', 2) AS patch
             FROM participants p
             JOIN matches m ON m.match_id = p.match_id
-            -- participants guarda a los diez jugadores; solo los invocadores
-            -- seguidos tienen puuid, y son los únicos que salen por la API
+            -- participants guarda a los diez jugadores de cada partida, y
+            -- solo los invocadores seguidos tienen puuid
             WHERE p.puuid IS NOT NULL
             ORDER BY m.played_at DESC
             LIMIT 20

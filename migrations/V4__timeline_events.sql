@@ -1,9 +1,9 @@
--- Eventos del endpoint timeline de MATCH-V5. Son listas: una partida tiene
--- unas 300 compras y 180 subidas de habilidad de los diez jugadores, así que
--- no caben como columnas de participants y necesitan tabla propia.
+-- Eventos del endpoint timeline de MATCH-V5. Una partida tiene unas 300
+-- compras y 180 subidas de habilidad de los diez jugadores, así que no caben
+-- como columnas de participants y necesitan su propia tabla.
 
--- Los jugadores se identifican por su número dentro de la partida (1-10),
--- no por PUUID: para el análisis de builds basta, y así no se guarda la
+-- Los jugadores se identifican por su número dentro de la partida (1-10) y
+-- no por PUUID. Para analizar builds basta con eso, y así no se guarda la
 -- identidad de nadie más.
 
 CREATE TABLE IF NOT EXISTS item_purchases (
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS skill_levelups (
     timestamp_ms   INTEGER  NOT NULL
 );
 
--- Las consultas siempre parten de una partida y un jugador: "dame las compras
--- de esta partida en orden". Sin índice, Postgres recorrería la tabla entera.
+-- Las consultas siempre parten de una partida y un jugador. Sin índice,
+-- Postgres recorrería la tabla entera cada vez.
 CREATE INDEX idx_item_purchases_match ON item_purchases (match_id, participant_id, timestamp_ms);
 CREATE INDEX idx_skill_levelups_match ON skill_levelups (match_id, participant_id, timestamp_ms);
