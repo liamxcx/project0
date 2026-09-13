@@ -16,11 +16,7 @@ from config import (
     RIOT_TAG_LINE,
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s  %(levelname)-7s  %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+# El formato lo configura config.py, que se importa antes
 log = logging.getLogger("collector")
 
 # Con --refetch se vuelven a pedir a Riot las partidas ya guardadas, para

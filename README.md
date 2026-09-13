@@ -617,12 +617,19 @@ El servicio `db` tiene un healthcheck con `pg_isready`, y `collector` usa
 solo esperaría a que el contenedor arrancase, no a que PostgreSQL
 aceptase conexiones, y la aplicación podría fallar al conectar.
 
-`config.py` centraliza la lectura del `.env`: `collector.py` y `api.py`
+`config.py` centraliza la lectura del `.env`. `collector.py` y `api.py`
 importan de ahí en vez de construir cada uno su cadena de conexión.
 
-`api.py` y `collector.py` llaman los dos a `logging.basicConfig`. uvicorn
-configura solo sus propios loggers, así que sin esa llamada los mensajes de
-la API saldrían sin formato y los de nivel `INFO` no se verían.
+Las variables sin valor por defecto pasan por `obligatoria()`, que corta la
+ejecución con un mensaje claro si faltan. Sin eso, una variable ausente se
+cuela como el texto `None` dentro de la cadena de conexión y el fallo
+aparece más tarde, al conectar, diciendo que la contraseña es incorrecta
+cuando lo que pasa es que no hay ninguna.
+
+El logging se configura en `config.py` y no en cada script. `config.py` es
+lo primero que importan `collector.py` y `api.py`, así que cuando el resto
+del código escribe su primer mensaje el formato ya está puesto. Hace falta
+configurarlo porque uvicorn solo ajusta sus propios loggers.
 
 `scheduler` usa la misma imagen que `collector` y lo único que cambia es el
 comando: un bucle de shell que ejecuta `collector.py` y duerme. Como el

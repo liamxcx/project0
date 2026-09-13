@@ -10,11 +10,7 @@ from psycopg.rows import dict_row
 
 from config import CACHE_TTL_SECONDS, CORS_ORIGINS, DB_URL, REDIS_URL
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s  %(levelname)-7s  %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+# El formato lo configura config.py, que se importa antes
 log = logging.getLogger("api")
 
 app = FastAPI(title="Estadísticas de LoL")

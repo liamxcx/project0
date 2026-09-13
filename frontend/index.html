@@ -83,7 +83,7 @@
             (p) => `
         <tr>
           <td>${p.champion}</td>
-          <td>${p.position ?? "—"}</td>
+          <td>${p.position || "—"}</td>
           <td class="num">${p.kills} / ${p.deaths} / ${p.assists}</td>
           <td class="num">${kda(p.kills, p.deaths, p.assists)}</td>
           <td class="num">${duracion(p.duration_seconds)}</td>
