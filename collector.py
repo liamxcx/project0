@@ -344,11 +344,11 @@ with (
             # ya están guardadas en vez de perderse todas en el rollback.
             connection.commit()
 
-        except Exception as error:
-            # Una partida que falla no debe tumbar la ejecución entera.
-            # Se deshace lo suyo y se sigue con la siguiente.
+        # Cualquier error, a propósito. Una partida que falla no debe tumbar
+        # la ejecución, y log.exception deja el rastro para ver si fue un bug.
+        except Exception:
             connection.rollback()
-            log.warning("Partida %s no guardada: %s", match_id, error)
+            log.exception("Partida %s no guardada", match_id)
             continue
 
         saved += 1
