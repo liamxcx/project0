@@ -617,9 +617,56 @@ docker compose up -d --force-recreate
 docker inspect project0-scheduler-1 --format '{{json .HostConfig.LogConfig}}'
 ```
 
+## Tests
+
+Los tests viven en `test_api.py` y se lanzan con pytest desde el entorno
+virtual:
+
+```bash
+source .venv/bin/activate
+pytest
+```
+
+Las herramientas de test están en `requirements-dev.txt`, separado de
+`requirements.txt` porque este último se instala dentro de la imagen y la
+aplicación no necesita pytest para funcionar. Para tener el entorno local
+completo:
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+```
+
+### Cómo funcionan
+
+`TestClient` de FastAPI llama a los endpoints sin levantar uvicorn y sin
+abrir ningún puerto: importa `api.py` y ejecuta las funciones de ruta
+directamente. Por eso tardan milisegundos y no hace falta tener nada
+arrancado.
+
+Importar `api.py` ejecuta el módulo entero, así que un test que solo mira
+`/health` ya comprueba de paso que `config.py` encuentra sus variables, que
+el logging se configura y que las cuatro rutas se registran.
+
+Pytest busca ficheros que empiecen por `test_` y, dentro, funciones que
+empiecen por `test_`. Una función con otro nombre no se ejecuta y no avisa
+de nada.
+
+### Qué cubren y qué no
+
+Hoy solo se prueba `/health`, que no consulta PostgreSQL ni Redis. Los
+endpoints que sí leen de la base necesitan datos controlados y una base
+propia, no las partidas que haya guardadas en ese momento.
+
+Estos tests tampoco comprueban que la imagen se construya, que uvicorn
+arranque ni que los puertos estén publicados. Eso es trabajo del pipeline.
+
+El `.venv` usa la misma versión de Python que la imagen (3.14). Si se
+separan, un test puede pasar en local y fallar en el pipeline.
+
 ## Estructura
 
 ```
+test_api.py          los tests de la API                  → se lanzan con pytest
 collector.py         baja partidas de Riot y las guarda   → servicio collector
 api.py               sirve lo guardado, cuatro endpoints   → servicio api
 config.py            la configuración, en un solo sitio    → lo importan los dos
@@ -629,6 +676,7 @@ frontend/borrador/   notas para trabajar el diseño aparte
 Dockerfile           la imagen de collector, scheduler y api
 docker-compose.yml   los siete servicios, el volumen y los healthchecks
 requirements.txt     dependencias de Python, con versiones fijadas
+requirements-dev.txt pytest y compañía, fuera de la imagen
 .env                 los valores reales (fuera del repo y de la imagen)
 .env.example         las mismas claves, sin valores
 ```
