@@ -10,6 +10,7 @@ import requests
 from config import (
     DB_URL,
     MATCH_COUNT,
+    RANKED_SOLO_QUEUE,
     RIOT_API_KEY,
     RIOT_BASE_URL,
     RIOT_GAME_NAME,
@@ -168,9 +169,11 @@ if account_response.status_code != 200:
 
 puuid = account_response.json()["puuid"]
 
+# Sin el filtro de cola Riot devuelve las últimas partidas de cualquier
+# modo, y las normales y los swiftplay acabarían mezclados con las ranked.
 ids_response = fetch(
     f"{RIOT_BASE_URL}/lol/match/v5/matches/by-puuid/{puuid}/ids",
-    params={"count": MATCH_COUNT},
+    params={"count": MATCH_COUNT, "queue": RANKED_SOLO_QUEUE},
 )
 
 if ids_response is None or ids_response.status_code != 200:

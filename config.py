@@ -39,6 +39,9 @@ RIOT_TAG_LINE = obligatoria("RIOT_TAG_LINE")
 # Cuántas partidas recientes se piden a Riot en cada ejecución
 MATCH_COUNT = int(os.getenv("MATCH_COUNT", "20"))
 
+# Solo se procesan partidas de Ranked Solo/Duo.
+RANKED_SOLO_QUEUE = 420
+
 # ACCOUNT-V1 y MATCH-V5 usan región grande (europe), no plataforma (euw1)
 RIOT_BASE_URL = "https://europe.api.riotgames.com"
 

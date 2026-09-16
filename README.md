@@ -55,7 +55,7 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
 ### Qué hay hecho
 
 - **`collector`** — dado un Riot ID: PUUID (ACCOUNT-V1), identificadores
-  de las últimas partidas (MATCH-V5), y de cada una su detalle y su
+  de las últimas partidas de ranked solo (MATCH-V5), y de cada una su detalle y su
   timeline. Guarda la partida, los diez participantes y los eventos de
   compra y de habilidades, sin duplicar. Antes de descargar consulta
   cuáles ya están en la base y se las salta, así que solo pide a Riot lo
@@ -202,6 +202,45 @@ FROM participants;
 
 Los objetos y los hechizos se guardan como identificadores numéricos; los
 nombres y los iconos salen de Data Dragon, igual que con los campeones.
+
+### Solo ranked solo/duo
+
+El `collector` pide a Riot únicamente los identificadores de esa cola:
+
+```python
+params={"count": MATCH_COUNT, "queue": RANKED_SOLO_QUEUE}
+```
+
+El filtro va en la petición y no al guardar, así que las partidas de otros
+modos ni se descargan. Sin él, Riot devuelve las últimas partidas de
+cualquier tipo y las normales y los swiftplay acaban mezclados con las
+ranked, falseando todas las medias.
+
+`RANKED_SOLO_QUEUE` está en `config.py` y no en el `.env` porque no es
+configuración que cambie según el entorno. El proyecto entero se define
+sobre esa cola, y cambiarla dejaría sin sentido lo que ya está guardado.
+
+`matches.queue_id` se sigue guardando aunque hoy valga siempre 420, porque
+es el dato tal como viene de Riot. La API no lo expone.
+
+### Borrar partidas
+
+Las claves ajenas hacia `matches` tienen `ON DELETE CASCADE`, así que
+borrar una partida se lleva sus participantes, sus compras y sus subidas
+de habilidad:
+
+```sql
+DELETE FROM matches WHERE queue_id <> 420;
+```
+
+Esa sentencia responde `DELETE 6` contando solo las filas de `matches`;
+las de las otras tres tablas desaparecen sin aparecer en el mensaje. Con
+seis partidas eso son unas 2.200 filas, así que conviene contar antes de
+borrar.
+
+La clave de `participants` hacia `summoners` no lleva cascade a propósito.
+Quitar un invocador de los seguidos no debe borrar sus participaciones:
+esas partidas siguen existiendo.
 
 ### Los diez jugadores
 
@@ -674,11 +713,14 @@ Tras regenerar la clave puede tardar unos segundos en ser válida.
   lo más caro que hay. Con un usuario no se nota; con varias réplicas, sí.
   `psycopg` trae uno. Aplazado hasta tener tests que comprueben que las
   respuestas no cambian.
-- `ON DELETE CASCADE` en las claves ajenas de `participants`,
-  `item_purchases` y `skill_levelups`. Hoy borrar una partida de `matches`
-  falla porque esas tablas la referencian. Pendiente hasta que haga falta
-  borrar partidas viejas.
 - Invalidar la caché desde el `collector` cuando guarde partidas nuevas, en
   vez de esperar a que caduque el TTL.
+- `/health` no lo consulta nadie. El servicio `api` no tiene healthcheck en
+  el compose, así que el endpoint existe pero solo lo llaman los tests y las
+  comprobaciones a mano. Al desplegar en Kubernetes hará falta separarlo en
+  dos: `/health` respondiendo siempre, sin comprobar nada, para saber si el
+  proceso vive; y `/ready` comprobando PostgreSQL, para saber si puede
+  atender peticiones. Si la base se cae, lo que hay que hacer es dejar de
+  mandarle tráfico, no reiniciar contenedores que están sanos.
 - Decidir si `/docs` y `/redoc` se desactivan al desplegar fuera de local.
   Se hace con `docs_url=None` al crear la aplicación.
