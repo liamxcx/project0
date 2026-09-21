@@ -772,3 +772,9 @@ Tras regenerar la clave puede tardar unos segundos en ser válida.
   mandarle tráfico, no reiniciar contenedores que están sanos.
 - Decidir si `/docs` y `/redoc` se desactivan al desplegar fuera de local.
   Se hace con `docs_url=None` al crear la aplicación.
+- Los contenedores del Dockerfile corren como root. La imagen base de Python
+  no trae usuario propio y nunca se añadió uno, así que `collector`,
+  `scheduler` y `api` arrancan con todos los permisos dentro del contenedor.
+  Se arregla creando un usuario sin privilegios y poniendo `USER` después del
+  `pip install`, que sí necesita root. Las otras tres imágenes son oficiales
+  y ya se bajan a su propio usuario.
