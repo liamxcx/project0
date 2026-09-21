@@ -45,9 +45,14 @@ RANKED_SOLO_QUEUE = 420
 # ACCOUNT-V1 y MATCH-V5 usan región grande (europe), no plataforma (euw1)
 RIOT_BASE_URL = "https://europe.api.riotgames.com"
 
+DB_HOST = os.getenv("DB_HOST", "db")
+
+# Los tests usan una base aparte en el 5433 para no pisar la de verdad
+DB_PORT = os.getenv("DB_PORT", "5432")
+
 DB_URL = (
     f"postgresql://{obligatoria('POSTGRES_USER')}:{obligatoria('POSTGRES_PASSWORD')}"
-    f"@{os.getenv('DB_HOST', 'db')}:5432/{obligatoria('POSTGRES_DB')}"
+    f"@{DB_HOST}:{DB_PORT}/{obligatoria('POSTGRES_DB')}"
 )
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")

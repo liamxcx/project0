@@ -1,0 +1,35 @@
+# Base de datos aparte para los tests. Se levanta antes de pytest y se tira al
+# acabar, para que los tests no dependan de las partidas que tengas guardadas.
+name: project0-test
+
+services:
+  db-test:
+    image: postgres:16
+    # Credenciales fijas en vez de las del .env. La base es desechable y en
+    # GitHub Actions no habrá ningún .env que leer.
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: test
+    # El 5432 del host lo ocupa la base de verdad
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  flyway-test:
+    image: flyway/flyway:13-alpine
+    command: migrate
+    environment:
+      FLYWAY_URL: jdbc:postgresql://db-test:5432/test
+      FLYWAY_USER: test
+      FLYWAY_PASSWORD: test
+      FLYWAY_LOCATIONS: filesystem:/flyway/migrations
+    volumes:
+      - ./migrations:/flyway/migrations:ro
+    depends_on:
+      db-test:
+        condition: service_healthy
