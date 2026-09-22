@@ -75,10 +75,12 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
   partidas nuevas aparecen solas.
 - **`frontend`** — nginx sirviendo una página estática que pide los datos
   a la API desde el navegador.
+- **Tests** — pytest sobre los cuatro endpoints, contra una base de
+  PostgreSQL propia con datos inventados.
 
 ### Qué falta
 
-- Tests y CI
+- CI que ejecute los tests en cada push
 - Gráfica de winrate y comparar varios invocadores
 - Copia de seguridad de la base de datos
 - Despliegue en Kubernetes
@@ -139,6 +141,9 @@ Cambia según dónde se despliegue, por eso es configuración y no código.
 
 `DB_HOST` es `db` dentro de Compose. Para ejecutar el script fuera de
 Docker hay que ponerlo a `localhost`.
+
+`DB_PORT` no va en el `.env` y vale 5432 si falta. Solo lo cambian los
+tests, que usan su propia base en el 5433.
 
 ## Ejecución
 
@@ -619,12 +624,21 @@ docker inspect project0-scheduler-1 --format '{{json .HostConfig.LogConfig}}'
 
 ## Tests
 
-Los tests viven en `test_api.py` y se lanzan con pytest desde el entorno
-virtual:
+Los tests viven en `test_api.py` y usan su propia base de datos, que se
+levanta aparte con `docker-compose.test.yml`:
 
 ```bash
+docker compose -f docker-compose.test.yml up -d
 source .venv/bin/activate
 pytest
+```
+
+La base se queda levantada entre ejecuciones, así que el primer comando
+solo hace falta una vez. Sin ella, `/health` pasa igual y el resto falla
+con un error de conexión al puerto 5433. Para tirarla al acabar:
+
+```bash
+docker compose -f docker-compose.test.yml down
 ```
 
 Las herramientas de test están en `requirements-dev.txt`, separado de
@@ -640,8 +654,8 @@ pip install -r requirements.txt -r requirements-dev.txt
 
 `TestClient` de FastAPI llama a los endpoints sin levantar uvicorn y sin
 abrir ningún puerto: importa `api.py` y ejecuta las funciones de ruta
-directamente. Por eso tardan milisegundos y no hace falta tener nada
-arrancado.
+directamente. Por eso tardan milisegundos. Lo único que tiene que estar
+arrancado es la base de test.
 
 Importar `api.py` ejecuta el módulo entero, así que un test que solo mira
 `/health` ya comprueba de paso que `config.py` encuentra sus variables, que
@@ -651,13 +665,49 @@ Pytest busca ficheros que empiecen por `test_` y, dentro, funciones que
 empiecen por `test_`. Una función con otro nombre no se ejecuta y no avisa
 de nada.
 
+### La base de test
+
+`docker-compose.test.yml` levanta un PostgreSQL (`db-test`) y un Flyway
+(`flyway-test`) que le aplica las mismas migraciones que a la base de
+verdad. Es un proyecto de Compose aparte, `project0-test`, así que no sale
+en el `docker compose ps` de siempre ni se levanta con el `up` normal.
+
+Publica el 5433 porque el 5432 lo tiene la base real, y no tiene volumen.
+Al tirarla se pierde todo y la siguiente vez arranca vacía.
+
+Las credenciales (`test`/`test`/`test`) están escritas en el propio
+fichero en vez de salir del `.env`. La base es desechable y solo escucha
+en localhost, y así funciona igual donde no haya `.env`, como en el
+pipeline.
+
+### conftest.py
+
+pytest ejecuta `conftest.py` antes de cargar los tests. Ahí se hacen tres
+cosas.
+
+Se ponen `DB_HOST`, `DB_PORT` y las credenciales apuntando a `db-test`.
+Como `load_dotenv()` no sobrescribe variables que ya existen, cuando
+`config.py` monta `DB_URL` sale `postgresql://test:test@localhost:5433/test`
+y no la base real. El resto de variables sí se leen del `.env`.
+
+La fixture `datos` vacía las tablas, mete tres partidas inventadas y las
+vuelve a vaciar al acabar el test, pase o falle. Los tests que la
+necesitan la piden como parámetro. Son pocos datos a propósito, para que
+el resultado esperado de cada test se pueda contar a mano.
+
+La fixture `sin_cache` se aplica sola a todos los tests y cambia las
+funciones de caché por otras que no hacen nada. Si Redis respondiera, un
+test podría recibir la respuesta cacheada del anterior en vez de consultar
+la base.
+
 ### Qué cubren y qué no
 
-Hoy solo se prueba `/health`, que no consulta PostgreSQL ni Redis. Los
-endpoints que sí leen de la base necesitan datos controlados y una base
-propia, no las partidas que haya guardadas en ese momento.
+Los cuatro endpoints tienen al menos un test. Entre los datos hay rivales
+sin `puuid`, uno de ellos con un campeón que también lleva el invocador,
+así que si el filtro de la API se rompe se nota en `/matches`, en
+`/champions` y en `/champions/{champion}`.
 
-Estos tests tampoco comprueban que la imagen se construya, que uvicorn
+Estos tests no comprueban que la imagen se construya, que uvicorn
 arranque ni que los puertos estén publicados. Eso es trabajo del pipeline.
 
 El `.venv` usa la misma versión de Python que la imagen (3.14). Si se
@@ -666,19 +716,21 @@ separan, un test puede pasar en local y fallar en el pipeline.
 ## Estructura
 
 ```
-test_api.py          los tests de la API                  → se lanzan con pytest
-collector.py         baja partidas de Riot y las guarda   → servicio collector
-api.py               sirve lo guardado, cuatro endpoints   → servicio api
-config.py            la configuración, en un solo sitio    → lo importan los dos
-migrations/          el esquema, versionado paso a paso    → servicio flyway
-frontend/index.html  la página que consume la API          → servicio frontend
-frontend/borrador/   notas para trabajar el diseño aparte
-Dockerfile           la imagen de collector, scheduler y api
-docker-compose.yml   los siete servicios, el volumen y los healthchecks
-requirements.txt     dependencias de Python, con versiones fijadas
-requirements-dev.txt pytest y compañía, fuera de la imagen
-.env                 los valores reales (fuera del repo y de la imagen)
-.env.example         las mismas claves, sin valores
+test_api.py             los tests de la API                  → se lanzan con pytest
+conftest.py             prepara la base y los datos de test
+collector.py            baja partidas de Riot y las guarda   → servicio collector
+api.py                  sirve lo guardado, cuatro endpoints   → servicio api
+config.py               la configuración, en un solo sitio    → lo importan los dos
+migrations/             el esquema, versionado paso a paso    → servicio flyway
+frontend/index.html     la página que consume la API          → servicio frontend
+frontend/borrador/      notas para trabajar el diseño aparte
+Dockerfile              la imagen de collector, scheduler y api
+docker-compose.yml      los siete servicios, el volumen y los healthchecks
+docker-compose.test.yml la base de test, aparte
+requirements.txt        dependencias de Python, con versiones fijadas
+requirements-dev.txt    pytest y compañía, fuera de la imagen
+.env                    los valores reales (fuera del repo y de la imagen)
+.env.example            las mismas claves, sin valores
 ```
 
 ## Notas
