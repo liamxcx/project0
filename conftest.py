@@ -4,12 +4,13 @@ import psycopg
 import pytest
 
 # pytest carga este fichero antes que los tests, así que estas variables ya
-# están puestas cuando se importa la API y config.py monta DB_URL.
+# están puestas cuando se importa la API y config.py lee la base y Redis.
 os.environ["DB_HOST"] = "localhost"
 os.environ["DB_PORT"] = "5433"
 os.environ["POSTGRES_USER"] = "test"
 os.environ["POSTGRES_PASSWORD"] = "test"
 os.environ["POSTGRES_DB"] = "test"
+os.environ["REDIS_URL"] = "redis://localhost:6380/0"
 
 # Tres partidas inventadas. Ahri sale dos veces (una victoria y una derrota) y
 # Lux una. En cada partida hay además un rival sin puuid, que la API no debe
@@ -58,10 +59,23 @@ def datos():
         conexion.execute(VACIAR)
 
 
+def pytest_configure(config):
+    # Sin registrarla, pytest avisa de que no conoce la marca
+    config.addinivalue_line("markers", "con_cache: usa el Redis de test")
+
+
 @pytest.fixture(autouse=True)
-def sin_cache(monkeypatch):
-    """Desactiva Redis en todos los tests para que cada uno lea de la base."""
+def sin_cache(request, monkeypatch):
+    """Apaga Redis en cada test, salvo en los marcados con con_cache."""
     import api
 
-    monkeypatch.setattr(api, "cache_get", lambda key: None)
-    monkeypatch.setattr(api, "cache_set", lambda key, value: None)
+    if request.node.get_closest_marker("con_cache"):
+        # Se guarda aparte porque un test puede cambiar api.cache por otro
+        redis_test = api.cache
+        redis_test.flushdb()
+        yield
+        redis_test.flushdb()
+    else:
+        monkeypatch.setattr(api, "cache_get", lambda key: None)
+        monkeypatch.setattr(api, "cache_set", lambda key, value: None)
+        yield

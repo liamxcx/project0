@@ -1,6 +1,11 @@
+import psycopg
+import pytest
+import redis
 from fastapi.testclient import TestClient
 
+import api
 from api import app
+from config import DB_URL
 
 # Llama a los endpoints sin levantar uvicorn ni abrir ningún puerto
 cliente = TestClient(app)
@@ -66,3 +71,28 @@ def test_champion_stats_devuelve_404_si_no_lo_has_jugado(datos):
     respuesta = cliente.get("/champions/Garen")
 
     assert respuesta.status_code == 404
+
+
+@pytest.mark.con_cache
+def test_la_segunda_llamada_no_toca_postgres(datos):
+    primera = cliente.get("/matches")
+    assert len(primera.json()) == 3
+
+    # Si la segunda llamada consultara la base, ya no encontraría ninguna
+    with psycopg.connect(DB_URL) as conexion:
+        conexion.execute("DELETE FROM matches")
+
+    segunda = cliente.get("/matches")
+    assert segunda.json() == primera.json()
+
+
+@pytest.mark.con_cache
+def test_la_api_responde_aunque_redis_se_caiga(datos, monkeypatch):
+    # En el puerto 1 no escucha nadie, así que cada llamada a Redis falla
+    redis_caido = redis.Redis.from_url("redis://localhost:1/0", socket_timeout=1)
+    monkeypatch.setattr(api, "cache", redis_caido)
+
+    respuesta = cliente.get("/matches")
+
+    assert respuesta.status_code == 200
+    assert len(respuesta.json()) == 3
