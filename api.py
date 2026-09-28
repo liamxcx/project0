@@ -37,7 +37,7 @@ def cache_get(key):
 def cache_set(key, value):
     """Guarda en caché. Si Redis falla, sigue adelante sin guardar."""
     try:
-        cache.setex(key, CACHE_TTL_SECONDS, value)
+        cache.set(key, value, ex=CACHE_TTL_SECONDS)
     except redis.RedisError:
         log.warning("Redis no disponible al guardar %s", key)
 
