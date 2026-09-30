@@ -75,8 +75,8 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
   partidas nuevas aparecen solas.
 - **`frontend`** — nginx sirviendo una página estática que pide los datos
   a la API desde el navegador.
-- **Tests** — pytest sobre los cuatro endpoints, contra una base de
-  PostgreSQL propia con datos inventados.
+- **Tests** — pytest sobre los cuatro endpoints y la caché, contra un
+  PostgreSQL y un Redis propios, con datos inventados.
 
 ### Qué falta
 
@@ -624,8 +624,8 @@ docker inspect project0-scheduler-1 --format '{{json .HostConfig.LogConfig}}'
 
 ## Tests
 
-Los tests viven en `test_api.py` y usan su propia base de datos, que se
-levanta aparte con `docker-compose.test.yml`:
+Los tests viven en `test_api.py` y usan su propia base de datos y su
+propio Redis, que se levantan aparte con `docker-compose.test.yml`:
 
 ```bash
 docker compose -f docker-compose.test.yml up -d
@@ -633,9 +633,10 @@ source .venv/bin/activate
 pytest
 ```
 
-La base se queda levantada entre ejecuciones, así que el primer comando
-solo hace falta una vez. Sin ella, `/health` pasa igual y el resto falla
-con un error de conexión al puerto 5433. Para tirarla al acabar:
+Los contenedores se quedan levantados entre ejecuciones, así que el primer
+comando solo hace falta una vez. Sin ellos, `/health` pasa igual y el resto
+falla con un error de conexión al puerto 5433 o al 6380. Para tirarlos al
+acabar:
 
 ```bash
 docker compose -f docker-compose.test.yml down
@@ -655,7 +656,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 `TestClient` de FastAPI llama a los endpoints sin levantar uvicorn y sin
 abrir ningún puerto: importa `api.py` y ejecuta las funciones de ruta
 directamente. Por eso tardan milisegundos. Lo único que tiene que estar
-arrancado es la base de test.
+arrancado son la base y el Redis de test.
 
 Importar `api.py` ejecuta el módulo entero, así que un test que solo mira
 `/health` ya comprueba de paso que `config.py` encuentra sus variables, que
@@ -665,40 +666,56 @@ Pytest busca ficheros que empiecen por `test_` y, dentro, funciones que
 empiecen por `test_`. Una función con otro nombre no se ejecuta y no avisa
 de nada.
 
-### La base de test
+### Los contenedores de test
 
 `docker-compose.test.yml` levanta un PostgreSQL (`db-test`) y un Flyway
 (`flyway-test`) que le aplica las mismas migraciones que a la base de
 verdad. Es un proyecto de Compose aparte, `project0-test`, así que no sale
 en el `docker compose ps` de siempre ni se levanta con el `up` normal.
 
-Publica el 5433 porque el 5432 lo tiene la base real, y no tiene volumen.
-Al tirarla se pierde todo y la siguiente vez arranca vacía.
+La base se publica en el 5433 porque el 5432 lo tiene la base real, y no
+tiene volumen. Al tirarla se pierde todo y la siguiente vez arranca vacía.
 
 Las credenciales (`test`/`test`/`test`) están escritas en el propio
 fichero en vez de salir del `.env`. La base es desechable y solo escucha
 en localhost, y así funciona igual donde no haya `.env`, como en el
 pipeline.
 
+También levanta `redis-test`, con la misma imagen que el Redis del
+proyecto y sin contraseña, igual que él. Se publica en el 6380 para que
+no choque con otro Redis que haya en la máquina.
+
 ### conftest.py
 
 pytest ejecuta `conftest.py` antes de cargar los tests. Ahí se hacen tres
 cosas.
 
-Se ponen `DB_HOST`, `DB_PORT` y las credenciales apuntando a `db-test`.
-Como `load_dotenv()` no sobrescribe variables que ya existen, cuando
-`config.py` monta `DB_URL` sale `postgresql://test:test@localhost:5433/test`
-y no la base real. El resto de variables sí se leen del `.env`.
+Se ponen `DB_HOST`, `DB_PORT` y las credenciales apuntando a `db-test`, y
+`REDIS_URL` apuntando a `redis-test`. Como `load_dotenv()` no sobrescribe
+variables que ya existen, cuando `config.py` monta `DB_URL` sale
+`postgresql://test:test@localhost:5433/test` y no la base real. El resto
+de variables sí se leen del `.env`.
 
 La fixture `datos` vacía las tablas, mete tres partidas inventadas y las
 vuelve a vaciar al acabar el test, pase o falle. Los tests que la
 necesitan la piden como parámetro. Son pocos datos a propósito, para que
 el resultado esperado de cada test se pueda contar a mano.
 
-La fixture `sin_cache` se aplica sola a todos los tests y cambia las
-funciones de caché por otras que no hacen nada. Si Redis respondiera, un
-test podría recibir la respuesta cacheada del anterior en vez de consultar
-la base.
+La fixture `sin_cache` se aplica sola a todos los tests y cambia
+`cache_get` y `cache_set` por funciones que no hacen nada, así que la API
+va siempre a la base. Si no, un test podría recibir la respuesta que dejó
+cacheada el anterior.
+
+Los tests que sí quieren la caché llevan encima `@pytest.mark.con_cache`.
+Con esa marca, `sin_cache` no toca nada y la API usa `redis-test` de
+verdad. Además vacía Redis antes y después del test, por lo mismo que
+`datos` vacía la base. La marca se registra en `pytest_configure`, porque
+si no pytest avisa de que no la conoce.
+
+Está hecho así, y no al revés, para que olvidar la marca no tenga
+consecuencias. Un test sin ella lee de la base como los demás. Si la
+caché estuviera encendida por defecto, un test que se olvidara de
+apagarla dependería de lo que hubiera dejado en Redis el anterior.
 
 ### Qué cubren y qué no
 
@@ -706,6 +723,13 @@ Los cuatro endpoints tienen al menos un test. Entre los datos hay rivales
 sin `puuid`, uno de ellos con un campeón que también lleva el invocador,
 así que si el filtro de la API se rompe se nota en `/matches`, en
 `/champions` y en `/champions/{champion}`.
+
+Dos tests más comprueban la caché. El primero llama a `/matches`, borra
+las partidas de la base y vuelve a llamar. Si la segunda respuesta sigue
+trayendo las tres partidas, es que ha salido de Redis. El segundo cambia
+el cliente de Redis de la API por uno que apunta a un puerto donde no
+escucha nadie, y comprueba que `/matches` responde igual desde la base.
+Si alguien quita el `try/except` de `cache_get`, ese test falla.
 
 Estos tests no comprueban que la imagen se construya, que uvicorn
 arranque ni que los puertos estén publicados. Eso es trabajo del pipeline.
@@ -726,7 +750,7 @@ frontend/index.html     la página que consume la API          → servicio fron
 frontend/borrador/      notas para trabajar el diseño aparte
 Dockerfile              la imagen de collector, scheduler y api
 docker-compose.yml      los siete servicios, el volumen y los healthchecks
-docker-compose.test.yml la base de test, aparte
+docker-compose.test.yml la base y el Redis de test, aparte
 requirements.txt        dependencias de Python, con versiones fijadas
 requirements-dev.txt    pytest y compañía, fuera de la imagen
 .env                    los valores reales (fuera del repo y de la imagen)
@@ -780,6 +804,7 @@ Redis es opcional por diseño. Las llamadas a la caché van envueltas en
 "no hay nada cacheado": la API responde igual, más lenta, y deja un aviso
 en los logs. El cliente lleva además `socket_timeout=1`, para que un Redis
 que acepta la conexión pero no contesta no deje la petición esperando.
+Un test comprueba que la API responde con Redis caído (ver [Tests](#tests)).
 
 `game_version` es la numeración interna de Riot, la que da la API. No
 coincide con la que ve el jugador en el cliente: la pública va diez por
