@@ -10,8 +10,9 @@ Solo se procesan partidas de Ranked Solo/Duo (queueId 420).
 
 ## Estado actual
 
-Recolección, base de datos con migraciones, API propia y una página que la
-consume, todo funcionando. Faltan los tests y el despliegue.
+Recolección, base de datos con migraciones, API propia, una página que la
+consume y tests que se ejecutan en cada push, todo funcionando. Falta el
+despliegue.
 
 ### Cómo encajan las piezas
 
@@ -77,10 +78,11 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
   a la API desde el navegador.
 - **Tests** — pytest sobre los cuatro endpoints y la caché, contra un
   PostgreSQL y un Redis propios, con datos inventados.
+- **CI** — GitHub Actions ejecuta los tests en cada push y marca cada
+  commit en verde o en rojo.
 
 ### Qué falta
 
-- CI que ejecute los tests en cada push
 - Gráfica de winrate y comparar varios invocadores
 - Copia de seguridad de la base de datos
 - Despliegue en Kubernetes
@@ -694,7 +696,8 @@ Se ponen `DB_HOST`, `DB_PORT` y las credenciales apuntando a `db-test`, y
 `REDIS_URL` apuntando a `redis-test`. Como `load_dotenv()` no sobrescribe
 variables que ya existen, cuando `config.py` monta `DB_URL` sale
 `postgresql://test:test@localhost:5433/test` y no la base real. El resto
-de variables sí se leen del `.env`.
+de variables que usa la API tienen valor por defecto, así que los tests no
+necesitan un `.env`.
 
 La fixture `datos` vacía las tablas, mete tres partidas inventadas y las
 vuelve a vaciar al acabar el test, pase o falle. Los tests que la
@@ -737,6 +740,74 @@ arranque ni que los puertos estén publicados. Eso es trabajo del pipeline.
 El `.venv` usa la misma versión de Python que la imagen (3.14). Si se
 separan, un test puede pasar en local y fallar en el pipeline.
 
+## Integración continua
+
+Cada push a GitHub ejecuta los tests con GitHub Actions. El workflow está
+en `.github/workflows/tests.yml` y el resultado sale al lado de cada
+commit, con un tick verde si todo pasa y una cruz roja si algo falla. El
+detalle de cada ejecución está en la pestaña Actions del repositorio.
+
+Se dispara con un push a cualquier rama, no solo a `main`. Así se puede
+probar un cambio en una rama aparte sin que llegue a `main`.
+
+Cada ejecución arranca en una máquina Ubuntu nueva, que GitHub borra al
+acabar. Los pasos son los mismos que en local:
+
+1. Clonar el repositorio (`actions/checkout`).
+2. Instalar Python 3.14 (`actions/setup-python`), la misma versión que la
+   imagen y el `.venv`.
+3. Instalar `requirements.txt` y `requirements-dev.txt`.
+4. Levantar los contenedores de test y aplicar las migraciones.
+5. Lanzar `pytest -v`.
+
+Si un paso termina con error, los siguientes no se ejecutan y la ejecución
+sale en rojo. La cruz puede venir de una dependencia que no se instala o de
+una migración que falla, no solo de un test. Para saber cuál ha sido hay
+que abrir el job y mirar qué paso tiene la cruz.
+
+### Los contenedores en el pipeline
+
+Se levantan con el mismo `docker-compose.test.yml` que en local, así que
+los dos prueban contra lo mismo y la configuración está en un solo sitio.
+GitHub Actions tiene su propia forma de declarar contenedores
+(`services:`), pero habría que repetir ahí la imagen, los puertos y los
+healthchecks, y no sirve para contenedores que terminan, como
+`flyway-test`.
+
+Se hace en dos comandos:
+
+```bash
+docker compose -f docker-compose.test.yml up -d --wait db-test redis-test
+docker compose -f docker-compose.test.yml run --rm flyway-test
+```
+
+`--wait` no devuelve el control hasta que los healthchecks de `db-test` y
+`redis-test` dan bien. Sin él, los tests podrían empezar antes de que
+Redis aceptara conexiones.
+
+`flyway-test` va aparte porque `--wait` trata como un fallo que un
+contenedor termine, aunque acabe con código 0. `run` lo ejecuta en primer
+plano, espera a que acabe y devuelve su código de salida, así que si una
+migración falla el paso falla y no se llega a los tests. `--rm` borra el
+contenedor al terminar.
+
+Los mismos dos comandos sirven en local en lugar del `up -d` de la sección
+Tests.
+
+### Sin .env ni secretos
+
+En el pipeline no hay `.env`, y no hace falta. `conftest.py` pone las
+variables de la base y de Redis, y la API no exige ninguna más. Las de Riot
+solo las exige `collector.py` (ver Notas), y los tests no lo ejecutan. Por
+eso no hay ninguna clave de Riot guardada en GitHub.
+
+### El sistema del runner
+
+El job usa `ubuntu-latest`, que GitHub mueve a la siguiente versión LTS
+cuando sale. Se deja así porque del sistema solo se usa Docker. Python lo
+instala `setup-python` en la versión indicada y lo demás va en contenedores
+con la imagen fijada.
+
 ## Estructura
 
 ```
@@ -753,6 +824,7 @@ docker-compose.yml      los siete servicios, el volumen y los healthchecks
 docker-compose.test.yml la base y el Redis de test, aparte
 requirements.txt        dependencias de Python, con versiones fijadas
 requirements-dev.txt    pytest y compañía, fuera de la imagen
+.github/workflows/      el pipeline de GitHub Actions         → se ejecuta en cada push
 .env                    los valores reales (fuera del repo y de la imagen)
 .env.example            las mismas claves, sin valores
 ```
