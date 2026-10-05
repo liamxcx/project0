@@ -1,0 +1,26 @@
+name: Tests
+
+on: push
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      # Clona el repo en el runner, que empieza vacío
+      - uses: actions/checkout@v7
+
+      # La misma versión que la imagen y el .venv
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      # requirements-dev.txt no incluye al otro, así que se instalan los dos
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+
+      # up --wait da error si un contenedor termina, aunque acabe bien. Por eso
+      # flyway-test va aparte con run, que espera a que termine.
+      - run: |
+          docker compose -f docker-compose.test.yml up -d --wait db-test redis-test
+          docker compose -f docker-compose.test.yml run --rm flyway-test
+
+      - run: pytest -v
