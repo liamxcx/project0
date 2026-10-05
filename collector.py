@@ -11,14 +11,18 @@ from config import (
     DB_URL,
     MATCH_COUNT,
     RANKED_SOLO_QUEUE,
-    RIOT_API_KEY,
     RIOT_BASE_URL,
-    RIOT_GAME_NAME,
-    RIOT_TAG_LINE,
+    obligatoria,
 )
 
 # El formato lo configura config.py, que se importa antes
 log = logging.getLogger("collector")
+
+# Se leen aquí y no en config.py porque solo las usa el collector. Así la API
+# y los tests pueden importar config.py sin tener las variables de Riot.
+RIOT_API_KEY = obligatoria("RIOT_API_KEY")
+RIOT_GAME_NAME = obligatoria("RIOT_GAME_NAME")
+RIOT_TAG_LINE = obligatoria("RIOT_TAG_LINE")
 
 # Con --refetch se vuelven a pedir a Riot las partidas ya guardadas, para
 # rellenar columnas añadidas después. Sin él, las que ya están se saltan.

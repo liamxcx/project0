@@ -32,10 +32,6 @@ def obligatoria(nombre):
     return valor
 
 
-RIOT_API_KEY = obligatoria("RIOT_API_KEY")
-RIOT_GAME_NAME = obligatoria("RIOT_GAME_NAME")
-RIOT_TAG_LINE = obligatoria("RIOT_TAG_LINE")
-
 # Cuántas partidas recientes se piden a Riot en cada ejecución
 MATCH_COUNT = int(os.getenv("MATCH_COUNT", "20"))
 

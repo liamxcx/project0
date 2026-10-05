@@ -783,6 +783,11 @@ aceptase conexiones, y la aplicación podría fallar al conectar.
 `config.py` centraliza la lectura del `.env`. `collector.py` y `api.py`
 importan de ahí en vez de construir cada uno su cadena de conexión.
 
+Las tres variables de Riot son la excepción y se leen en `collector.py`.
+Importar `config.py` ejecuta el fichero entero, así que si estuvieran ahí la
+API no arrancaría sin ellas aunque no las use. Tampoco podrían lanzarse los
+tests sin un `.env`.
+
 Las variables sin valor por defecto pasan por `obligatoria()`, que corta la
 ejecución con un mensaje claro si faltan. Sin eso, una variable ausente se
 cuela como el texto `None` dentro de la cadena de conexión y el fallo
