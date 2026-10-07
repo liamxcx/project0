@@ -215,7 +215,10 @@ nombres y los iconos salen de Data Dragon, igual que con los campeones.
 El `collector` pide a Riot únicamente los identificadores de esa cola:
 
 ```python
-params={"count": MATCH_COUNT, "queue": RANKED_SOLO_QUEUE}
+ids_response = fetch(
+    f"{RIOT_BASE_URL}/lol/match/v5/matches/by-puuid/{puuid}/ids",
+    params={"count": MATCH_COUNT, "queue": RANKED_SOLO_QUEUE},
+)
 ```
 
 El filtro va en la petición y no al guardar, así que las partidas de otros

@@ -57,8 +57,9 @@ def fetch(url, params=None, attempts=3):
         # Los 5xx suelen ser temporales, así que se reintenta
         if response.status_code >= 500:
             delay = 2**attempt
-            log.warning("Riot devolvió %s, reintento en %ss",
-                        response.status_code, delay)
+            log.warning(
+                "Riot devolvió %s, reintento en %ss", response.status_code, delay
+            )
             time.sleep(delay)
             continue
 
@@ -216,7 +217,9 @@ with (
     already_saved = {row[0] for row in cursor.fetchall()}
 
     if refetch:
-        log.info("Modo --refetch: se vuelven a pedir las %s guardadas", len(already_saved))
+        log.info(
+            "Modo --refetch: se vuelven a pedir las %s guardadas", len(already_saved)
+        )
         already_saved = set()
     elif already_saved:
         log.info("Ya guardadas, no se piden a Riot: %s", len(already_saved))
@@ -235,7 +238,9 @@ with (
             info = match_response.json()["info"]
 
             # Riot da la fecha en milisegundos desde 1970
-            played_at = datetime.fromtimestamp(info["gameCreation"] / 1000, timezone.utc)
+            played_at = datetime.fromtimestamp(
+                info["gameCreation"] / 1000, timezone.utc
+            )
 
             cursor.execute(
                 """
