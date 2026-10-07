@@ -1,8 +1,24 @@
-name: Tests
+name: CI
 
 on: push
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      # Ruff sale de requirements-dev.txt para usar la misma versión que en local
+      - run: pip install -r requirements-dev.txt
+
+      - run: ruff format --check .
+
+      - run: ruff check .
+
   tests:
     runs-on: ubuntu-latest
     steps:
@@ -24,3 +40,17 @@ jobs:
           docker compose -f docker-compose.test.yml run --rm flyway-test
 
       - run: pytest -v
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      # Solo comprueba que la imagen se construye. Todavía no hay ningún
+      # registro al que subirla.
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false

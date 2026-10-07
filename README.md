@@ -746,7 +746,7 @@ separan, un test puede pasar en local y fallar en el pipeline.
 ## Integración continua
 
 Cada push a GitHub ejecuta los tests con GitHub Actions. El workflow está
-en `.github/workflows/tests.yml` y el resultado sale al lado de cada
+en `.github/workflows/ci.yml` y el resultado sale al lado de cada
 commit, con un tick verde si todo pasa y una cruz roja si algo falla. El
 detalle de cada ejecución está en la pestaña Actions del repositorio.
 
