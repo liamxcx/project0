@@ -13,3 +13,7 @@ Pygments==2.21.0
 httpx2==2.13.0
 httpcore2==2.13.0
 truststore==0.10.4
+
+# Fijado para que el CI y cualquier máquina formateen y revisen igual, sin
+# depender de la versión que traiga la extensión del editor
+ruff==0.16.10
