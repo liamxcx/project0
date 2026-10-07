@@ -78,8 +78,8 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
   a la API desde el navegador.
 - **Tests** — pytest sobre los cuatro endpoints y la caché, contra un
   PostgreSQL y un Redis propios, con datos inventados.
-- **CI** — GitHub Actions ejecuta los tests en cada push y marca cada
-  commit en verde o en rojo.
+- **CI** — GitHub Actions pasa Ruff, ejecuta los tests y construye la
+  imagen en cada push, y marca cada commit en verde o en rojo.
 
 ### Qué falta
 
@@ -737,24 +737,63 @@ el cliente de Redis de la API por uno que apunta a un puerto donde no
 escucha nadie, y comprueba que `/matches` responde igual desde la base.
 Si alguien quita el `try/except` de `cache_get`, ese test falla.
 
-Estos tests no comprueban que la imagen se construya, que uvicorn
-arranque ni que los puertos estén publicados. Eso es trabajo del pipeline.
+Estos tests no usan el `Dockerfile`. Que la imagen se construya lo
+comprueba el job `build` del pipeline. Que uvicorn arranque dentro del
+contenedor y que los puertos estén publicados no lo comprueba nada todavía.
 
 El `.venv` usa la misma versión de Python que la imagen (3.14). Si se
 separan, un test puede pasar en local y fallar en el pipeline.
 
-## Integración continua
+## CI
 
-Cada push a GitHub ejecuta los tests con GitHub Actions. El workflow está
-en `.github/workflows/ci.yml` y el resultado sale al lado de cada
-commit, con un tick verde si todo pasa y una cruz roja si algo falla. El
-detalle de cada ejecución está en la pestaña Actions del repositorio.
+Cada push a GitHub ejecuta el pipeline de CI (integración continua) en
+GitHub Actions. El workflow está en `.github/workflows/ci.yml` y el
+resultado sale al lado de cada commit, con un tick verde si todo pasa y una
+cruz roja si algo falla. El detalle de cada ejecución está en la pestaña
+Actions del repositorio.
 
 Se dispara con un push a cualquier rama, no solo a `main`. Así se puede
 probar un cambio en una rama aparte sin que llegue a `main`.
 
-Cada ejecución arranca en una máquina Ubuntu nueva, que GitHub borra al
-acabar. Los pasos son los mismos que en local:
+El workflow tiene tres jobs, `lint`, `tests` y `build`. Arrancan a la vez,
+cada uno en su propia máquina Ubuntu que GitHub borra al acabar. Que falle
+uno no para a los otros, así que un fallo de formato no esconde si los
+tests pasan.
+
+Dentro de un job, si un paso termina con error, los siguientes no se
+ejecutan. Para saber qué ha fallado hay que abrir el job en rojo y mirar
+qué paso tiene la cruz.
+
+### lint
+
+Instala `requirements-dev.txt` y pasa Ruff en dos pasos:
+
+```bash
+ruff format --check .
+ruff check .
+```
+
+El primero comprueba que el código tiene el formato de Ruff, sin cambiar
+nada. El segundo pasa el linter, que busca imports sin usar, variables que
+no se usan y fallos parecidos. Van separados para ver a la primera cuál de
+los dos ha fallado.
+
+Ruff está fijado en `requirements-dev.txt` para que el pipeline y cualquier
+máquina usen la misma versión. La extensión del editor puede traer otra, y
+entre versiones cambian las reglas de formato.
+
+Para dejar el código como lo quiere Ruff antes de un commit:
+
+```bash
+ruff format .
+```
+
+Ruff también formatea los bloques de Python de este README, así que lo que
+vaya en un bloque ```` ```python ```` tiene que ser Python válido.
+
+### tests
+
+Los mismos pasos que en local:
 
 1. Clonar el repositorio (`actions/checkout`).
 2. Instalar Python 3.14 (`actions/setup-python`), la misma versión que la
@@ -763,10 +802,8 @@ acabar. Los pasos son los mismos que en local:
 4. Levantar los contenedores de test y aplicar las migraciones.
 5. Lanzar `pytest -v`.
 
-Si un paso termina con error, los siguientes no se ejecutan y la ejecución
-sale en rojo. La cruz puede venir de una dependencia que no se instala o de
-una migración que falla, no solo de un test. Para saber cuál ha sido hay
-que abrir el job y mirar qué paso tiene la cruz.
+La cruz puede venir de una dependencia que no se instala o de una
+migración que falla, no solo de un test.
 
 ### Los contenedores en el pipeline
 
@@ -804,12 +841,29 @@ variables de la base y de Redis, y la API no exige ninguna más. Las de Riot
 solo las exige `collector.py` (ver Notas), y los tests no lo ejecutan. Por
 eso no hay ninguna clave de Riot guardada en GitHub.
 
+### build
+
+Construye la imagen con el `Dockerfile`, igual que `docker build .`, usando
+las acciones oficiales de Docker (`docker/setup-buildx-action` y
+`docker/build-push-action`). Hace falta porque los tests ejecutan el código
+directamente y nunca usan el `Dockerfile`, así que un `COPY` de un fichero
+que no existe o un `pip install` que falla dentro de la imagen no saldría en
+ningún otro sitio.
+
+La imagen no se sube a ningún registro (`push: false`). El aviso `No output
+specified with docker-container driver` del log viene de eso y es
+esperado.
+
+`build-push-action` guarda además un registro del build como artifact de la
+ejecución. Se puede descargar e importar en la sección Builds de Docker
+Desktop para ver el build paso a paso.
+
 ### El sistema del runner
 
-El job usa `ubuntu-latest`, que GitHub mueve a la siguiente versión LTS
-cuando sale. Se deja así porque del sistema solo se usa Docker. Python lo
-instala `setup-python` en la versión indicada y lo demás va en contenedores
-con la imagen fijada.
+Los tres jobs usan `ubuntu-latest`, que GitHub mueve a la siguiente
+versión LTS cuando sale. Se deja así porque del sistema solo se usa Docker.
+Python lo instala `setup-python` en la versión indicada y lo demás va en
+contenedores con la imagen fijada.
 
 ## Estructura
 
@@ -826,7 +880,7 @@ Dockerfile              la imagen de collector, scheduler y api
 docker-compose.yml      los siete servicios, el volumen y los healthchecks
 docker-compose.test.yml la base y el Redis de test, aparte
 requirements.txt        dependencias de Python, con versiones fijadas
-requirements-dev.txt    pytest y compañía, fuera de la imagen
+requirements-dev.txt    pytest, Ruff y compañía, fuera de la imagen
 .github/workflows/      el pipeline de GitHub Actions         → se ejecuta en cada push
 .env                    los valores reales (fuera del repo y de la imagen)
 .env.example            las mismas claves, sin valores
