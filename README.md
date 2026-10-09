@@ -84,7 +84,7 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
 ### Qué falta
 
 - Gráfica de winrate y comparar varios invocadores
-- Copia de seguridad de la base de datos
+- Copia de seguridad automática de la base de datos
 - Despliegue en Kubernetes
 
 ## Requisitos
@@ -559,6 +559,22 @@ tabla de control y apunta la V1 como aplicada sin ejecutarla.
 Hace falta solo al meter Flyway en una base que ya existe. Una base vacía
 ejecuta las migraciones desde la V1 y llega al mismo esquema.
 
+## Copia de seguridad
+
+```bash
+mkdir -p backups
+docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > backups/project0-$(date +%F).dump
+```
+
+Para restaurarla en una base vacía:
+
+```bash
+docker compose exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d <base>' < backups/<fichero>.dump
+```
+
+La copia va en formato custom de `pg_dump` y la carpeta `backups/` está
+fuera de Git. Se hace a mano. La copia automática llegará con Kubernetes.
+
 ## Frontend
 
 Una página en `frontend/index.html` que pide los datos a la API y los
@@ -882,6 +898,7 @@ docker-compose.test.yml la base y el Redis de test, aparte
 requirements.txt        dependencias de Python, con versiones fijadas
 requirements-dev.txt    pytest, Ruff y compañía, fuera de la imagen
 .github/workflows/      el pipeline de GitHub Actions         → se ejecuta en cada push
+backups/                copias de la base con pg_dump (fuera del repo)
 .env                    los valores reales (fuera del repo y de la imagen)
 .env.example            las mismas claves, sin valores
 ```
