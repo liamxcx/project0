@@ -1,0 +1,21 @@
+# Clúster local de project0. Los puertos solo se pueden fijar al crearlo,
+# así que cambiar este fichero obliga a recrear el clúster.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: project0
+nodes:
+  - role: control-plane
+  # El controlador de Ingress irá en este nodo, por eso es el único que
+  # publica el 80 y el 443. La etiqueta sirve para mandarlo aquí.
+  - role: worker
+    labels:
+      ingress-ready: "true"
+    extraPortMappings:
+      # Solo en 127.0.0.1, para que no se pueda entrar desde la red local.
+      - containerPort: 80
+        hostPort: 80
+        listenAddress: "127.0.0.1"
+      - containerPort: 443
+        hostPort: 443
+        listenAddress: "127.0.0.1"
+  - role: worker
