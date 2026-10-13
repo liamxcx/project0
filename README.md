@@ -90,6 +90,7 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
 ## Requisitos
 
 - Docker
+- kind y kubectl, para el clúster local de Kubernetes
 - Una clave de la API de Riot: https://developer.riotgames.com
   La Development Key caduca cada 24 horas. Una personal key, que se pide
   registrando el proyecto en el portal, no caduca.
@@ -881,6 +882,22 @@ versión LTS cuando sale. Se deja así porque del sistema solo se usa Docker.
 Python lo instala `setup-python` en la versión indicada y lo demás va en
 contenedores con la imagen fijada.
 
+## Kubernetes
+
+Clúster local con kind, definido en `kind-config.yaml`: un control plane y
+dos workers.
+
+```bash
+kind create cluster --config kind-config.yaml   # crearlo
+kubectl get nodes                               # los tres nodos en Ready
+kind delete cluster --name project0             # borrarlo
+```
+
+El primer worker publica el 80 y el 443 en `127.0.0.1` para el Ingress.
+Los puertos solo se fijan al crear el clúster, así que cambiar
+`kind-config.yaml` obliga a borrarlo y crearlo otra vez, y se pierde lo que
+haya dentro.
+
 ## Estructura
 
 ```
@@ -895,6 +912,7 @@ frontend/borrador/      notas para trabajar el diseño aparte
 Dockerfile              la imagen de collector, scheduler y api
 docker-compose.yml      los siete servicios, el volumen y los healthchecks
 docker-compose.test.yml la base y el Redis de test, aparte
+kind-config.yaml        el clúster local de Kubernetes       → kind create cluster
 requirements.txt        dependencias de Python, con versiones fijadas
 requirements-dev.txt    pytest, Ruff y compañía, fuera de la imagen
 .github/workflows/      el pipeline de GitHub Actions         → se ejecuta en cada push
