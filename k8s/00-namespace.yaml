@@ -1,0 +1,6 @@
+# El 00 del nombre hace que kubectl apply -f k8s/ lo aplique antes que el
+# resto, porque recorre los ficheros en orden alfabético.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: project0
