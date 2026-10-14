@@ -42,6 +42,9 @@ jobs:
       - run: pytest -v
 
   build:
+    # Solo se construye si el código pasa el lint y los tests, porque esta
+    # imagen es la que se acabará desplegando.
+    needs: [lint, tests]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
