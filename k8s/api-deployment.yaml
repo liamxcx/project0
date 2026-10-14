@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: project0
+  labels:
+    app.kubernetes.io/name: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: api
+    spec:
+      # La imagen es privada en GHCR. El Secret se crea a mano porque lleva el
+      # token, así que no está en el repo.
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: api
+          image: ghcr.io/liamxcx/project0:f560348
+          # La misma imagen sirve para api, collector y scheduler, así que cada
+          # manifiesto elige qué proceso arranca.
+          command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: POSTGRES_USER
+              value: loltest
+            - name: POSTGRES_DB
+              value: lolstats
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: POSTGRES_PASSWORD
+          # En Compose la API usa unos 53 MiB. Sin límite de CPU, porque un
+          # límite frena el proceso en los picos aunque el nodo esté libre.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
