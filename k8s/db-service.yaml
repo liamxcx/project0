@@ -1,0 +1,10 @@
+# Hasta que Postgres entre en el clúster (k5), db apunta al Postgres de
+# Compose a través de host.docker.internal, que solo existe en Docker Desktop.
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  namespace: project0
+spec:
+  type: ExternalName
+  externalName: host.docker.internal
