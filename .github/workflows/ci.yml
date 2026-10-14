@@ -46,14 +46,48 @@ jobs:
     # imagen es la que se acabará desplegando.
     needs: [lint, tests]
     runs-on: ubuntu-latest
+    # El token que GitHub da al job necesita permiso para subir al registro
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v7
 
+      # QEMU emula arm64 en el runner, que es amd64. Solo hace falta en main,
+      # que es donde se construyen las dos arquitecturas.
+      - uses: docker/setup-qemu-action@v4
+        if: github.ref == 'refs/heads/main'
+
       - uses: docker/setup-buildx-action@v4
 
-      # Solo comprueba que la imagen se construye. Todavía no hay ningún
-      # registro al que subirla.
+      # Solo main sube la imagen, así que solo ahí hace falta iniciar sesión
+      - uses: docker/login-action@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Etiqueta la imagen con el SHA corto del commit, para saber qué código
+      # lleva cada una
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: type=sha,prefix=
+
+      # En main la sube a GHCR. En el resto de ramas solo comprueba que se
+      # construye.
       - uses: docker/build-push-action@v7
         with:
           context: .
-          push: false
+          push: ${{ github.ref == 'refs/heads/main' }}
+          # En main, arm64 para los nodos de kind y amd64 para servidores. En
+          # el resto de ramas basta amd64, que es nativa y no hay que emular.
+          platforms: ${{ github.ref == 'refs/heads/main' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Guarda las capas en la caché de Actions para reutilizarlas en la
+          # siguiente ejecución si no han cambiado
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
