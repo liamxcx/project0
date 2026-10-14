@@ -46,14 +46,36 @@ jobs:
     # imagen es la que se acabará desplegando.
     needs: [lint, tests]
     runs-on: ubuntu-latest
+    # El token que GitHub da al job necesita permiso para subir al registro
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v7
 
       - uses: docker/setup-buildx-action@v4
 
-      # Solo comprueba que la imagen se construye. Todavía no hay ningún
-      # registro al que subirla.
+      # Solo main sube la imagen, así que solo ahí hace falta iniciar sesión
+      - uses: docker/login-action@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Etiqueta la imagen con el SHA corto del commit, para saber qué código
+      # lleva cada una
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: type=sha,prefix=
+
+      # En main la sube a GHCR. En el resto de ramas solo comprueba que se
+      # construye.
       - uses: docker/build-push-action@v7
         with:
           context: .
-          push: false
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
