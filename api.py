@@ -55,9 +55,25 @@ CHAMPION_STATS_SELECT = """
 """
 
 
+# Solo dice que el proceso responde. No comprueba nada externo, porque
+# Kubernetes reinicia el contenedor si falla y reiniciar no arregla la base.
 @app.get("/health")
 def health():
     return {"estado": "ok"}
+
+
+# Comprueba PostgreSQL porque sin él la API no puede responder nada útil.
+# Mientras falle, Kubernetes deja de mandar tráfico a este pod.
+@app.get("/ready")
+def ready():
+    try:
+        with psycopg.connect(DB_URL, connect_timeout=2) as connection:
+            connection.execute("SELECT 1")
+    except psycopg.Error:
+        log.warning("PostgreSQL no disponible en /ready")
+        raise HTTPException(status_code=503, detail="PostgreSQL no disponible")
+
+    return {"estado": "listo"}
 
 
 @app.get("/matches")

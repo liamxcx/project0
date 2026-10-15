@@ -18,6 +18,22 @@ def test_health_responde_ok():
     assert respuesta.json() == {"estado": "ok"}
 
 
+def test_ready_responde_ok_si_postgres_responde():
+    respuesta = cliente.get("/ready")
+
+    assert respuesta.status_code == 200
+    assert respuesta.json() == {"estado": "listo"}
+
+
+def test_ready_devuelve_503_si_postgres_no_responde(monkeypatch):
+    # En el puerto 1 no escucha nadie, así que la conexión falla al momento
+    monkeypatch.setattr(api, "DB_URL", "postgresql://test:test@localhost:1/test")
+
+    respuesta = cliente.get("/ready")
+
+    assert respuesta.status_code == 503
+
+
 def test_matches_devuelve_solo_las_propias(datos):
     respuesta = cliente.get("/matches")
 
