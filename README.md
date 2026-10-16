@@ -612,7 +612,7 @@ Todo se registra con `logging`, con hora, nivel y mensaje:
 
 ```
 2026-09-09 03:38:41  INFO     Partidas encontradas: 6
-2026-09-09 03:42:50  WARNING  Redis no disponible al leer champions:all
+2026-09-09 03:42:50  WARNING  No se ha podido leer champions:all de Redis: Error -2 connecting to redis:6379. Name or service not known.
 ```
 
 Los niveles: `INFO` para el curso normal, `WARNING` para lo que va mal pero

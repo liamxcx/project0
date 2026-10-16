@@ -29,8 +29,8 @@ def cache_get(key):
     """Devuelve lo cacheado, o None si no está o si Redis falla."""
     try:
         return cache.get(key)
-    except redis.RedisError:
-        log.warning("Redis no disponible al leer %s", key)
+    except redis.RedisError as error:
+        log.warning("No se ha podido leer %s de Redis: %s", key, error)
         return None
 
 
@@ -38,8 +38,8 @@ def cache_set(key, value):
     """Guarda en caché. Si Redis falla, sigue adelante sin guardar."""
     try:
         cache.set(key, value, ex=CACHE_TTL_SECONDS)
-    except redis.RedisError:
-        log.warning("Redis no disponible al guardar %s", key)
+    except redis.RedisError as error:
+        log.warning("No se ha podido guardar %s en Redis: %s", key, error)
 
 
 CHAMPION_STATS_SELECT = """
@@ -72,7 +72,7 @@ def ready():
     except psycopg.Error as error:
         # Con la causa se distingue un Postgres parado de una contraseña mal o de
         # un problema de red, que también hacen fallar la readiness
-        log.warning("PostgreSQL no disponible en /ready: %s", error)
+        log.warning("No se ha podido consultar PostgreSQL desde /ready: %s", error)
         raise HTTPException(status_code=503, detail="PostgreSQL no disponible")
 
     return {"estado": "listo"}
