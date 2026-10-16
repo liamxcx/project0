@@ -21,13 +21,28 @@ spec:
         - name: ghcr-pull
       containers:
         - name: api
-          image: ghcr.io/liamxcx/project0:f560348
+          image: ghcr.io/liamxcx/project0:7546515
           # La misma imagen sirve para api, collector y scheduler, así que cada
           # manifiesto elige qué proceso arranca.
           command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
           ports:
             - name: http
               containerPort: 8000
+          # Si /health deja de responder, el kubelet reinicia el contenedor. Por eso
+          # no mira Postgres, porque reiniciar la API no arregla la base.
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+          # Si /ready falla, el pod deja de recibir tráfico del Service, pero no se
+          # reinicia. Vuelve a recibirlo cuando Postgres responde otra vez.
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            # Por defecto es 1 s, menos que los 2 s que /ready espera a Postgres
+            # antes de contestar con un 503
+            timeoutSeconds: 3
           env:
             - name: POSTGRES_USER
               value: loltest
