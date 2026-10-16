@@ -69,8 +69,10 @@ def ready():
     try:
         with psycopg.connect(DB_URL, connect_timeout=2) as connection:
             connection.execute("SELECT 1")
-    except psycopg.Error:
-        log.warning("PostgreSQL no disponible en /ready")
+    except psycopg.Error as error:
+        # Con la causa se distingue un Postgres parado de una contraseña mal o de
+        # un problema de red, que también hacen fallar la readiness
+        log.warning("PostgreSQL no disponible en /ready: %s", error)
         raise HTTPException(status_code=503, detail="PostgreSQL no disponible")
 
     return {"estado": "listo"}
