@@ -21,7 +21,7 @@ spec:
         - name: ghcr-pull
       containers:
         - name: api
-          image: ghcr.io/liamxcx/project0:5714059
+          image: ghcr.io/liamxcx/project0:c2dece7
           # La misma imagen sirve para api, collector y scheduler, así que cada
           # manifiesto elige qué proceso arranca.
           command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
