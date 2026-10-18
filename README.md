@@ -11,8 +11,9 @@ Solo se procesan partidas de Ranked Solo/Duo (queueId 420).
 ## Estado actual
 
 Recolección, base de datos con migraciones, API propia, una página que la
-consume y tests que se ejecutan en cada push, todo funcionando. Falta el
-despliegue.
+consume y tests que se ejecutan en cada push, todo funcionando en Compose.
+El despliegue en Kubernetes está en marcha: la API ya corre en un clúster
+local con kind (ver [Kubernetes](#kubernetes)).
 
 ### Cómo encajan las piezas
 
@@ -67,7 +68,7 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
   healthcheck.
 - **`flyway`** — aplica las migraciones pendientes al arrancar y termina.
   Los servicios que usan la base esperan a que acabe.
-- **`api`** — cuatro endpoints con FastAPI, agregados calculados en SQL y
+- **`api`** — cinco endpoints con FastAPI, agregados calculados en SQL y
   documentación interactiva automática en `/docs`.
 - **`redis`** — caché de respuestas de la API, con caducidad automática y
   opcional: si Redis no responde, la API consulta PostgreSQL y sigue
@@ -76,16 +77,18 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
   partidas nuevas aparecen solas.
 - **`frontend`** — nginx sirviendo una página estática que pide los datos
   a la API desde el navegador.
-- **Tests** — pytest sobre los cuatro endpoints y la caché, contra un
+- **Tests** — pytest sobre los cinco endpoints y la caché, contra un
   PostgreSQL y un Redis propios, con datos inventados.
 - **CI** — GitHub Actions pasa Ruff, ejecuta los tests y construye la
-  imagen en cada push, y marca cada commit en verde o en rojo.
+  imagen en cada push, y marca cada commit en verde o en rojo. En `main`
+  sube además la imagen a GitHub Container Registry.
 
 ### Qué falta
 
 - Gráfica de winrate y comparar varios invocadores
 - Copia de seguridad automática de la base de datos
-- Despliegue en Kubernetes
+- Llevar a Kubernetes el resto de servicios (Postgres, el refresco y el
+  frontend)
 
 ## Requisitos
 
@@ -414,6 +417,9 @@ Endpoints:
 
 - `GET /health` — devuelve `{"estado": "ok"}`. No consulta la base de
   datos: solo confirma que el servicio responde.
+- `GET /ready` — devuelve `{"estado": "listo"}` si PostgreSQL responde a un
+  `SELECT 1`, y un 503 si no. En Kubernetes, `/health` es la liveness probe
+  y `/ready` la readiness probe.
 - `GET /matches` — las 20 partidas más recientes, de la más nueva a la
   más antigua. Cruza `participants` con `matches` y devuelve identificador,
   campeón, posición, KDA, resultado, fecha, duración y parche, este último
@@ -443,7 +449,7 @@ GET /champions            →  champions:all
 GET /champions/{champion} →  champions:<campeón en minúsculas>
 ```
 
-`/health` no se cachea: devuelve una constante. Y las respuestas vacías
+`/health` y `/ready` no se cachean. Y las respuestas vacías
 también se guardan (`champions:garen` vale `null`), para que preguntar por
 un campeón que no existe no consulte PostgreSQL cada vez.
 
@@ -682,7 +688,7 @@ arrancado son la base y el Redis de test.
 
 Importar `api.py` ejecuta el módulo entero, así que un test que solo mira
 `/health` ya comprueba de paso que `config.py` encuentra sus variables, que
-el logging se configura y que las cuatro rutas se registran.
+el logging se configura y que las rutas se registran.
 
 Pytest busca ficheros que empiecen por `test_` y, dentro, funciones que
 empiecen por `test_`. Una función con otro nombre no se ejecuta y no avisa
@@ -742,7 +748,9 @@ apagarla dependería de lo que hubiera dejado en Redis el anterior.
 
 ### Qué cubren y qué no
 
-Los cuatro endpoints tienen al menos un test. Entre los datos hay rivales
+Los cinco endpoints tienen al menos un test. `/ready` tiene dos: uno con la
+base de test, que debe dar 200, y otro que apunta la conexión a un puerto
+donde no escucha nadie, que debe dar 503. Entre los datos hay rivales
 sin `puuid`, uno de ellos con un campeón que también lleva el invocador,
 así que si el filtro de la API se rompe se nota en `/matches`, en
 `/champions` y en `/champions/{champion}`.
@@ -867,9 +875,15 @@ directamente y nunca usan el `Dockerfile`, así que un `COPY` de un fichero
 que no existe o un `pip install` que falla dentro de la imagen no saldría en
 ningún otro sitio.
 
-La imagen no se sube a ningún registro (`push: false`). El aviso `No output
-specified with docker-container driver` del log viene de eso y es
-esperado.
+En `main` la construye para amd64 y arm64 y la sube a GitHub Container
+Registry como `ghcr.io/liamxcx/project0`, etiquetada con el SHA corto del
+commit. Es la imagen que usa el clúster. En el resto de ramas solo la
+construye para amd64 y no la sube, así que el aviso `No output specified
+with docker-container driver` del log es esperado. Las capas se guardan en
+la caché de Actions para no reconstruir lo que no ha cambiado.
+
+`build` solo arranca si `lint` y `tests` pasan, para no subir nunca una
+imagen con código que no los pasa.
 
 `build-push-action` guarda además un registro del build como artifact de la
 ejecución. Se puede descargar e importar en la sección Builds de Docker
@@ -898,13 +912,75 @@ Los puertos solo se fijan al crear el clúster, así que cambiar
 `kind-config.yaml` obliga a borrarlo y crearlo otra vez, y se pierde lo que
 haya dentro.
 
+### Desplegar
+
+Los manifiestos están en `k8s/`. La API necesita dos credenciales que no
+pueden estar en el repo: un token para bajar la imagen de GHCR, que es
+privada, y la contraseña de PostgreSQL. Van en dos Secrets que se crean a
+mano después del namespace y antes del resto:
+
+```bash
+kubectl apply -f k8s/00-namespace.yaml
+
+read -rs GHCR_TOKEN
+kubectl create secret docker-registry ghcr-pull -n project0 \
+  --docker-server=ghcr.io --docker-username=<usuario de GitHub> \
+  --docker-password="$GHCR_TOKEN"
+
+kubectl create secret generic db-credentials -n project0 \
+  --from-literal=POSTGRES_PASSWORD="$(grep '^POSTGRES_PASSWORD=' .env | cut -d= -f2-)"
+
+kubectl apply -f k8s/
+```
+
+El token es un token classic de GitHub con solo el permiso
+`read:packages`. `read -s` lo pide sin mostrarlo, para que no quede en el
+historial de la terminal. La contraseña se lee del `.env` por lo mismo.
+
+Mientras PostgreSQL no esté en el clúster, el Service `db` apunta al de
+Compose a través de `host.docker.internal`, que solo existe en Docker
+Desktop. Así que el `db` de Compose tiene que estar levantado.
+
+Para probar la API desde fuera del clúster (el 8000 lo ocupa Compose):
+
+```bash
+kubectl get pods                              # dos pods api en 1/1
+kubectl port-forward service/api 8001:80      # y en otra terminal:
+curl localhost:8001/ready
+```
+
+### Desplegar una versión nueva
+
+Cada push a `main` sube una imagen etiquetada con el SHA corto del commit.
+Para desplegarla, se cambia `image:` en `k8s/api-deployment.yaml` y:
+
+```bash
+kubectl diff -f k8s/                          # qué va a cambiar
+kubectl apply -f k8s/
+kubectl rollout status deployment/api         # espera al rolling update
+```
+
+El commit del YAML se hace después de comprobar que funciona, para que lo
+que hay en `main` coincida siempre con lo desplegado.
+
+Si el despliegue no termina, los pods viejos siguen atendiendo hasta que el
+nuevo pasa la readiness. Para ver qué falla y volver a la versión del
+último commit:
+
+```bash
+kubectl get pods
+kubectl describe pod <pod nuevo>              # los eventos, al final
+git restore k8s/api-deployment.yaml
+kubectl apply -f k8s/
+```
+
 ## Estructura
 
 ```
 test_api.py             los tests de la API                  → se lanzan con pytest
 conftest.py             prepara la base y los datos de test
 collector.py            baja partidas de Riot y las guarda   → servicio collector
-api.py                  sirve lo guardado, cuatro endpoints   → servicio api
+api.py                  sirve lo guardado, cinco endpoints    → servicio api
 config.py               la configuración, en un solo sitio    → lo importan los dos
 migrations/             el esquema, versionado paso a paso    → servicio flyway
 frontend/index.html     la página que consume la API          → servicio frontend
@@ -913,6 +989,7 @@ Dockerfile              la imagen de collector, scheduler y api
 docker-compose.yml      los siete servicios, el volumen y los healthchecks
 docker-compose.test.yml la base y el Redis de test, aparte
 kind-config.yaml        el clúster local de Kubernetes       → kind create cluster
+k8s/                    los manifiestos del clúster           → kubectl apply -f k8s/
 requirements.txt        dependencias de Python, con versiones fijadas
 requirements-dev.txt    pytest, Ruff y compañía, fuera de la imagen
 .github/workflows/      el pipeline de GitHub Actions         → se ejecuta en cada push
@@ -989,8 +1066,8 @@ Los valores que llegan por la URL se pasan a la consulta como parámetros
 (`%s` y una tupla), nunca interpolados en el texto SQL. Interpolarlos
 abriría la puerta a la inyección SQL.
 
-Las tablas, las columnas y las rutas están en inglés; los mensajes de la
-consola, los comentarios y esta documentación, en español.
+El código, las tablas, las columnas y las rutas están en inglés; los
+mensajes de la consola, los comentarios y esta documentación, en español.
 
 Códigos de error habituales de la API:
 
@@ -1009,13 +1086,6 @@ Tras regenerar la clave puede tardar unos segundos en ser válida.
   respuestas no cambian.
 - Invalidar la caché desde el `collector` cuando guarde partidas nuevas, en
   vez de esperar a que caduque el TTL.
-- `/health` no lo consulta nadie. El servicio `api` no tiene healthcheck en
-  el compose, así que el endpoint existe pero solo lo llaman los tests y las
-  comprobaciones a mano. Al desplegar en Kubernetes hará falta separarlo en
-  dos: `/health` respondiendo siempre, sin comprobar nada, para saber si el
-  proceso vive; y `/ready` comprobando PostgreSQL, para saber si puede
-  atender peticiones. Si la base se cae, lo que hay que hacer es dejar de
-  mandarle tráfico, no reiniciar contenedores que están sanos.
 - Decidir si `/docs` y `/redoc` se desactivan al desplegar fuera de local.
   Se hace con `docs_url=None` al crear la aplicación.
 - Los contenedores del Dockerfile corren como root. La imagen base de Python
