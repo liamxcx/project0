@@ -952,7 +952,7 @@ Importar `config.py` ejecuta el fichero entero, así que si estuvieran ahí la
 API no arrancaría sin ellas aunque no las use. Tampoco podrían lanzarse los
 tests sin un `.env`.
 
-Las variables sin valor por defecto pasan por `obligatoria()`, que corta la
+Las variables sin valor por defecto pasan por `required_env()`, que corta la
 ejecución con un mensaje claro si faltan. Sin eso, una variable ausente se
 cuela como el texto `None` dentro de la cadena de conexión y el fallo
 aparece más tarde, al conectar, diciendo que la contraseña es incorrecta

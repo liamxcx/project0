@@ -12,7 +12,7 @@ from config import (
     MATCH_COUNT,
     RANKED_SOLO_QUEUE,
     RIOT_BASE_URL,
-    obligatoria,
+    required_env,
 )
 
 # El formato lo configura config.py, que se importa antes
@@ -20,9 +20,9 @@ log = logging.getLogger("collector")
 
 # Se leen aquí y no en config.py porque solo las usa el collector. Así la API
 # y los tests pueden importar config.py sin tener las variables de Riot.
-RIOT_API_KEY = obligatoria("RIOT_API_KEY")
-RIOT_GAME_NAME = obligatoria("RIOT_GAME_NAME")
-RIOT_TAG_LINE = obligatoria("RIOT_TAG_LINE")
+RIOT_API_KEY = required_env("RIOT_API_KEY")
+RIOT_GAME_NAME = required_env("RIOT_GAME_NAME")
+RIOT_TAG_LINE = required_env("RIOT_TAG_LINE")
 
 # Con --refetch se vuelven a pedir a Riot las partidas ya guardadas, para
 # rellenar columnas añadidas después. Sin él, las que ya están se saltan.
@@ -68,7 +68,7 @@ def fetch(url, params=None, attempts=3):
     return None
 
 
-def guardar_timeline(cursor, match_id):
+def save_timeline(cursor, match_id):
     """Descarga el timeline de una partida y guarda compras y habilidades.
 
     Es una petición extra por partida: el detalle y el timeline son dos
@@ -79,8 +79,8 @@ def guardar_timeline(cursor, match_id):
     if response is None or response.status_code != 200:
         raise RuntimeError(f"Sin timeline para {match_id}")
 
-    compras = []
-    habilidades = []
+    purchases = []
+    level_ups = []
 
     for frame in response.json()["info"]["frames"]:
         for event in frame["events"]:
@@ -89,27 +89,27 @@ def guardar_timeline(cursor, match_id):
             if participant_id < 1:
                 continue
 
-            tipo = event["type"]
+            event_type = event["type"]
 
-            if tipo == "ITEM_PURCHASED":
-                compras.append(
+            if event_type == "ITEM_PURCHASED":
+                purchases.append(
                     [match_id, participant_id, event["itemId"], event["timestamp"]]
                 )
 
-            elif tipo == "ITEM_UNDO" and event["afterId"] == 0:
+            elif event_type == "ITEM_UNDO" and event["afterId"] == 0:
                 # Se busca la última compra de ese objeto y se quita, porque
                 # esa compra no llegó a ocurrir. Con afterId distinto de 0
                 # sería deshacer una venta, que no afecta aquí.
-                for i in range(len(compras) - 1, -1, -1):
+                for i in range(len(purchases) - 1, -1, -1):
                     if (
-                        compras[i][1] == participant_id
-                        and compras[i][2] == event["beforeId"]
+                        purchases[i][1] == participant_id
+                        and purchases[i][2] == event["beforeId"]
                     ):
-                        del compras[i]
+                        del purchases[i]
                         break
 
-            elif tipo == "SKILL_LEVEL_UP":
-                habilidades.append(
+            elif event_type == "SKILL_LEVEL_UP":
+                level_ups.append(
                     [
                         match_id,
                         participant_id,
@@ -129,7 +129,7 @@ def guardar_timeline(cursor, match_id):
         INSERT INTO item_purchases (match_id, participant_id, item_id, timestamp_ms)
         VALUES (%s, %s, %s, %s)
         """,
-        compras,
+        purchases,
     )
     cursor.executemany(
         """
@@ -137,10 +137,10 @@ def guardar_timeline(cursor, match_id):
             (match_id, participant_id, skill_slot, level_up_type, timestamp_ms)
         VALUES (%s, %s, %s, %s, %s)
         """,
-        habilidades,
+        level_ups,
     )
 
-    return len(compras), len(habilidades)
+    return len(purchases), len(level_ups)
 
 
 log.info("Consultando datos de %s#%s", RIOT_GAME_NAME, RIOT_TAG_LINE)
@@ -267,8 +267,8 @@ with (
             for participant in info["participants"]:
                 # Solo se guarda el PUUID de los invocadores seguidos. Del
                 # resto basta el número de jugador, su identidad no hace falta.
-                seguido = participant["puuid"] == puuid
-                if seguido:
+                followed = participant["puuid"] == puuid
+                if followed:
                     me = participant
 
                 cursor.execute(
@@ -314,7 +314,7 @@ with (
                     """,
                     (
                         match_id,
-                        puuid if seguido else None,
+                        puuid if followed else None,
                         participant["championName"],
                         participant["teamPosition"],
                         participant["kills"],
@@ -347,7 +347,7 @@ with (
                 # participante propio la partida no sirve para nada.
                 raise RuntimeError("el invocador no aparece entre los participantes")
 
-            n_compras, n_habilidades = guardar_timeline(cursor, match_id)
+            n_purchases, n_level_ups = save_timeline(cursor, match_id)
 
             # Se hace un commit por partida. Si una falla, las anteriores
             # ya están guardadas en vez de perderse todas en el rollback.
@@ -363,14 +363,14 @@ with (
         saved += 1
 
         kda = f"{me['kills']}/{me['deaths']}/{me['assists']}"
-        resultado = "Victoria" if me["win"] else "Derrota"
+        result = "Victoria" if me["win"] else "Derrota"
         log.info(
             "%-15s %-10s %-9s %s compras, %s habilidades",
             me["championName"],
             kda,
-            resultado,
-            n_compras,
-            n_habilidades,
+            result,
+            n_purchases,
+            n_level_ups,
         )
 
         time.sleep(0.1)

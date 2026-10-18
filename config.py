@@ -18,18 +18,18 @@ logging.basicConfig(
 log = logging.getLogger("config")
 
 
-def obligatoria(nombre):
+def required_env(name):
     """Lee una variable del entorno y corta la ejecución si no está.
 
     Sin esto, una variable ausente se cuela como None dentro de la cadena de
     conexión y el fallo aparece mucho más tarde, al conectar, sin decir qué
     faltaba.
     """
-    valor = os.getenv(nombre)
-    if not valor:
-        log.error("Falta la variable %s en el .env", nombre)
+    value = os.getenv(name)
+    if not value:
+        log.error("Falta la variable %s en el .env", name)
         sys.exit(1)
-    return valor
+    return value
 
 
 # Cuántas partidas recientes se piden a Riot en cada ejecución
@@ -47,8 +47,8 @@ DB_HOST = os.getenv("DB_HOST", "db")
 DB_PORT = os.getenv("DB_PORT", "5432")
 
 DB_URL = (
-    f"postgresql://{obligatoria('POSTGRES_USER')}:{obligatoria('POSTGRES_PASSWORD')}"
-    f"@{DB_HOST}:{DB_PORT}/{obligatoria('POSTGRES_DB')}"
+    f"postgresql://{required_env('POSTGRES_USER')}:{required_env('POSTGRES_PASSWORD')}"
+    f"@{DB_HOST}:{DB_PORT}/{required_env('POSTGRES_DB')}"
 )
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
@@ -60,7 +60,7 @@ CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "60"))
 # Varios se separan por comas. Se quitan los espacios de alrededor para que
 # "http://a.com, http://b.com" funcione igual que sin el espacio.
 CORS_ORIGINS = [
-    origen.strip()
-    for origen in os.getenv("CORS_ORIGINS", "http://localhost:8080").split(",")
-    if origen.strip()
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "http://localhost:8080").split(",")
+    if origin.strip()
 ]
