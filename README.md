@@ -719,20 +719,20 @@ variables que ya existen, cuando `config.py` monta `DB_URL` sale
 de variables que usa la API tienen valor por defecto, así que los tests no
 necesitan un `.env`.
 
-La fixture `datos` vacía las tablas, mete tres partidas inventadas y las
+La fixture `seeded_db` vacía las tablas, mete tres partidas inventadas y las
 vuelve a vaciar al acabar el test, pase o falle. Los tests que la
 necesitan la piden como parámetro. Son pocos datos a propósito, para que
 el resultado esperado de cada test se pueda contar a mano.
 
-La fixture `sin_cache` se aplica sola a todos los tests y cambia
+La fixture `disable_cache` se aplica sola a todos los tests y cambia
 `cache_get` y `cache_set` por funciones que no hacen nada, así que la API
 va siempre a la base. Si no, un test podría recibir la respuesta que dejó
 cacheada el anterior.
 
-Los tests que sí quieren la caché llevan encima `@pytest.mark.con_cache`.
-Con esa marca, `sin_cache` no toca nada y la API usa `redis-test` de
+Los tests que sí quieren la caché llevan encima `@pytest.mark.with_cache`.
+Con esa marca, `disable_cache` no toca nada y la API usa `redis-test` de
 verdad. Además vacía Redis antes y después del test, por lo mismo que
-`datos` vacía la base. La marca se registra en `pytest_configure`, porque
+`seeded_db` vacía la base. La marca se registra en `pytest_configure`, porque
 si no pytest avisa de que no la conoce.
 
 Está hecho así, y no al revés, para que olvidar la marca no tenga

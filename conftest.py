@@ -16,7 +16,7 @@ os.environ["REDIS_URL"] = "redis://localhost:6380/0"
 # Lux una. En cada partida hay además un rival sin puuid, que la API no debe
 # contar nunca. Hay dos con Yasuo, que tú no has jugado, y uno con Ahri, que
 # sí, para comprobar que sus partidas no se suman a las tuyas.
-DATOS = """
+SEED_SQL = """
     INSERT INTO summoners (puuid, game_name, tag_line)
     VALUES ('yo', 'Invocador', 'TEST');
 
@@ -37,44 +37,44 @@ DATOS = """
         ('EUW1_3', 6, NULL, 'Ahri',  'MIDDLE',   5,  5,  5, false);
 """
 
-VACIAR = "TRUNCATE summoners, matches, participants, item_purchases, skill_levelups"
+CLEAR_SQL = "TRUNCATE summoners, matches, participants, item_purchases, skill_levelups"
 
 
 @pytest.fixture
-def datos():
-    """Deja la base con las tres partidas de DATOS y la vacía al acabar el test."""
+def seeded_db():
+    """Deja la base con las tres partidas de SEED_SQL y la vacía al acabar el test."""
     # Se importa aquí y no arriba porque config.py tiene que leerse después de
     # poner las variables de entorno.
     from config import DB_URL
 
     # Se vacía también antes por si una ejecución anterior se cortó a medias
     # y dejó filas.
-    with psycopg.connect(DB_URL) as conexion:
-        conexion.execute(VACIAR)
-        conexion.execute(DATOS)
+    with psycopg.connect(DB_URL) as connection:
+        connection.execute(CLEAR_SQL)
+        connection.execute(SEED_SQL)
 
     yield
 
-    with psycopg.connect(DB_URL) as conexion:
-        conexion.execute(VACIAR)
+    with psycopg.connect(DB_URL) as connection:
+        connection.execute(CLEAR_SQL)
 
 
 def pytest_configure(config):
     # Sin registrarla, pytest avisa de que no conoce la marca
-    config.addinivalue_line("markers", "con_cache: usa el Redis de test")
+    config.addinivalue_line("markers", "with_cache: usa el Redis de test")
 
 
 @pytest.fixture(autouse=True)
-def sin_cache(request, monkeypatch):
-    """Apaga Redis en cada test, salvo en los marcados con con_cache."""
+def disable_cache(request, monkeypatch):
+    """Apaga Redis en cada test, salvo en los marcados con with_cache."""
     import api
 
-    if request.node.get_closest_marker("con_cache"):
+    if request.node.get_closest_marker("with_cache"):
         # Se guarda aparte porque un test puede cambiar api.cache por otro
-        redis_test = api.cache
-        redis_test.flushdb()
+        test_redis = api.cache
+        test_redis.flushdb()
         yield
-        redis_test.flushdb()
+        test_redis.flushdb()
     else:
         monkeypatch.setattr(api, "cache_get", lambda key: None)
         monkeypatch.setattr(api, "cache_set", lambda key, value: None)
