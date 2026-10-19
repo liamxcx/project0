@@ -1,0 +1,11 @@
+# La comparten la API y el collector. Lo que use solo uno de los dos va en su
+# propio ConfigMap.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: project0-config
+  namespace: project0
+data:
+  POSTGRES_USER: loltest
+  POSTGRES_DB: lolstats
+  TZ: Europe/Madrid

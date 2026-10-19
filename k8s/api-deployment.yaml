@@ -43,11 +43,12 @@ spec:
             # Por defecto es 1 s, menos que los 2 s que /ready espera a Postgres
             # antes de contestar con un 503
             timeoutSeconds: 3
+          envFrom:
+            - configMapRef:
+                name: project0-config
+            - configMapRef:
+                name: api-config
           env:
-            - name: POSTGRES_USER
-              value: loltest
-            - name: POSTGRES_DB
-              value: lolstats
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
