@@ -8,3 +8,4 @@ metadata:
 data:
   CACHE_TTL_SECONDS: "60"
   CORS_ORIGINS: http://localhost:8080
+  REDIS_URL: redis://redis:6379/0
