@@ -12,8 +12,8 @@ Solo se procesan partidas de Ranked Solo/Duo (queueId 420).
 
 Recolección, base de datos con migraciones, API propia, una página que la
 consume y tests que se ejecutan en cada push, todo funcionando en Compose.
-El despliegue en Kubernetes está en marcha: la API ya corre en un clúster
-local con kind (ver [Kubernetes](#kubernetes)).
+El despliegue en Kubernetes está en marcha: la API y Redis ya corren en un
+clúster local con kind (ver [Kubernetes](#kubernetes)).
 
 ### Cómo encajan las piezas
 
@@ -914,10 +914,8 @@ haya dentro.
 
 ### Desplegar
 
-Los manifiestos están en `k8s/`. La API necesita dos credenciales que no
-pueden estar en el repo: un token para bajar la imagen de GHCR, que es
-privada, y la contraseña de PostgreSQL. Van en dos Secrets que se crean a
-mano después del namespace y antes del resto:
+Los manifiestos están en `k8s/`. Las credenciales no están en el repo y van
+en Secrets que se crean a mano, después del namespace y antes del resto:
 
 ```bash
 kubectl apply -f k8s/00-namespace.yaml
@@ -930,12 +928,22 @@ kubectl create secret docker-registry ghcr-pull -n project0 \
 kubectl create secret generic db-credentials -n project0 \
   --from-literal=POSTGRES_PASSWORD="$(grep '^POSTGRES_PASSWORD=' .env | cut -d= -f2-)"
 
+kubectl create secret generic riot-credentials -n project0 \
+  --from-literal=RIOT_API_KEY="$(grep '^RIOT_API_KEY=' .env | cut -d= -f2-)"
+
 kubectl apply -f k8s/
 ```
 
 El token es un token classic de GitHub con solo el permiso
-`read:packages`. `read -s` lo pide sin mostrarlo, para que no quede en el
-historial de la terminal. La contraseña se lee del `.env` por lo mismo.
+`read:packages`.
+
+En el clúster, la configuración que no es secreta no sale del `.env`, sino de
+los ConfigMaps de `k8s/`. Tras cambiar uno, los pods no lo ven hasta que se
+recrean:
+
+```bash
+kubectl rollout restart deployment/api
+```
 
 Mientras PostgreSQL no esté en el clúster, el Service `db` apunta al de
 Compose a través de `host.docker.internal`, que solo existe en Docker
@@ -944,7 +952,7 @@ Desktop. Así que el `db` de Compose tiene que estar levantado.
 Para probar la API desde fuera del clúster (el 8000 lo ocupa Compose):
 
 ```bash
-kubectl get pods                              # dos pods api en 1/1
+kubectl get pods                              # dos pods api y uno redis en 1/1
 kubectl port-forward service/api 8001:80      # y en otra terminal:
 curl localhost:8001/ready
 ```
