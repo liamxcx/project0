@@ -82,6 +82,9 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
 - **CI** — GitHub Actions pasa Ruff, ejecuta los tests y construye las
   imágenes en cada push, y marca cada commit en verde o en rojo. En `main`
   sube además las imágenes a GitHub Container Registry.
+- **Kubernetes** — la API con dos réplicas, Redis y PostgreSQL en un clúster
+  local con kind. Las imágenes salen del CI, el esquema lo aplica un Job y
+  los datos de PostgreSQL viven en un disco que se conserva.
 
 ### Qué falta
 
@@ -974,10 +977,9 @@ recrean:
 kubectl rollout restart deployment/api
 ```
 
-PostgreSQL corre en el StatefulSet `postgres`, con los datos en un disco
-que no se borra con el pod. En un clúster nuevo arranca vacío, así que el
-Job `migrations` crea el esquema y los datos se traen restaurando una copia
-(ver [Copia de seguridad](#copia-de-seguridad)).
+En un clúster nuevo PostgreSQL arranca vacío, así que el Job `migrations`
+crea el esquema y los datos se traen restaurando una copia (ver
+[Copia de seguridad](#copia-de-seguridad)).
 
 Para probar la API desde fuera del clúster (el 8000 lo ocupa Compose):
 
@@ -1019,6 +1021,30 @@ kubectl describe pod <pod nuevo>              # los eventos, al final
 git restore k8s/api-deployment.yaml
 kubectl apply -f k8s/
 ```
+
+### PostgreSQL
+
+Corre en un StatefulSet con una réplica, y no en un Deployment, porque
+necesita un disco propio que vuelva con él. El pod se llama siempre
+`postgres-0` y su disco es el PVC `datos-postgres-0`, que el StatefulSet
+crea a partir de `volumeClaimTemplates`. Si se borra el pod, vuelve con el
+mismo nombre y el mismo disco, aunque con otra IP.
+
+El disco usa la StorageClass `standard-retain`, definida en
+`k8s/01-storageclass.yaml`. Es igual que la `standard` de kind, pero con
+`reclaimPolicy: Retain`. Con la de kind, borrar el PVC borraría también los
+datos. Con esta, el PV queda en `Released` y los datos siguen en el nodo
+hasta que alguien los borre a mano. Ninguna de las dos sobrevive a
+`kind delete cluster`, y para eso está la copia.
+
+El Service `postgres` es headless (`clusterIP: None`). El DNS devuelve la
+IP del pod en vez de una IP virtual, y cada pod tiene su propio nombre,
+como `postgres-0.postgres`. Con una réplica no cambia nada, pero es lo que
+permite añadir réplicas y que los clientes elijan a cuál conectarse.
+
+Con una sola réplica, cada reinicio del pod es un corte. Al borrar
+`postgres-0` con la API sirviendo, `/ready` respondió 503 durante unos dos
+segundos y luego volvió solo.
 
 ## Estructura
 
