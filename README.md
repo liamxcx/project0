@@ -561,14 +561,16 @@ producción, un entorno nuevo ejecutaría la versión corregida y producción
 se quedaría con la vieja, sin avisar a nadie. Para corregir algo se escribe
 la migración siguiente.
 
-### La base actual se incorporó con baseline
+### Meter Flyway en una base que ya existe
 
-Cuando se montó Flyway, las tablas ya existían con partidas dentro. En vez
-de vaciar la base se usó `flyway baseline -baselineVersion=1`, que crea la
-tabla de control y apunta la V1 como aplicada sin ejecutarla.
+Si la base ya tiene las tablas, `migrate` intentaría ejecutar la V1 y
+fallaría. Para eso está `flyway baseline -baselineVersion=1`, que crea la
+tabla de control y apunta la V1 como aplicada sin ejecutarla. Desde ahí,
+`migrate` sigue con la V2.
 
-Hace falta solo al meter Flyway en una base que ya existe. Una base vacía
-ejecuta las migraciones desde la V1 y llega al mismo esquema.
+Se usó al montar Flyway, sobre la base con partidas de entonces. La base
+actual se reconstruyó después desde cero, así que en
+`flyway_schema_history` la V1 sale como `SQL` y no como `BASELINE`.
 
 ## Copia de seguridad
 
@@ -582,6 +584,19 @@ Para restaurarla en una base vacía:
 ```bash
 docker compose exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d <base>' < backups/<fichero>.dump
 ```
+
+Para restaurarla en el clúster, sustituyendo lo que haya en `postgres-0`, y
+aplicar después las migraciones escritas desde la copia:
+
+```bash
+kubectl exec -i postgres-0 -- sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --single-transaction' < backups/<fichero>.dump
+kubectl delete job migrations
+kubectl apply -f k8s/migrations-job.yaml
+```
+
+`--clean --if-exists` borra cada objeto de la copia antes de crearlo, y
+`--single-transaction` hace que, si algo falla, la base se quede como
+estaba.
 
 La copia va en formato custom de `pg_dump` y la carpeta `backups/` está
 fuera de Git. Se hace a mano. La copia automática llegará con Kubernetes.
