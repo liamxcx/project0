@@ -42,9 +42,21 @@ jobs:
       - run: pytest -v
 
   build:
-    # Solo se construye si el código pasa el lint y los tests, porque esta
-    # imagen es la que se acabará desplegando.
+    # Solo se construye si el código pasa el lint y los tests, porque estas
+    # imágenes son las que se acabarán desplegando.
     needs: [lint, tests]
+    # Una copia de este job por imagen. Las dos llevan el SHA del mismo commit,
+    # así que la API y sus migraciones se despliegan con el mismo tag.
+    strategy:
+      matrix:
+        include:
+          - name: api
+            context: .
+            image: project0
+          - name: migrations
+            context: migrations
+            image: project0-migrations
+    name: build (${{ matrix.name }})
     runs-on: ubuntu-latest
     # El token que GitHub da al job necesita permiso para subir al registro
     permissions:
@@ -73,21 +85,21 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           tags: type=sha,prefix=
 
       # En main la sube a GHCR. En el resto de ramas solo comprueba que se
       # construye.
       - uses: docker/build-push-action@v7
         with:
-          context: .
+          context: ${{ matrix.context }}
           push: ${{ github.ref == 'refs/heads/main' }}
           # En main, arm64 para los nodos de kind y amd64 para servidores. En
           # el resto de ramas basta amd64, que es nativa y no hay que emular.
           platforms: ${{ github.ref == 'refs/heads/main' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Guarda las capas en la caché de Actions para reutilizarlas en la
-          # siguiente ejecución si no han cambiado
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Guarda las capas en la caché de Actions, una por imagen para que
+          # cada build no pise la caché del otro
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
