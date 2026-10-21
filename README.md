@@ -79,9 +79,9 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
   a la API desde el navegador.
 - **Tests** — pytest sobre los cinco endpoints y la caché, contra un
   PostgreSQL y un Redis propios, con datos inventados.
-- **CI** — GitHub Actions pasa Ruff, ejecuta los tests y construye la
-  imagen en cada push, y marca cada commit en verde o en rojo. En `main`
-  sube además la imagen a GitHub Container Registry.
+- **CI** — GitHub Actions pasa Ruff, ejecuta los tests y construye las
+  imágenes en cada push, y marca cada commit en verde o en rojo. En `main`
+  sube además las imágenes a GitHub Container Registry.
 
 ### Qué falta
 
@@ -511,6 +511,7 @@ migrations/
   V4__timeline_events.sql              item_purchases y skill_levelups
   V5__participants_participant_id.sql  el número de jugador (1-10)
   V6__all_ten_participants.sql         los diez jugadores y la clave nueva
+  V7__cascade_on_match_delete.sql      borrar una partida borra sus filas
 ```
 
 El nombre es la convención de Flyway: `V`, el número, **dos** guiones
@@ -528,6 +529,9 @@ aplicación no arranca, en vez de trabajar sobre una base a medias.
 
 Flyway lleva la cuenta en una tabla de la propia base,
 `flyway_schema_history`, que se puede consultar como cualquier otra.
+
+En el clúster las aplica el Job `migrations`, con una imagen de Flyway que
+lleva los `.sql` dentro (ver [Desplegar una versión nueva](#desplegar-una-versión-nueva)).
 
 ### Añadir un cambio
 
@@ -868,22 +872,32 @@ eso no hay ninguna clave de Riot guardada en GitHub.
 
 ### build
 
-Construye la imagen con el `Dockerfile`, igual que `docker build .`, usando
-las acciones oficiales de Docker (`docker/setup-buildx-action` y
-`docker/build-push-action`). Hace falta porque los tests ejecutan el código
-directamente y nunca usan el `Dockerfile`, así que un `COPY` de un fichero
-que no existe o un `pip install` que falla dentro de la imagen no saldría en
-ningún otro sitio.
+Construye las dos imágenes del proyecto con las acciones oficiales de
+Docker (`docker/setup-buildx-action` y `docker/build-push-action`). Es un
+`matrix`: el job se escribe una vez y GitHub lanza una copia por imagen, a
+la vez:
 
-En `main` la construye para amd64 y arm64 y la sube a GitHub Container
-Registry como `ghcr.io/liamxcx/project0`, etiquetada con el SHA corto del
-commit. Es la imagen que usa el clúster. En el resto de ramas solo la
-construye para amd64 y no la sube, así que el aviso `No output specified
-with docker-container driver` del log es esperado. Las capas se guardan en
-la caché de Actions para no reconstruir lo que no ha cambiado.
+```
+build (api)          Dockerfile              ghcr.io/liamxcx/project0
+build (migrations)   migrations/Dockerfile   ghcr.io/liamxcx/project0-migrations
+```
+
+Hace falta porque los tests ejecutan el código directamente y nunca usan el
+`Dockerfile`, así que un `COPY` de un fichero que no existe o un
+`pip install` que falla dentro de la imagen no saldría en ningún otro
+sitio.
+
+En `main` las construye para amd64 y arm64 y las sube a GitHub Container
+Registry, etiquetadas con el SHA corto del commit. Las dos llevan el mismo
+tag, así que se sabe qué migraciones van con qué código. En el resto de
+ramas solo las construye para amd64 y no las sube, así que el aviso
+`No output specified with docker-container driver` del log es esperado.
+Las capas se guardan en la caché de Actions para no reconstruir lo que no
+ha cambiado.
 
 `build` solo arranca si `lint` y `tests` pasan, para no subir nunca una
-imagen con código que no los pasa.
+imagen con código que no los pasa. Si falla una de las dos copias, GitHub
+cancela la otra.
 
 `build-push-action` guarda además un registro del build como artifact de la
 ejecución. Se puede descargar e importar en la sección Builds de Docker
@@ -959,14 +973,22 @@ curl localhost:8001/ready
 
 ### Desplegar una versión nueva
 
-Cada push a `main` sube una imagen etiquetada con el SHA corto del commit.
-Para desplegarla, se cambia `image:` en `k8s/api-deployment.yaml` y:
+Cada push a `main` sube las dos imágenes con el SHA corto del commit. Para
+desplegarlas, se pone ese tag en el `image:` de `k8s/migrations-job.yaml` y
+de `k8s/api-deployment.yaml`, y:
 
 ```bash
+kubectl delete job migrations                 # el spec de un Job no se puede cambiar
+kubectl apply -f k8s/migrations-job.yaml
+kubectl wait --for=condition=complete job/migrations --timeout=5m
 kubectl diff -f k8s/                          # qué va a cambiar
 kubectl apply -f k8s/
 kubectl rollout status deployment/api         # espera al rolling update
 ```
+
+Las migraciones van primero porque el código nuevo puede necesitar una
+columna nueva. Si el Job falla, la migración que falla se deshace y la API
+se queda como estaba. El motivo está en `kubectl logs job/migrations`.
 
 El commit del YAML se hace después de comprobar que funciona, para que lo
 que hay en `main` coincida siempre con lo desplegado.
@@ -990,7 +1012,8 @@ conftest.py             prepara la base y los datos de test
 collector.py            baja partidas de Riot y las guarda   → servicio collector
 api.py                  sirve lo guardado, cinco endpoints    → servicio api
 config.py               la configuración, en un solo sitio    → lo importan los dos
-migrations/             el esquema, versionado paso a paso    → servicio flyway
+migrations/             el esquema, versionado paso a paso    → servicio flyway y Job migrations
+migrations/Dockerfile   la imagen de migraciones para el clúster
 frontend/index.html     la página que consume la API          → servicio frontend
 frontend/borrador/      notas para trabajar el diseño aparte
 Dockerfile              la imagen de collector, scheduler y api
