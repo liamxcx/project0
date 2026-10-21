@@ -1,0 +1,9 @@
+# Igual que la standard de kind, pero conserva el disco al borrar el PVC. La usa
+# Postgres, para que un PVC borrado sin querer no se lleve los datos.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: standard-retain
+provisioner: rancher.io/local-path
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
