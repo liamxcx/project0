@@ -12,8 +12,8 @@ Solo se procesan partidas de Ranked Solo/Duo (queueId 420).
 
 Recolección, base de datos con migraciones, API propia, una página que la
 consume y tests que se ejecutan en cada push, todo funcionando en Compose.
-El despliegue en Kubernetes está en marcha: la API y Redis ya corren en un
-clúster local con kind (ver [Kubernetes](#kubernetes)).
+El despliegue en Kubernetes está en marcha: la API, Redis y PostgreSQL ya
+corren en un clúster local con kind (ver [Kubernetes](#kubernetes)).
 
 ### Cómo encajan las piezas
 
@@ -87,8 +87,7 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
 
 - Gráfica de winrate y comparar varios invocadores
 - Copia de seguridad automática de la base de datos
-- Llevar a Kubernetes el resto de servicios (Postgres, el refresco y el
-  frontend)
+- Llevar a Kubernetes el resto de servicios (el refresco y el frontend)
 
 ## Requisitos
 
@@ -145,8 +144,9 @@ Subirlo alivia a PostgreSQL a costa de servir datos más viejos.
 desde un navegador. Varios se separan por comas, y van sin barra final.
 Cambia según dónde se despliegue, por eso es configuración y no código.
 
-`DB_HOST` es `db` dentro de Compose. Para ejecutar el script fuera de
-Docker hay que ponerlo a `localhost`.
+`DB_HOST` es `db` dentro de Compose. En el clúster es `postgres` y lo pone
+el ConfigMap `project0-config`. Para ejecutar el script fuera de Docker hay
+que ponerlo a `localhost`.
 
 `DB_PORT` no va en el `.env` y vale 5432 si falta. Solo lo cambian los
 tests, que usan su propia base en el 5433.
@@ -974,14 +974,15 @@ recrean:
 kubectl rollout restart deployment/api
 ```
 
-Mientras PostgreSQL no esté en el clúster, el Service `db` apunta al de
-Compose a través de `host.docker.internal`, que solo existe en Docker
-Desktop. Así que el `db` de Compose tiene que estar levantado.
+PostgreSQL corre en el StatefulSet `postgres`, con los datos en un disco
+que no se borra con el pod. En un clúster nuevo arranca vacío, así que el
+Job `migrations` crea el esquema y los datos se traen restaurando una copia
+(ver [Copia de seguridad](#copia-de-seguridad)).
 
 Para probar la API desde fuera del clúster (el 8000 lo ocupa Compose):
 
 ```bash
-kubectl get pods                              # dos pods api y uno redis en 1/1
+kubectl get pods                              # api (dos), redis y postgres-0 en 1/1
 kubectl port-forward service/api 8001:80      # y en otra terminal:
 curl localhost:8001/ready
 ```
