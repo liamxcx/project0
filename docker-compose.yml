@@ -54,19 +54,6 @@ services:
         condition: service_completed_successfully
     logging: *default-logging
 
-  scheduler:
-    build: .
-    command:
-      - sh
-      - -c
-      - while true; do python collector.py; sleep ${REFRESH_INTERVAL_SECONDS}; done
-    env_file: .env
-    depends_on:
-      flyway:
-        condition: service_completed_successfully
-    restart: unless-stopped
-    logging: *default-logging
-
   api:
     build: .
     command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
