@@ -10,30 +10,32 @@ Solo se procesan partidas de Ranked Solo/Duo (queueId 420).
 
 ## Estado actual
 
-Recolección, base de datos con migraciones, API propia, una página que la
+El `collector`, base de datos con migraciones, API propia, una página que la
 consume y tests que se ejecutan en cada push, todo funcionando en Compose.
-El despliegue en Kubernetes está en marcha: la API, Redis y PostgreSQL ya
-corren en un clúster local con kind (ver [Kubernetes](#kubernetes)).
+El despliegue en Kubernetes está en marcha: la API, Redis, PostgreSQL y el
+`collector` ya corren en un clúster local con kind (ver [Kubernetes](#kubernetes)).
 
 ### Cómo encajan las piezas
 
-Al arrancar, `flyway` pone el esquema al día y solo entonces arrancan los
-servicios que usan la base:
+Al arrancar Compose, `flyway` pone el esquema al día y solo entonces
+arrancan los servicios que usan la base:
 
 ```
-db ──sano──▶ flyway ──termina──▶ collector / scheduler / api
+db ──sano──▶ flyway ──termina──▶ collector / api
 ```
 
-Recolección, cada hora sin que nadie la lance:
+En el clúster, un CronJob lanza el `collector` cada hora para traer las
+partidas nuevas de Riot:
 
 ```
-scheduler  ──cada hora──▶  collector  ──▶  API de Riot
-                               │              detalle de la partida
-                               │              y su timeline
-                               └──▶  PostgreSQL
+CronJob collector  ──cada hora──▶  pod collector  ──▶  API de Riot
+                                        │              detalle de la partida
+                                        │              y su timeline
+                                        └──▶  PostgreSQL
 ```
 
-Consulta, cada vez que alguien pregunta:
+Cuando alguien abre la página en Compose, el navegador pide la página al
+`frontend` y los datos a la `api`:
 
 ```
 navegador  ──▶  frontend   :8080   la página (nginx, ficheros estáticos)
@@ -42,13 +44,13 @@ navegador  ──▶  frontend   :8080   la página (nginx, ficheros estáticos)
                                   └──▶  PostgreSQL   solo si no lo está
 ```
 
-El navegador hace dos viajes: uno al `frontend` a por la página y otro a
-la `api` a por los datos. Son dos puertos distintos, o sea dos orígenes
-distintos, y por eso la API tiene que autorizar al frontend (ver CORS).
+Son dos puertos distintos, o sea dos orígenes distintos, y por eso la API
+tiene que autorizar al frontend (ver CORS).
 
-`collector` arranca, descarga, guarda y termina. Lo lanza `scheduler`, que
-solo hace eso: ejecutarlo y esperar hasta la siguiente vez. `db`, `redis`,
-`api`, `frontend` y `scheduler` se quedan en marcha.
+`collector` arranca, descarga, guarda y termina. En el clúster lo lanza un
+CronJob cada hora. En Compose se ejecuta una vez al hacer `up`, y después a
+mano con `docker compose run --rm collector`. `db`, `redis`, `api` y
+`frontend` se quedan en marcha.
 
 Ningún endpoint de la API llama a Riot: sirve solo lo que ya está guardado,
 así que consultar las estadísticas no gasta peticiones. Y cuando la
@@ -73,8 +75,6 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
 - **`redis`** — caché de respuestas de la API, con caducidad automática y
   opcional: si Redis no responde, la API consulta PostgreSQL y sigue
   funcionando.
-- **`scheduler`** — ejecuta el `collector` cada cierto tiempo, así que las
-  partidas nuevas aparecen solas.
 - **`frontend`** — nginx sirviendo una página estática que pide los datos
   a la API desde el navegador.
 - **Tests** — pytest sobre los cinco endpoints y la caché, contra un
@@ -82,15 +82,16 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
 - **CI** — GitHub Actions pasa Ruff, ejecuta los tests y construye las
   imágenes en cada push, y marca cada commit en verde o en rojo. En `main`
   sube además las imágenes a GitHub Container Registry.
-- **Kubernetes** — la API con dos réplicas, Redis y PostgreSQL en un clúster
-  local con kind. Las imágenes salen del CI, el esquema lo aplica un Job y
-  los datos de PostgreSQL viven en un disco que se conserva.
+- **Kubernetes** — la API con dos réplicas, Redis, PostgreSQL y el
+  `collector`, que un CronJob lanza cada hora, en un clúster local con kind.
+  Las imágenes salen del CI, el esquema lo aplica un Job y los datos de
+  PostgreSQL viven en un disco que se conserva.
 
 ### Qué falta
 
 - Gráfica de winrate y comparar varios invocadores
 - Copia de seguridad automática de la base de datos
-- Llevar a Kubernetes el resto de servicios (el refresco y el frontend)
+- Llevar el frontend a Kubernetes
 
 ## Requisitos
 
@@ -118,7 +119,6 @@ MATCH_COUNT=20
 
 REDIS_URL=redis://redis:6379/0
 CACHE_TTL_SECONDS=60
-REFRESH_INTERVAL_SECONDS=3600
 TZ=Europe/Madrid
 CORS_ORIGINS=http://localhost:8080
 ```
@@ -133,11 +133,6 @@ que ya tiene, subirlo solo cuesta peticiones la primera vez.
 `TZ` es la zona horaria de los contenedores, y es la que sale en los logs.
 La convención en servidores es `UTC`; aquí está en hora local porque el
 proyecto se lee desde Madrid.
-
-`REFRESH_INTERVAL_SECONDS` es cada cuánto el `scheduler` vuelve a ejecutar
-el `collector`. Una hora es razonable: las partidas no aparecen más rápido
-que eso, y como el `collector` no vuelve a pedir las que ya tiene, un
-intervalo corto tampoco gastaría peticiones de más.
 
 `CACHE_TTL_SECONDS` es cuántos segundos vive cada respuesta cacheada. Es
 el desfase máximo entre lo que hay en PostgreSQL y lo que devuelve la API.
@@ -160,13 +155,13 @@ tests, que usan su propia base en el 5433.
 docker compose up
 ```
 
-Levanta los siete servicios. El esquema lo aplica `flyway` antes de que
-arranquen `collector`, `scheduler` y `api`.
+Levanta los seis servicios. El esquema lo aplica `flyway` antes de que
+arranquen `collector` y `api`.
 
 Los servicios no se comportan igual:
 
-- `db`, `redis`, `api`, `frontend` y `scheduler` son procesos largos: se
-  quedan corriendo hasta que se paran.
+- `db`, `redis`, `api` y `frontend` son procesos largos: se quedan
+  corriendo hasta que se paran.
 - `collector` y `flyway` terminan cuando acaban su trabajo. En
   `docker compose ps` aparecen como `Exited (0)`, que no es un error.
 
@@ -181,10 +176,10 @@ El `--build` hace falta porque `collector.py`, `api.py`, `config.py` y
 `requirements.txt` se copian dentro de la imagen. El `.env` y las
 migraciones se leen al arrancar, así que esos no lo necesitan.
 
-Va sin nombrar servicio. `collector`, `scheduler` y `api` comparten el
-`Dockerfile`, pero Compose construye una imagen por servicio:
-`docker compose up --build api` reconstruye solo esa y deja a las otras dos
-con el código anterior, sin dar ningún error. Nombrar un servicio vale para
+Va sin nombrar servicio. `collector` y `api` comparten el `Dockerfile`,
+pero Compose construye una imagen por servicio:
+`docker compose up --build api` reconstruye solo esa y deja la otra con el
+código anterior, sin dar ningún error. Nombrar un servicio vale para
 levantarlo suelto, no para reconstruir.
 
 Los cambios de esquema ya no necesitan `down -v`: se escriben como una
@@ -526,7 +521,7 @@ base es el resultado de aplicarlos todos en orden.
 ### Cómo se aplican
 
 El servicio `flyway` se ejecuta al arrancar, aplica lo que falte y
-termina. `collector`, `scheduler` y `api` esperan a que acabe bien
+termina. `collector` y `api` esperan a que acabe bien
 (`service_completed_successfully`), así que si una migración falla la
 aplicación no arranca, en vez de trabajar sobre una base a medias.
 
@@ -648,10 +643,10 @@ no impide seguir (un reintento, Redis caído), y `ERROR` para lo que corta la
 ejecución (clave caducada, API inalcanzable).
 
 ```bash
-docker compose logs -f scheduler              # seguir en directo
+docker compose logs -f api                    # seguir en directo
 docker compose logs --tail 20 api             # las últimas 20 líneas
-docker compose logs --since 3h scheduler      # las últimas 3 horas
-docker compose logs scheduler | grep WARNING  # solo los problemas
+docker compose logs --since 3h api            # las últimas 3 horas
+docker compose logs collector | grep WARNING  # solo los problemas
 ```
 
 El `Dockerfile` define `PYTHONUNBUFFERED=1`. Sin eso Python acumula la
@@ -660,8 +655,8 @@ servicio que no termina nunca, como `api`, llegarían tarde.
 
 Los logs se rotan para que no crezcan sin límite: cada servicio guarda
 como mucho 3 ficheros de 10 MB, y al abrir el cuarto se borra el más
-viejo. Son 30 MB por servicio como techo. Sin esto el `scheduler`, que
-escribe cada hora y no termina nunca, acabaría llenando el disco.
+viejo. Son 30 MB por servicio como techo. Sin esto un servicio que no
+termina nunca, como `api`, acabaría llenando el disco.
 
 La configuración está en el bloque `x-logging` del `docker-compose.yml`,
 y cada servicio la referencia con `logging: *default-logging`. Los
@@ -669,7 +664,7 @@ cambios ahí solo afectan a contenedores nuevos:
 
 ```bash
 docker compose up -d --force-recreate
-docker inspect project0-scheduler-1 --format '{{json .HostConfig.LogConfig}}'
+docker inspect project0-api-1 --format '{{json .HostConfig.LogConfig}}'
 ```
 
 ## Tests
@@ -977,6 +972,8 @@ recrean:
 kubectl rollout restart deployment/api
 ```
 
+El `collector` no lo necesita, porque cada ejecución es un pod nuevo.
+
 En un clúster nuevo PostgreSQL arranca vacío, así que el Job `migrations`
 crea el esquema y los datos se traen restaurando una copia (ver
 [Copia de seguridad](#copia-de-seguridad)).
@@ -992,8 +989,8 @@ curl localhost:8001/ready
 ### Desplegar una versión nueva
 
 Cada push a `main` sube las dos imágenes con el SHA corto del commit. Para
-desplegarlas, se pone ese tag en el `image:` de `k8s/migrations-job.yaml` y
-de `k8s/api-deployment.yaml`, y:
+desplegarlas, se pone ese tag en el `image:` de `k8s/migrations-job.yaml`,
+`k8s/api-deployment.yaml` y `k8s/collector-cronjob.yaml`, y:
 
 ```bash
 kubectl delete job migrations                 # el spec de un Job no se puede cambiar
@@ -1003,6 +1000,8 @@ kubectl diff -f k8s/                          # qué va a cambiar
 kubectl apply -f k8s/
 kubectl rollout status deployment/api         # espera al rolling update
 ```
+
+El CronJob usa la imagen nueva desde su siguiente ejecución.
 
 Las migraciones van primero porque el código nuevo puede necesitar una
 columna nueva. Si el Job falla, la migración que falla se deshace y la API
@@ -1046,6 +1045,40 @@ Con una sola réplica, cada reinicio del pod es un corte. Al borrar
 `postgres-0` con la API sirviendo, `/ready` respondió 503 durante unos dos
 segundos y luego volvió solo.
 
+### Collector
+
+Lo lanza el CronJob `collector` cada hora en punto, en hora de Madrid. Cada
+ejecución es un Job con su pod, que descarga las partidas nuevas, las guarda
+y termina. Una hora basta porque las partidas no aparecen más rápido, y como
+el `collector` no vuelve a pedir las que ya tiene, ejecutarlo más a menudo
+tampoco gastaría peticiones de más.
+
+```bash
+kubectl get cronjob collector                 # horario y última ejecución
+kubectl get jobs                              # una por hora, Complete o Failed
+kubectl logs -l app.kubernetes.io/name=collector --prefix --tail=-1
+kubectl create job collector-manual --from=cronjob/collector   # ejecutarlo ya
+```
+
+Se guardan los Jobs, con sus logs, de las 3 últimas ejecuciones buenas y de
+las 3 últimas fallidas. Un Job `Complete` no asegura que se guardaran todas
+las partidas. Si una falla, el `collector` la salta, termina bien y la vuelve
+a intentar en la ejecución siguiente, así que el fallo solo queda en los logs.
+
+Cuando algo va mal:
+
+- No corren dos a la vez. Si una ejecución sigue en marcha a la hora
+  siguiente, la nueva se lanza cuando acabe la anterior, o se salta si han
+  pasado más de 30 minutos.
+- Si el clúster estuvo parado, al arrancar lanza solo la última ejecución
+  perdida, y solo si no han pasado más de 30 minutos desde su hora.
+- Si termina con error se reintenta una vez, y si pasa de 10 minutos se
+  corta.
+
+Cada ejecución mira las últimas `MATCH_COUNT` partidas (20, en el ConfigMap
+`collector-config`). Si se juegan más con el clúster parado, las más
+antiguas se recuperan lanzándolo a mano con un `MATCH_COUNT` más alto.
+
 ## Estructura
 
 ```
@@ -1058,8 +1091,8 @@ migrations/             el esquema, versionado paso a paso    → servicio flywa
 migrations/Dockerfile   la imagen de migraciones para el clúster
 frontend/index.html     la página que consume la API          → servicio frontend
 frontend/borrador/      notas para trabajar el diseño aparte
-Dockerfile              la imagen de collector, scheduler y api
-docker-compose.yml      los siete servicios, el volumen y los healthchecks
+Dockerfile              la imagen de collector y api
+docker-compose.yml      los seis servicios, el volumen y los healthchecks
 docker-compose.test.yml la base y el Redis de test, aparte
 kind-config.yaml        el clúster local de Kubernetes       → kind create cluster
 k8s/                    los manifiestos del clúster           → kubectl apply -f k8s/
@@ -1113,10 +1146,10 @@ lo primero que importan `collector.py` y `api.py`, así que cuando el resto
 del código escribe su primer mensaje el formato ya está puesto. Hace falta
 configurarlo porque uvicorn solo ajusta sus propios loggers.
 
-`scheduler` usa la misma imagen que `collector` y lo único que cambia es el
-comando: un bucle de shell que ejecuta `collector.py` y duerme. Como el
-script en sí no contiene nada del bucle, al desplegar en Kubernetes se puede
-sustituir por un CronJob sin tocar el código.
+`collector.py` no contiene ningún bucle: arranca, descarga, guarda y
+termina. Lo repite quien lo lanza, que en el clúster es un CronJob. Por eso
+el bucle de shell que había en Compose se pudo sustituir sin tocar el
+código.
 
 Redis es opcional por diseño. Las llamadas a la caché van envueltas en
 `cache_get` y `cache_set`, que capturan cualquier error y lo tratan como
@@ -1162,8 +1195,14 @@ Tras regenerar la clave puede tardar unos segundos en ser válida.
 - Decidir si `/docs` y `/redoc` se desactivan al desplegar fuera de local.
   Se hace con `docs_url=None` al crear la aplicación.
 - Los contenedores del Dockerfile corren como root. La imagen base de Python
-  no trae usuario propio y nunca se añadió uno, así que `collector`,
-  `scheduler` y `api` arrancan con todos los permisos dentro del contenedor.
+  no trae usuario propio y nunca se añadió uno, así que `collector` y `api`
+  arrancan con todos los permisos dentro del contenedor.
   Se arregla creando un usuario sin privilegios y poniendo `USER` después del
   `pip install`, que sí necesita root. Las otras tres imágenes son oficiales
   y ya se bajan a su propio usuario.
+- El `collector` no atiende SIGTERM. Es el PID 1 de su contenedor y Python no
+  prepara nada para esa señal, así que la ignora. Al pararlo, con
+  `kubectl delete`, por el tope de 10 minutos o al vaciar un nodo, espera
+  los 30 s de gracia y muere con SIGKILL, con código 137, que se confunde
+  con un `OOMKilled`. No se pierden datos, porque la partida a medias se
+  deshace. Se arregla saliendo del programa al recibir `signal.SIGTERM`.
