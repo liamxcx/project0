@@ -1,5 +1,5 @@
-# La entrada HTTP del clúster. Es del equipo de plataforma y vive junto a
-# Traefik; cada aplicación cuelga de ella sus HTTPRoute.
+# La entrada HTTP del clúster. Vive junto a Traefik y la comparten las
+# aplicaciones, que cuelgan de ella sus HTTPRoute.
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:

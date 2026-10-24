@@ -934,7 +934,8 @@ kubectl get nodes                               # los tres nodos en Ready
 kind delete cluster --name project0             # borrarlo
 ```
 
-El primer worker publica el 80 y el 443 en `127.0.0.1` para el Ingress.
+El primer worker publica el 80 y el 443 en `127.0.0.1` para Traefik (ver
+[Entrada al clúster](#entrada-al-clúster)).
 Los puertos solo se fijan al crear el clúster, así que cambiar
 `kind-config.yaml` obliga a borrarlo y crearlo otra vez, y se pierde lo que
 haya dentro.
@@ -1079,6 +1080,39 @@ Cada ejecución mira las últimas `MATCH_COUNT` partidas (20, en el ConfigMap
 `collector-config`). Si se juegan más con el clúster parado, las más
 antiguas se recuperan lanzándolo a mano con un `MATCH_COUNT` más alto.
 
+### Entrada al clúster
+
+El tráfico de fuera entra por Traefik, que lee los `Gateway` y `HTTPRoute`
+de Gateway API. Su configuración está en `platform/`, aparte de la de la
+aplicación. Se instala una vez por clúster, en este orden:
+
+```bash
+# 1. Los tipos de Gateway API, que no vienen con Kubernetes
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.3/standard-install.yaml
+
+# 2. Traefik
+helm repo add traefik https://traefik.github.io/charts
+helm install traefik traefik/traefik --version 42.1.3 \
+  --namespace traefik --create-namespace \
+  --values platform/helm/traefik-values.yaml
+
+# 3. El Gateway public, que acepta rutas de project0
+kubectl apply -f platform/
+```
+
+En kind, Traefik escucha en el 80 de `project0-worker`, que kind une con el
+80 de la máquina. En un clúster real iría detrás de un Service
+`LoadBalancer`.
+
+Para cambiar un value, se edita `traefik-values.yaml` y se ejecuta el mismo
+comando con `upgrade` en vez de `install`, siempre con `--values`.
+
+```bash
+helm list -n traefik                  # la release y su revisión
+kubectl get gateway -n traefik        # public, con PROGRAMMED True
+curl -i http://localhost              # 404 de Traefik mientras no haya rutas
+```
+
 ## Estructura
 
 ```
@@ -1096,6 +1130,8 @@ docker-compose.yml      los seis servicios, el volumen y los healthchecks
 docker-compose.test.yml la base y el Redis de test, aparte
 kind-config.yaml        el clúster local de Kubernetes       → kind create cluster
 k8s/                    los manifiestos del clúster           → kubectl apply -f k8s/
+platform/               la entrada al clúster (el Gateway)    → kubectl apply -f platform/
+platform/helm/          los values del chart de Traefik       → helm install / upgrade
 requirements.txt        dependencias de Python, con versiones fijadas
 requirements-dev.txt    pytest, Ruff y compañía, fuera de la imagen
 .github/workflows/      el pipeline de GitHub Actions         → se ejecuta en cada push
