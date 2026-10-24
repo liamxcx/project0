@@ -1,0 +1,31 @@
+providers:
+  kubernetesGateway:
+    enabled: true
+  # Solo se usa Gateway API, así que Traefik no lee Ingress ni sus objetos
+  # propios (IngressRoute, Middleware).
+  kubernetesIngress:
+    enabled: false
+  kubernetesCRD:
+    enabled: false
+
+ingressClass:
+  enabled: false
+
+# El Gateway está escrito a mano en platform/, en vez del que trae el chart.
+gateway:
+  enabled: false
+
+# project0-worker es el único nodo que publica el 80 en kind-config.yaml.
+nodeSelector:
+  ingress-ready: "true"
+
+ports:
+  web:
+    # El 80 del nodo, que kind une con el 80 de la máquina. Dentro del
+    # contenedor Traefik sigue escuchando en el 8000.
+    hostPort: 80
+
+# kind no tiene balanceador, y el tráfico entra por el hostPort.
+service:
+  spec:
+    type: ClusterIP

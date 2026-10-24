@@ -1,0 +1,21 @@
+# La entrada HTTP del clúster. Es del equipo de plataforma y vive junto a
+# Traefik; cada aplicación cuelga de ella sus HTTPRoute.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: public
+  namespace: traefik
+spec:
+  gatewayClassName: traefik
+  listeners:
+    - name: web
+      protocol: HTTP
+      # Tiene que coincidir con el entryPoint web de Traefik, que escucha en el
+      # 8000. El 80 de fuera llega a él por el hostPort.
+      port: 8000
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: project0
