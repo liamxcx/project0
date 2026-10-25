@@ -885,7 +885,7 @@ eso no hay ninguna clave de Riot guardada en GitHub.
 
 ### build
 
-Construye las dos imágenes del proyecto con las acciones oficiales de
+Construye las tres imágenes del proyecto con las acciones oficiales de
 Docker (`docker/setup-buildx-action` y `docker/build-push-action`). Es un
 `matrix`: el job se escribe una vez y GitHub lanza una copia por imagen, a
 la vez:
@@ -893,6 +893,7 @@ la vez:
 ```
 build (api)          Dockerfile              ghcr.io/liamxcx/project0
 build (migrations)   migrations/Dockerfile   ghcr.io/liamxcx/project0-migrations
+build (frontend)     frontend/Dockerfile     ghcr.io/liamxcx/project0-frontend
 ```
 
 Hace falta porque los tests ejecutan el código directamente y nunca usan el
@@ -901,16 +902,16 @@ Hace falta porque los tests ejecutan el código directamente y nunca usan el
 sitio.
 
 En `main` las construye para amd64 y arm64 y las sube a GitHub Container
-Registry, etiquetadas con el SHA corto del commit. Las dos llevan el mismo
-tag, así que se sabe qué migraciones van con qué código. En el resto de
+Registry, etiquetadas con el SHA corto del commit. Las tres llevan el mismo
+tag, así que se sabe qué migraciones y qué página van con qué código. En el resto de
 ramas solo las construye para amd64 y no las sube, así que el aviso
 `No output specified with docker-container driver` del log es esperado.
 Las capas se guardan en la caché de Actions para no reconstruir lo que no
 ha cambiado.
 
 `build` solo arranca si `lint` y `tests` pasan, para no subir nunca una
-imagen con código que no los pasa. Si falla una de las dos copias, GitHub
-cancela la otra.
+imagen con código que no los pasa. Si falla una de las copias, GitHub
+cancela las demás.
 
 `build-push-action` guarda además un registro del build como artifact de la
 ejecución. Se puede descargar e importar en la sección Builds de Docker
@@ -989,9 +990,10 @@ curl localhost:8001/ready
 
 ### Desplegar una versión nueva
 
-Cada push a `main` sube las dos imágenes con el SHA corto del commit. Para
+Cada push a `main` sube las tres imágenes con el SHA corto del commit. Para
 desplegarlas, se pone ese tag en el `image:` de `k8s/migrations-job.yaml`,
-`k8s/api-deployment.yaml` y `k8s/collector-cronjob.yaml`, y:
+`k8s/api-deployment.yaml`, `k8s/collector-cronjob.yaml` y
+`k8s/frontend-deployment.yaml`, y:
 
 ```bash
 kubectl delete job migrations                 # el spec de un Job no se puede cambiar
@@ -1000,6 +1002,7 @@ kubectl wait --for=condition=complete job/migrations --timeout=5m
 kubectl diff -f k8s/                          # qué va a cambiar
 kubectl apply -f k8s/
 kubectl rollout status deployment/api         # espera al rolling update
+kubectl rollout status deployment/frontend
 ```
 
 El CronJob usa la imagen nueva desde su siguiente ejecución.
@@ -1080,6 +1083,14 @@ Cada ejecución mira las últimas `MATCH_COUNT` partidas (20, en el ConfigMap
 `collector-config`). Si se juegan más con el clúster parado, las más
 antiguas se recuperan lanzándolo a mano con un `MATCH_COUNT` más alto.
 
+### Frontend
+
+En el clúster la página va dentro de su propia imagen, construida con
+`frontend/Dockerfile`: nginx sin root, que escucha en el 8080, con el
+`index.html` copiado. Así que un cambio en la página necesita una imagen
+nueva, como el resto del código. La sirven dos réplicas detrás del Service
+`frontend`, que la publica en el 80.
+
 ### Entrada al clúster
 
 El tráfico de fuera entra por Traefik, que lee los `Gateway` y `HTTPRoute`
@@ -1124,6 +1135,7 @@ config.py               la configuración, en un solo sitio    → lo importan l
 migrations/             el esquema, versionado paso a paso    → servicio flyway y Job migrations
 migrations/Dockerfile   la imagen de migraciones para el clúster
 frontend/index.html     la página que consume la API          → servicio frontend
+frontend/Dockerfile     la imagen del frontend para el clúster
 frontend/borrador/      notas para trabajar el diseño aparte
 Dockerfile              la imagen de collector y api
 docker-compose.yml      los seis servicios, el volumen y los healthchecks
