@@ -45,8 +45,8 @@ jobs:
     # Solo se construye si el código pasa el lint y los tests, porque estas
     # imágenes son las que se acabarán desplegando.
     needs: [lint, tests]
-    # Una copia de este job por imagen. Las dos llevan el SHA del mismo commit,
-    # así que la API y sus migraciones se despliegan con el mismo tag.
+    # Una copia de este job por imagen. Todas llevan el SHA del mismo commit,
+    # así que se despliegan juntas con el mismo tag.
     strategy:
       matrix:
         include:
@@ -56,6 +56,9 @@ jobs:
           - name: migrations
             context: migrations
             image: project0-migrations
+          - name: frontend
+            context: frontend
+            image: project0-frontend
     name: build (${{ matrix.name }})
     runs-on: ubuntu-latest
     # El token que GitHub da al job necesita permiso para subir al registro
