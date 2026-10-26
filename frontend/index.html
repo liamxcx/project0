@@ -112,7 +112,9 @@
       </table>`;
       }
 
-      fetch("http://localhost:8000/matches")
+      // Ruta relativa: el navegador la pide al mismo sitio del que sacó la
+      // página, y Traefik la pasa a la API.
+      fetch("/api/matches")
         .then((r) => {
           if (!r.ok) throw new Error(`La API respondió ${r.status}`);
           return r.json();
