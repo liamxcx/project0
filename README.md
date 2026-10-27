@@ -3,17 +3,18 @@
 Herramienta personal de estadísticas de League of Legends.
 Consume la API de Riot Games y guarda el historial de partidas en PostgreSQL.
 
-Proyecto de aprendizaje: el objetivo es llegar a una aplicación
-contenerizada con base de datos, API propia y frontend.
+Proyecto para aprender DevOps con una aplicación real: contenedores con
+Docker y Compose, CI con GitHub Actions y despliegue en Kubernetes.
 
 Solo se procesan partidas de Ranked Solo/Duo (queueId 420).
 
 ## Estado actual
 
 El `collector`, base de datos con migraciones, API propia, una página que la
-consume y tests que se ejecutan en cada push, todo funcionando en Compose.
-El despliegue en Kubernetes está en marcha: la API, Redis, PostgreSQL y el
-`collector` ya corren en un clúster local con kind (ver [Kubernetes](#kubernetes)).
+consume y tests que se ejecutan en cada push. Todo corre en un clúster local
+de Kubernetes con kind, y la página se abre en `http://localhost`, entrando
+por Traefik (ver [Kubernetes](#kubernetes)). Compose se queda como entorno de
+desarrollo.
 
 ### Cómo encajan las piezas
 
@@ -34,18 +35,24 @@ CronJob collector  ──cada hora──▶  pod collector  ──▶  API de Ri
                                         └──▶  PostgreSQL
 ```
 
-Cuando alguien abre la página en Compose, el navegador pide la página al
-`frontend` y los datos a la `api`:
+Cuando alguien abre la página, todo entra por una sola puerta: Traefik en el
+clúster. La puerta manda `/api/matches` a la API, quitándole el prefijo, y
+todo lo demás al frontend:
 
 ```
-navegador  ──▶  frontend   :8080   la página (nginx, ficheros estáticos)
-     │
-     └────────▶  api       :8000  ──▶  Redis        ¿está cacheada?
-                                  └──▶  PostgreSQL   solo si no lo está
+navegador ──▶ Traefik :80 ──┬── /             ──▶ frontend   la página (nginx)
+                            │
+                            └── /api/matches  ──▶ api        como /matches
+                                                   ├──▶ Redis        ¿está cacheada?
+                                                   └──▶ PostgreSQL   solo si no lo está
 ```
 
-Son dos puertos distintos, o sea dos orígenes distintos, y por eso la API
-tiene que autorizar al frontend (ver CORS).
+En Compose, la puerta es el propio nginx del `frontend`, en
+`http://localhost:8080`, con las mismas dos reglas (ver [Frontend](#frontend)).
+
+La página pide los datos con una ruta relativa, `/api/matches`, así que la
+página y la API comparten origen y el navegador no necesita CORS (ver
+[Sin CORS](#sin-cors)).
 
 `collector` arranca, descarga, guarda y termina. En el clúster lo lanza un
 CronJob cada hora. En Compose se ejecuta una vez al hacer `up`, y después a
@@ -75,28 +82,28 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
 - **`redis`** — caché de respuestas de la API, con caducidad automática y
   opcional: si Redis no responde, la API consulta PostgreSQL y sigue
   funcionando.
-- **`frontend`** — nginx sirviendo una página estática que pide los datos
-  a la API desde el navegador.
+- **`frontend`** — una página estática que pide los datos a la API desde el
+  navegador, por la misma puerta por la que llega la página.
 - **Tests** — pytest sobre los cinco endpoints y la caché, contra un
   PostgreSQL y un Redis propios, con datos inventados.
 - **CI** — GitHub Actions pasa Ruff, ejecuta los tests y construye las
   imágenes en cada push, y marca cada commit en verde o en rojo. En `main`
   sube además las imágenes a GitHub Container Registry.
-- **Kubernetes** — la API con dos réplicas, Redis, PostgreSQL y el
-  `collector`, que un CronJob lanza cada hora, en un clúster local con kind.
-  Las imágenes salen del CI, el esquema lo aplica un Job y los datos de
-  PostgreSQL viven en un disco que se conserva.
+- **Kubernetes** — todo el proyecto en un clúster local con kind: la API y
+  el frontend con dos réplicas cada uno, Redis, PostgreSQL y el `collector`,
+  que un CronJob lanza cada hora. Las imágenes salen del CI, el esquema lo
+  aplica un Job, los datos de PostgreSQL viven en un disco que se conserva y
+  el tráfico de fuera entra por Traefik con Gateway API.
 
 ### Qué falta
 
 - Gráfica de winrate y comparar varios invocadores
 - Copia de seguridad automática de la base de datos
-- Llevar el frontend a Kubernetes
 
 ## Requisitos
 
 - Docker
-- kind y kubectl, para el clúster local de Kubernetes
+- kind, kubectl y Helm, para el clúster local de Kubernetes
 - Una clave de la API de Riot: https://developer.riotgames.com
   La Development Key caduca cada 24 horas. Una personal key, que se pide
   registrando el proyecto en el portal, no caduca.
@@ -120,7 +127,6 @@ MATCH_COUNT=20
 REDIS_URL=redis://redis:6379/0
 CACHE_TTL_SECONDS=60
 TZ=Europe/Madrid
-CORS_ORIGINS=http://localhost:8080
 ```
 
 El Riot ID va separado: si eres `TuNombre#EUW`, el nombre va en
@@ -131,16 +137,11 @@ ejecución. Si falta, se usan 20. Como el `collector` no vuelve a pedir las
 que ya tiene, subirlo solo cuesta peticiones la primera vez.
 
 `TZ` es la zona horaria de los contenedores, y es la que sale en los logs.
-La convención en servidores es `UTC`; aquí está en hora local porque el
-proyecto se lee desde Madrid.
+Va en hora de Madrid y no en `UTC` para leer los logs sin convertir la hora.
 
 `CACHE_TTL_SECONDS` es cuántos segundos vive cada respuesta cacheada. Es
 el desfase máximo entre lo que hay en PostgreSQL y lo que devuelve la API.
 Subirlo alivia a PostgreSQL a costa de servir datos más viejos.
-
-`CORS_ORIGINS` son los orígenes que pueden leer las respuestas de la API
-desde un navegador. Varios se separan por comas, y van sin barra final.
-Cambia según dónde se despliegue, por eso es configuración y no código.
 
 `DB_HOST` es `db` dentro de Compose. En el clúster es `postgres` y lo pone
 el ConfigMap `project0-config`. Para ejecutar el script fuera de Docker hay
@@ -182,7 +183,7 @@ pero Compose construye una imagen por servicio:
 código anterior, sin dar ningún error. Nombrar un servicio vale para
 levantarlo suelto, no para reconstruir.
 
-Los cambios de esquema ya no necesitan `down -v`: se escriben como una
+Los cambios de esquema no necesitan `down -v`: se escriben como una
 migración nueva y `flyway` la aplica al arrancar, sin tocar los datos.
 Ver [Migraciones](#migraciones).
 
@@ -296,10 +297,6 @@ WHERE match_id = 'EUW1_...'
 ORDER BY kp_pct DESC;
 ```
 
-El `SUM(...) OVER (PARTITION BY ...)` es una función de ventana: suma por
-equipo sin agrupar las filas, así que cada jugador conserva la suya y ve
-además el total.
-
 Una clave primaria crea su índice automáticamente. La anterior,
 `(match_id, puuid)`, servía además para buscar por `puuid`; la nueva no,
 porque esa columna ya no está. Por eso `V6` crea `idx_participants_puuid`
@@ -403,13 +400,12 @@ docker compose exec db psql -U loltest -d lolstats -P pager=off \
   -c "SELECT champion, kills, gold_earned, damage_to_champions FROM participants;"
 ```
 
-`-P pager=off` evita que la salida se abra en un paginador y deje el
-terminal esperando.
-
 ## API
 
-Servicio `api`, con FastAPI y uvicorn. Escucha en `http://localhost:8000`,
-publicado solo en `127.0.0.1`.
+Servicio `api`, con FastAPI y uvicorn. En Compose escucha en
+`http://localhost:8000`, publicado solo en `127.0.0.1`. En el clúster solo se
+publica `/matches`, como `http://localhost/api/matches` (ver
+[Entrada al clúster](#entrada-al-clúster)).
 
 Endpoints:
 
@@ -566,9 +562,8 @@ fallaría. Para eso está `flyway baseline -baselineVersion=1`, que crea la
 tabla de control y apunta la V1 como aplicada sin ejecutarla. Desde ahí,
 `migrate` sigue con la V2.
 
-Se usó al montar Flyway, sobre la base con partidas de entonces. La base
-actual se reconstruyó después desde cero, así que en
-`flyway_schema_history` la V1 sale como `SQL` y no como `BASELINE`.
+Se usó al introducir Flyway en el proyecto, sobre la base que ya tenía
+partidas.
 
 ## Copia de seguridad
 
@@ -597,37 +592,38 @@ kubectl apply -f k8s/migrations-job.yaml
 estaba.
 
 La copia va en formato custom de `pg_dump` y la carpeta `backups/` está
-fuera de Git. Se hace a mano. La copia automática llegará con Kubernetes.
+fuera de Git. Se hace a mano, y la copia automática está en
+[Qué falta](#qué-falta).
 
 ## Frontend
 
-Una página en `frontend/index.html` que pide los datos a la API y los
-pinta. Se abre en `http://localhost:8080`.
+Una página en `frontend/index.html`, servida por nginx, que pide los datos
+a la API y los pinta. En Compose se abre en `http://localhost:8080`, y en el
+clúster en `http://localhost` (ver [Kubernetes](#kubernetes)).
 
-La sirve nginx, no la API: son dos servicios y dos puertos. Servir los
-estáticos con un servidor web dedicado es lo estándar, y permite añadir un
-reverse proxy delante más adelante.
+En Compose, nginx hace también de puerta de entrada, como Traefik en el
+clúster. Su configuración está en `frontend/nginx-compose.conf`: pasa
+`/api/matches` a la API como `/matches` y sirve lo demás desde el disco.
+Por eso levantar el `frontend` levanta también la API, y las respuestas de
+la API llegan con `Server: nginx`.
 
-La carpeta entra en el contenedor como un bind mount de solo lectura, así
-que editar el HTML y recargar el navegador basta: no hay que reconstruir
-ni reiniciar nada. Si el cambio no se ve, suele ser la caché del
-navegador (`Cmd + Shift + R`).
+Solo se monta `index.html`, como bind mount de solo lectura, así que editar
+el HTML y recargar el navegador basta: no hay que reconstruir ni reiniciar
+nada. Si el cambio no se ve, suele ser la caché del navegador
+(`Cmd + Shift + R`).
 
-### CORS
+### Sin CORS
 
-La página vive en `http://localhost:8080` y la API en
-`http://localhost:8000`. Distinto puerto es distinto origen, y por defecto
-el navegador no deja que una página lea respuestas de otro origen.
+La página pide `/api/matches` con una ruta relativa, así que la petición va
+al mismo sitio del que salió la página: mismo protocolo, host y puerto.
+Para el navegador, la página y la API son el mismo origen, y puede leer sus
+respuestas sin pedir permiso.
 
-La API lo autoriza con `CORSMiddleware`, que añade la cabecera
-`Access-Control-Allow-Origin` a sus respuestas. Se comprueba en la pestaña
-Network del navegador, en las cabeceras de respuesta de `/champions`.
-
-Solo se autoriza el método `GET`, que es lo único que hace la API.
-
-CORS no protege la API: `curl` y cualquier cosa que no sea un navegador
-acceden igual. Lo que evita es que una página de otro origen lea respuestas
-aprovechando la sesión del usuario.
+Antes, en Compose, la página estaba en el 8080 y la API en el 8000, que son
+orígenes distintos, y la API autorizaba a la página con `CORSMiddleware` y
+la variable `CORS_ORIGINS`. Al pasar las dos por la misma puerta se
+quitaron. Si algún día una página de otro origen necesita leer la API, habrá
+que volver a añadirlos.
 
 ## Logs
 
@@ -707,10 +703,6 @@ Importar `api.py` ejecuta el módulo entero, así que un test que solo mira
 `/health` ya comprueba de paso que `config.py` encuentra sus variables, que
 el logging se configura y que las rutas se registran.
 
-Pytest busca ficheros que empiecen por `test_` y, dentro, funciones que
-empiecen por `test_`. Una función con otro nombre no se ejecuta y no avisa
-de nada.
-
 ### Los contenedores de test
 
 `docker-compose.test.yml` levanta un PostgreSQL (`db-test`) y un Flyway
@@ -788,23 +780,14 @@ separan, un test puede pasar en local y fallar en el pipeline.
 
 ## CI
 
-Cada push a GitHub ejecuta el pipeline de CI (integración continua) en
-GitHub Actions. El workflow está en `.github/workflows/ci.yml` y el
-resultado sale al lado de cada commit, con un tick verde si todo pasa y una
-cruz roja si algo falla. El detalle de cada ejecución está en la pestaña
-Actions del repositorio.
-
-Se dispara con un push a cualquier rama, no solo a `main`. Así se puede
-probar un cambio en una rama aparte sin que llegue a `main`.
+Cada push, a cualquier rama, ejecuta el pipeline de GitHub Actions
+definido en `.github/workflows/ci.yml`. Así un cambio se puede probar en una
+rama antes de que llegue a `main`.
 
 El workflow tiene tres jobs, `lint`, `tests` y `build`. Arrancan a la vez,
 cada uno en su propia máquina Ubuntu que GitHub borra al acabar. Que falle
 uno no para a los otros, así que un fallo de formato no esconde si los
 tests pasan.
-
-Dentro de un job, si un paso termina con error, los siguientes no se
-ejecutan. Para saber qué ha fallado hay que abrir el job en rojo y mirar
-qué paso tiene la cruz.
 
 ### lint
 
@@ -913,10 +896,6 @@ ha cambiado.
 imagen con código que no los pasa. Si falla una de las copias, GitHub
 cancela las demás.
 
-`build-push-action` guarda además un registro del build como artifact de la
-ejecución. Se puede descargar e importar en la sección Builds de Docker
-Desktop para ver el build paso a paso.
-
 ### El sistema del runner
 
 Los tres jobs usan `ubuntu-latest`, que GitHub mueve a la siguiente
@@ -980,10 +959,11 @@ En un clúster nuevo PostgreSQL arranca vacío, así que el Job `migrations`
 crea el esquema y los datos se traen restaurando una copia (ver
 [Copia de seguridad](#copia-de-seguridad)).
 
-Para probar la API desde fuera del clúster (el 8000 lo ocupa Compose):
+Para llamar a las rutas de la API que no se publican, como `/ready` (el 8000
+lo ocupa Compose):
 
 ```bash
-kubectl get pods                              # api (dos), redis y postgres-0 en 1/1
+kubectl get pods                              # api y frontend (dos de cada), redis y postgres-0 en 1/1
 kubectl port-forward service/api 8001:80      # y en otra terminal:
 curl localhost:8001/ready
 ```
@@ -1089,7 +1069,8 @@ En el clúster la página va dentro de su propia imagen, construida con
 `frontend/Dockerfile`: nginx sin root, que escucha en el 8080, con el
 `index.html` copiado. Así que un cambio en la página necesita una imagen
 nueva, como el resto del código. La sirven dos réplicas detrás del Service
-`frontend`, que la publica en el 80.
+`frontend`, y desde fuera se llega por Traefik (ver
+[Entrada al clúster](#entrada-al-clúster)).
 
 ### Entrada al clúster
 
@@ -1118,10 +1099,23 @@ En kind, Traefik escucha en el 80 de `project0-worker`, que kind une con el
 Para cambiar un value, se edita `traefik-values.yaml` y se ejecuta el mismo
 comando con `upgrade` en vez de `install`, siempre con `--values`.
 
+Las reglas de project0 van en la HTTPRoute `project0`, en
+`k8s/project0-httproute.yaml`, colgada del Gateway `public`:
+
+```
+/api/matches   →  Service api, como /matches
+/              →  Service frontend
+```
+
+La API tiene sus rutas sin prefijo, así que la HTTPRoute lo quita con un
+filtro `URLRewrite`. Solo se publica la ruta que usa la página. `/health`,
+`/ready`, `/docs` y el resto de la API se quedan dentro del clúster.
+
 ```bash
 helm list -n traefik                  # la release y su revisión
 kubectl get gateway -n traefik        # public, con PROGRAMMED True
-curl -i http://localhost              # 404 de Traefik mientras no haya rutas
+kubectl describe httproute project0   # Accepted y ResolvedRefs en True
+curl -i http://localhost/api/matches  # la API, a través de Traefik
 ```
 
 ## Estructura
@@ -1136,6 +1130,7 @@ migrations/             el esquema, versionado paso a paso    → servicio flywa
 migrations/Dockerfile   la imagen de migraciones para el clúster
 frontend/index.html     la página que consume la API          → servicio frontend
 frontend/Dockerfile     la imagen del frontend para el clúster
+frontend/nginx-compose.conf la puerta de entrada en Compose   → servicio frontend
 frontend/borrador/      notas para trabajar el diseño aparte
 Dockerfile              la imagen de collector y api
 docker-compose.yml      los seis servicios, el volumen y los healthchecks
@@ -1158,9 +1153,6 @@ Las rutas usan hosts distintos según la API. Las que usa este proyecto
 (ACCOUNT-V1 y MATCH-V5) van por región grande: `europe.api.riotgames.com`.
 Otras, como LEAGUE-V4 para el rango, usan la plataforma:
 `euw1.api.riotgames.com`.
-
-Dentro de la red de Compose los servicios se alcanzan por su nombre de
-servicio, no por `localhost`.
 
 `api` arranca uvicorn con `--host 0.0.0.0`. Por defecto uvicorn escucha en
 `127.0.0.1`, que dentro del contenedor significa solo el propio contenedor:
@@ -1233,9 +1225,9 @@ Tras regenerar la clave puede tardar unos segundos en ser válida.
 
 ## Deuda técnica
 
-- Un pool de conexiones en la API. Hoy cada endpoint abre su propia
-  conexión a PostgreSQL y la cierra al terminar, y abrir una conexión es de
-  lo más caro que hay. Con un usuario no se nota; con varias réplicas, sí.
+- Un pool de conexiones en la API. Hoy cada petición abre su propia
+  conexión a PostgreSQL y la cierra al terminar, con su conexión TCP y su
+  autenticación cada vez. Con un usuario no se nota, pero con más tráfico sí.
   `psycopg` trae uno. Aplazado hasta tener tests que comprueben que las
   respuestas no cambian.
 - Invalidar la caché desde el `collector` cuando guarde partidas nuevas, en
@@ -1246,8 +1238,8 @@ Tras regenerar la clave puede tardar unos segundos en ser válida.
   no trae usuario propio y nunca se añadió uno, así que `collector` y `api`
   arrancan con todos los permisos dentro del contenedor.
   Se arregla creando un usuario sin privilegios y poniendo `USER` después del
-  `pip install`, que sí necesita root. Las otras tres imágenes son oficiales
-  y ya se bajan a su propio usuario.
+  `pip install`, que sí necesita root. La del frontend no tiene el problema,
+  porque parte de `nginx-unprivileged`, que corre sin root.
 - El `collector` no atiende SIGTERM. Es el PID 1 de su contenedor y Python no
   prepara nada para esa señal, así que la ignora. Al pararlo, con
   `kubectl delete`, por el tope de 10 minutos o al vaciar un nodo, espera
