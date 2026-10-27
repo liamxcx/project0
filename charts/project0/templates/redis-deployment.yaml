@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: redis
+    {{- include "project0.labels" . | nindent 4 }}
+spec:
+  # Una sola réplica, porque cada una tendría su propia caché. Si Redis cae, la
+  # API sigue respondiendo desde Postgres.
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image }}
+          # Solo es caché, así que no guarda nada en disco. Al llegar al límite de
+          # memoria borra las claves menos usadas en vez de rechazar escrituras.
+          args:
+            - --save
+            - ""
+            - --appendonly
+            - "no"
+            - --maxmemory
+            - 100mb
+            - --maxmemory-policy
+            - allkeys-lru
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+          livenessProbe:
+            tcpSocket:
+              port: redis
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
