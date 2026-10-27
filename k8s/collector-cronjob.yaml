@@ -26,7 +26,7 @@ spec:
             - name: ghcr-pull
           containers:
             - name: collector
-              image: ghcr.io/liamxcx/project0:8f1f205
+              image: ghcr.io/liamxcx/project0:193e9e2
               command: ["python", "collector.py"]
               envFrom:
                 - configMapRef:

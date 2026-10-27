@@ -19,7 +19,7 @@ spec:
         - name: ghcr-pull
       containers:
         - name: frontend
-          image: ghcr.io/liamxcx/project0-frontend:8f1f205
+          image: ghcr.io/liamxcx/project0-frontend:193e9e2
           ports:
             - name: http
               containerPort: 8080

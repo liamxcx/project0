@@ -23,7 +23,7 @@ spec:
         - name: ghcr-pull
       containers:
         - name: flyway
-          image: ghcr.io/liamxcx/project0-migrations:8f1f205
+          image: ghcr.io/liamxcx/project0-migrations:193e9e2
           envFrom:
             - configMapRef:
                 name: project0-config
