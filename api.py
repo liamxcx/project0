@@ -5,22 +5,14 @@ import psycopg
 import redis
 from fastapi import FastAPI, HTTPException
 from fastapi.encoders import jsonable_encoder
-from fastapi.middleware.cors import CORSMiddleware
 from psycopg.rows import dict_row
 
-from config import CACHE_TTL_SECONDS, CORS_ORIGINS, DB_URL, REDIS_URL
+from config import CACHE_TTL_SECONDS, DB_URL, REDIS_URL
 
 # El formato lo configura config.py, que se importa antes
 log = logging.getLogger("api")
 
 app = FastAPI(title="Estadísticas de LoL")
-
-# Autoriza al frontend a leer las respuestas desde el navegador
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
-    allow_methods=["GET"],
-)
 
 cache = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=1)
 

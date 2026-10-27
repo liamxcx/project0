@@ -7,7 +7,4 @@ metadata:
     app.kubernetes.io/name: api
 data:
   CACHE_TTL_SECONDS: "60"
-  # Vacío porque la página y la API comparten origen al entrar las dos por
-  # Traefik, así que el navegador no pide permiso a la API.
-  CORS_ORIGINS: ""
   REDIS_URL: redis://redis:6379/0

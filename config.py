@@ -55,12 +55,3 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 
 # Segundos que vive cada respuesta cacheada
 CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "60"))
-
-# Orígenes que pueden leer las respuestas de la API desde un navegador.
-# Varios se separan por comas. Se quitan los espacios de alrededor para que
-# "http://a.com, http://b.com" funcione igual que sin el espacio.
-CORS_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv("CORS_ORIGINS", "http://localhost:8080").split(",")
-    if origin.strip()
-]
