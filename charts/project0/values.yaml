@@ -1,2 +1,79 @@
+# Tag de las tres imágenes propias (API y collector, migraciones y frontend).
+# Vacío usa el appVersion de Chart.yaml; se cambia aquí o con --set para probar otro.
+image:
+  tag: ""
+
+timezone: Europe/Madrid
+
+# El Gateway de la entrada al clúster. No es de este chart, se instala aparte
+# con Traefik, así que depende de cada clúster.
+gateway:
+  name: public
+  namespace: traefik
+  sectionName: web
+
+postgres:
+  image: postgres:16
+  user: loltest
+  database: lolstats
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
 redis:
   image: redis:8-alpine
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+
+api:
+  replicas: 2
+  cacheTtlSeconds: 60
+  # En Compose la API usa unos 53 MiB. Sin límite de CPU, porque un
+  # límite frena el proceso en los picos aunque el nodo esté libre.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+migrations:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+frontend:
+  replicas: 2
+  # nginx arranca un worker por cada CPU del nodo, no del contenedor, así
+  # que la memoria depende del nodo. En kind, unos 17 MiB sin tráfico.
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 64Mi
+
+collector:
+  # Formato cron, en la zona de timezone. Cada hora en punto.
+  schedule: "0 * * * *"
+  riotGameName: "Charli xcx"
+  riotTagLine: Wink
+  matchCount: 20
+  # Con --refetch de 20 partidas el pico fue de 42 MiB y la media
+  # de CPU de unos 90m. Sin límite de CPU, como la API.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      memory: 128Mi

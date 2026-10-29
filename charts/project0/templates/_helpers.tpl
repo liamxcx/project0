@@ -8,3 +8,10 @@ app.kubernetes.io/part-of: {{ .Chart.Name }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
+
+{{/*
+Tag de las imágenes propias. Si values no dice otro, el appVersion del chart.
+*/}}
+{{- define "project0.imageTag" -}}
+{{ .Values.image.tag | default .Chart.AppVersion }}
+{{- end }}

@@ -1,0 +1,14 @@
+# La comparten la API, el collector, Postgres y el Job de migraciones. Lo que
+# use solo uno va en su propio ConfigMap.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: project0-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "project0.labels" . | nindent 4 }}
+data:
+  POSTGRES_USER: {{ .Values.postgres.user | quote }}
+  POSTGRES_DB: {{ .Values.postgres.database | quote }}
+  DB_HOST: postgres
+  TZ: {{ .Values.timezone | quote }}

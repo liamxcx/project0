@@ -1,0 +1,40 @@
+# Las reglas de entrada de project0. Cuelgan del Gateway de values, que comparte
+# todo el clúster, y reparten las peticiones entre la página y la API.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: project0
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: project0
+    {{- include "project0.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ .Values.gateway.name }}
+      namespace: {{ .Values.gateway.namespace }}
+      sectionName: {{ .Values.gateway.sectionName }}
+  rules:
+    # Solo se publica lo que usa la página. /health, /ready y /docs se quedan
+    # dentro del clúster.
+    - matches:
+        - path:
+            type: Exact
+            value: /api/matches
+      filters:
+        # La API tiene la ruta sin el prefijo, así que se cambia al reenviar.
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /matches
+      backendRefs:
+        - name: api
+          port: 80
+    # Todo lo demás es la página.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: frontend
+          port: 80

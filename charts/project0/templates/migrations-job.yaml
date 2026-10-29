@@ -1,0 +1,46 @@
+# Aplica las migraciones pendientes y termina. El spec de un Job no se puede
+# cambiar, así que para otra versión hay que borrarlo y volver a crearlo.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrations
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: migrations
+    {{- include "project0.labels" . | nindent 4 }}
+spec:
+  # Una migración que falla vuelve a fallar igual, así que basta un reintento
+  # para cubrir fallos que no tengan que ver con el SQL.
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: migrations
+    spec:
+      # Never deja el pod fallido en su sitio, con sus logs, en lugar de
+      # reiniciar el contenedor dentro del mismo pod.
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: flyway
+          image: ghcr.io/liamxcx/project0-migrations:{{ include "project0.imageTag" . }}
+          envFrom:
+            - configMapRef:
+                name: project0-config
+          env:
+            - name: FLYWAY_URL
+              value: jdbc:postgresql://postgres:5432/$(POSTGRES_DB)
+            - name: FLYWAY_USER
+              value: $(POSTGRES_USER)
+            - name: FLYWAY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: POSTGRES_PASSWORD
+            # Con un clúster recién creado, el Job puede arrancar antes que
+            # Postgres. Así espera unos minutos en vez de fallar al momento.
+            - name: FLYWAY_CONNECT_RETRIES
+              value: "10"
+          resources:
+            {{- toYaml .Values.migrations.resources | nindent 12 }}

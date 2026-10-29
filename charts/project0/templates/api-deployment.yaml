@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: api
+    {{- include "project0.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api
+  template:
+    metadata:
+      # La API lee las variables al arrancar. Con la suma de cada ConfigMap, si uno
+      # cambia, cambia el pod y Kubernetes lo recrea.
+      annotations:
+        checksum/project0-config: {{ include (print $.Template.BasePath "/project0-configmap.yaml") . | sha256sum }}
+        checksum/api-config: {{ include (print $.Template.BasePath "/api-configmap.yaml") . | sha256sum }}
+      labels:
+        app.kubernetes.io/name: api
+    spec:
+      # La imagen es privada en GHCR. El Secret se crea a mano porque lleva el
+      # token, así que no está en el repo.
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: api
+          image: ghcr.io/liamxcx/project0:{{ include "project0.imageTag" . }}
+          # La misma imagen sirve para la API y el collector, así que cada
+          # manifiesto elige qué proceso arranca.
+          command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+          ports:
+            - name: http
+              containerPort: 8000
+          # Si /health deja de responder, el kubelet reinicia el contenedor. Por eso
+          # no mira Postgres, porque reiniciar la API no arregla la base.
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+          # Si /ready falla, el pod deja de recibir tráfico del Service, pero no se
+          # reinicia. Vuelve a recibirlo cuando Postgres responde otra vez.
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            # Por defecto es 1 s, menos que los 2 s que /ready espera a Postgres
+            # antes de contestar con un 503
+            timeoutSeconds: 3
+          envFrom:
+            - configMapRef:
+                name: project0-config
+            - configMapRef:
+                name: api-config
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: POSTGRES_PASSWORD
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}

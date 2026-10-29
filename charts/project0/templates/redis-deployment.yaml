@@ -42,8 +42,4 @@ spec:
             tcpSocket:
               port: redis
           resources:
-            requests:
-              cpu: 50m
-              memory: 32Mi
-            limits:
-              memory: 128Mi
+            {{- toYaml .Values.redis.resources | nindent 12 }}
