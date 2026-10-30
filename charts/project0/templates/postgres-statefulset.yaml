@@ -51,8 +51,8 @@ spec:
     - metadata:
         name: datos
       spec:
-        storageClassName: standard-retain
+        storageClassName: {{ .Values.postgres.storage.className }}
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
-            storage: 1Gi
+            storage: {{ .Values.postgres.storage.size }}

@@ -16,6 +16,11 @@ postgres:
   image: postgres:16
   user: loltest
   database: lolstats
+  # Solo cuentan al crear el StatefulSet. Kubernetes no deja cambiarlos después,
+  # así que en una instalación que ya existe hacen fallar el upgrade.
+  storage:
+    className: standard-retain
+    size: 1Gi
   resources:
     requests:
       cpu: 100m
