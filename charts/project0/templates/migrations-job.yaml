@@ -1,5 +1,5 @@
-# Aplica las migraciones pendientes y termina. El spec de un Job no se puede
-# cambiar, así que para otra versión hay que borrarlo y volver a crearlo.
+# Aplica las migraciones pendientes y termina. Es un hook de Helm, así que no
+# se aplica con lo demás sino en el momento que dice su anotación.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -8,6 +8,13 @@ metadata:
   labels:
     app.kubernetes.io/name: migrations
     {{- include "project0.labels" . | nindent 4 }}
+  annotations:
+    # En la primera instalación va después de crearlo todo, porque necesita
+    # PostgreSQL y project0-config. En los upgrades, antes de tocar la API.
+    helm.sh/hook: post-install,pre-upgrade
+    # El último Job se queda hasta el siguiente upgrade, para poder ver sus logs
+    # tanto si salió bien como si falló.
+    helm.sh/hook-delete-policy: before-hook-creation
 spec:
   # Una migración que falla vuelve a fallar igual, así que basta un reintento
   # para cubrir fallos que no tengan que ver con el SQL.
