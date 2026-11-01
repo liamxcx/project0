@@ -1,0 +1,6 @@
+# Va aquí y no en el chart porque Helm guarda la release dentro del namespace,
+# y helm uninstall lo borraría con todo lo de dentro, Secrets incluidos.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: project0
