@@ -4,7 +4,7 @@ Herramienta personal de estadísticas de League of Legends.
 Consume la API de Riot Games y guarda el historial de partidas en PostgreSQL.
 
 Proyecto para aprender DevOps con una aplicación real: contenedores con
-Docker y Compose, CI con GitHub Actions y despliegue en Kubernetes.
+Docker y Compose, CI con GitHub Actions y despliegue en Kubernetes con Helm.
 
 Solo se procesan partidas de Ranked Solo/Duo (queueId 420).
 
@@ -12,9 +12,9 @@ Solo se procesan partidas de Ranked Solo/Duo (queueId 420).
 
 El `collector`, base de datos con migraciones, API propia, una página que la
 consume y tests que se ejecutan en cada push. Todo corre en un clúster local
-de Kubernetes con kind, y la página se abre en `http://localhost`, entrando
-por Traefik (ver [Kubernetes](#kubernetes)). Compose se queda como entorno de
-desarrollo.
+de Kubernetes con kind, instalado con un chart de Helm propio, y la página se
+abre en `http://localhost`, entrando por Traefik (ver
+[Kubernetes](#kubernetes)). Compose se queda como entorno de desarrollo.
 
 ### Cómo encajan las piezas
 
@@ -86,14 +86,15 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
   navegador, por la misma puerta por la que llega la página.
 - **Tests** — pytest sobre los cinco endpoints y la caché, contra un
   PostgreSQL y un Redis propios, con datos inventados.
-- **CI** — GitHub Actions pasa Ruff, ejecuta los tests y construye las
-  imágenes en cada push, y marca cada commit en verde o en rojo. En `main`
-  sube además las imágenes a GitHub Container Registry.
+- **CI** — GitHub Actions pasa Ruff, ejecuta los tests, revisa el chart de
+  Helm y construye las imágenes en cada push, y marca cada commit en verde
+  o en rojo. En `main` sube además las imágenes a GitHub Container Registry.
 - **Kubernetes** — todo el proyecto en un clúster local con kind: la API y
   el frontend con dos réplicas cada uno, Redis, PostgreSQL y el `collector`,
-  que un CronJob lanza cada hora. Las imágenes salen del CI, el esquema lo
-  aplica un Job, los datos de PostgreSQL viven en un disco que se conserva y
-  el tráfico de fuera entra por Traefik con Gateway API.
+  que un CronJob lanza cada hora. Se instala con un chart de Helm propio,
+  las imágenes salen del CI, el esquema lo aplica un hook antes de cada
+  despliegue, los datos de PostgreSQL viven en un disco que se conserva y el
+  tráfico de fuera entra por Traefik con Gateway API.
 
 ### Qué falta
 
@@ -103,7 +104,7 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
 ## Requisitos
 
 - Docker
-- kind, kubectl y Helm, para el clúster local de Kubernetes
+- kind, kubectl y Helm 4, para el clúster local de Kubernetes
 - Una clave de la API de Riot: https://developer.riotgames.com
   La Development Key caduca cada 24 horas. Una personal key, que se pide
   registrando el proyecto en el portal, no caduca.
@@ -524,8 +525,9 @@ aplicación no arranca, en vez de trabajar sobre una base a medias.
 Flyway lleva la cuenta en una tabla de la propia base,
 `flyway_schema_history`, que se puede consultar como cualquier otra.
 
-En el clúster las aplica el Job `migrations`, con una imagen de Flyway que
-lleva los `.sql` dentro (ver [Desplegar una versión nueva](#desplegar-una-versión-nueva)).
+En el clúster las aplica el Job `migrations`, un hook de Helm que corre
+antes de cada despliegue, con una imagen de Flyway que lleva los `.sql`
+dentro (ver [Desplegar una versión nueva](#desplegar-una-versión-nueva)).
 
 ### Añadir un cambio
 
@@ -567,12 +569,30 @@ partidas.
 
 ## Copia de seguridad
 
+Desde Compose:
+
 ```bash
 mkdir -p backups
 docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > backups/project0-$(date +%F).dump
 ```
 
-Para restaurarla en una base vacía:
+Desde el clúster, igual pero dentro de `postgres-0`:
+
+```bash
+mkdir -p backups
+kubectl exec -n project0 postgres-0 -- sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > backups/project0-$(date +%F).dump
+```
+
+Va sin `-t` en `kubectl exec`, como con el `-T` de Compose, porque una
+terminal estropearía la salida binaria de `pg_dump`.
+
+Para ver qué tablas trae una copia sin restaurarla:
+
+```bash
+kubectl exec -i -n project0 postgres-0 -- pg_restore --list < backups/<fichero>.dump | grep 'TABLE DATA'
+```
+
+Para restaurarla en una base vacía de Compose:
 
 ```bash
 docker compose exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d <base>' < backups/<fichero>.dump
@@ -582,10 +602,12 @@ Para restaurarla en el clúster, sustituyendo lo que haya en `postgres-0`, y
 aplicar después las migraciones escritas desde la copia:
 
 ```bash
-kubectl exec -i postgres-0 -- sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --single-transaction' < backups/<fichero>.dump
-kubectl delete job migrations
-kubectl apply -f k8s/migrations-job.yaml
+kubectl exec -i -n project0 postgres-0 -- sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --single-transaction' < backups/<fichero>.dump
+helm upgrade project0 charts/project0 -n project0 --wait --timeout 5m
 ```
+
+El `helm upgrade` no cambia nada de la aplicación, pero lanza el hook de
+las migraciones.
 
 `--clean --if-exists` borra cada objeto de la copia antes de crearlo, y
 `--single-transaction` hace que, si algo falla, la base se quede como
@@ -784,10 +806,11 @@ Cada push, a cualquier rama, ejecuta el pipeline de GitHub Actions
 definido en `.github/workflows/ci.yml`. Así un cambio se puede probar en una
 rama antes de que llegue a `main`.
 
-El workflow tiene tres jobs, `lint`, `tests` y `build`. Arrancan a la vez,
-cada uno en su propia máquina Ubuntu que GitHub borra al acabar. Que falle
-uno no para a los otros, así que un fallo de formato no esconde si los
-tests pasan.
+El workflow tiene cuatro jobs, `lint`, `tests`, `chart-lint` y `build`. Los
+tres primeros arrancan a la vez, cada uno en su propia máquina Ubuntu que
+GitHub borra al acabar. Que falle uno no para a los otros, así que un fallo
+de formato no esconde si los tests pasan. `build` espera a que pasen los
+tres.
 
 ### lint
 
@@ -866,6 +889,22 @@ variables de la base y de Redis, y la API no exige ninguna más. Las de Riot
 solo las exige `collector.py` (ver Notas), y los tests no lo ejecutan. Por
 eso no hay ninguna clave de Riot guardada en GitHub.
 
+### chart-lint
+
+Revisa el chart de Helm de la aplicación:
+
+```bash
+helm lint --strict charts/project0
+```
+
+Comprueba que `Chart.yaml` está completo, que las plantillas se rellenan
+con los values sin errores y que el resultado es YAML válido. Con `--strict`
+fallan también los avisos, no solo los errores. No comprueba que el chart
+funcione en un clúster, solo que está bien escrito.
+
+Helm lo instala `azure/setup-helm`, fijado a la misma versión que se usa en
+local, para que `helm lint` dé el mismo resultado en los dos sitios.
+
 ### build
 
 Construye las tres imágenes del proyecto con las acciones oficiales de
@@ -892,16 +931,16 @@ ramas solo las construye para amd64 y no las sube, así que el aviso
 Las capas se guardan en la caché de Actions para no reconstruir lo que no
 ha cambiado.
 
-`build` solo arranca si `lint` y `tests` pasan, para no subir nunca una
-imagen con código que no los pasa. Si falla una de las copias, GitHub
-cancela las demás.
+`build` solo arranca si pasan `lint`, `tests` y `chart-lint`, para no subir
+nunca una imagen si el código falla o si el chart que la va a desplegar
+tiene errores. Si falla una de las copias, GitHub cancela las demás.
 
 ### El sistema del runner
 
-Los tres jobs usan `ubuntu-latest`, que GitHub mueve a la siguiente
+Todos los jobs usan `ubuntu-latest`, que GitHub mueve a la siguiente
 versión LTS cuando sale. Se deja así porque del sistema solo se usa Docker.
-Python lo instala `setup-python` en la versión indicada y lo demás va en
-contenedores con la imagen fijada.
+Python y Helm los instalan `setup-python` y `setup-helm` en la versión
+indicada, y lo demás va en contenedores con la imagen fijada.
 
 ## Kubernetes
 
@@ -920,14 +959,28 @@ Los puertos solo se fijan al crear el clúster, así que cambiar
 `kind-config.yaml` obliga a borrarlo y crearlo otra vez, y se pierde lo que
 haya dentro.
 
-### Desplegar
+La aplicación se instala con un chart de Helm propio, en `charts/project0`,
+como la release `project0` del namespace `project0`. Lo que va fuera del
+chart, como el namespace, la StorageClass y el Gateway, está en `platform/`.
 
-Los manifiestos están en `k8s/`. Las credenciales no están en el repo y van
-en Secrets que se crean a mano, después del namespace y antes del resto:
+### Instalar desde cero
+
+En un clúster recién creado, en este orden:
 
 ```bash
-kubectl apply -f k8s/00-namespace.yaml
+# 1. Los tipos de Gateway API, que no vienen con Kubernetes
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.3/standard-install.yaml
 
+# 2. Traefik, la entrada al clúster
+helm repo add traefik https://traefik.github.io/charts
+helm install traefik traefik/traefik --version 42.1.3 \
+  --namespace traefik --create-namespace \
+  --values platform/helm/traefik-values.yaml
+
+# 3. El namespace de la aplicación, la StorageClass y el Gateway
+kubectl apply -f platform/
+
+# 4. Los Secrets, que no están en el repo
 read -rs GHCR_TOKEN
 kubectl create secret docker-registry ghcr-pull -n project0 \
   --docker-server=ghcr.io --docker-username=<usuario de GitHub> \
@@ -939,71 +992,149 @@ kubectl create secret generic db-credentials -n project0 \
 kubectl create secret generic riot-credentials -n project0 \
   --from-literal=RIOT_API_KEY="$(grep '^RIOT_API_KEY=' .env | cut -d= -f2-)"
 
-kubectl apply -f k8s/
+# 5. La aplicación
+helm install project0 charts/project0 -n project0 --wait --timeout 5m
 ```
 
-El token es un token classic de GitHub con solo el permiso
-`read:packages`.
+El token de GHCR es un token classic de GitHub con solo el permiso
+`read:packages`. Los otros dos valores salen del `.env`.
 
-En el clúster, la configuración que no es secreta no sale del `.env`, sino de
-los ConfigMaps de `k8s/`. Tras cambiar uno, los pods no lo ven hasta que se
-recrean:
+El namespace y los Secrets van fuera del chart. Helm guarda la release
+dentro del namespace, y `helm uninstall` lo borraría con todo lo que tiene
+dentro. Y si los Secrets fueran plantillas del chart, sus valores
+acabarían en el historial de cada revisión.
 
-```bash
-kubectl rollout restart deployment/api
-```
-
-El `collector` no lo necesita, porque cada ejecución es un pod nuevo.
-
-En un clúster nuevo PostgreSQL arranca vacío, así que el Job `migrations`
-crea el esquema y los datos se traen restaurando una copia (ver
+En un clúster nuevo PostgreSQL arranca vacío. Al instalar, las migraciones
+crean el esquema, y los datos se traen restaurando una copia (ver
 [Copia de seguridad](#copia-de-seguridad)).
 
 Para llamar a las rutas de la API que no se publican, como `/ready` (el 8000
 lo ocupa Compose):
 
 ```bash
-kubectl get pods                              # api y frontend (dos de cada), redis y postgres-0 en 1/1
-kubectl port-forward service/api 8001:80      # y en otra terminal:
+kubectl get pods -n project0                          # api y frontend (dos de cada), redis y postgres-0 en 1/1
+kubectl port-forward -n project0 service/api 8001:80  # y en otra terminal:
 curl localhost:8001/ready
 ```
+
+### El chart
+
+`charts/project0` tiene cuatro partes:
+
+- `Chart.yaml` — el nombre y dos versiones. `version` es la del chart y se
+  sube a mano cuando cambian las plantillas o lo que se puede configurar.
+  `appVersion` es el tag de las imágenes que despliega.
+- `values.yaml` — lo que puede cambiar de un clúster a otro o con el
+  tiempo, como el tag, las réplicas, los recursos, el horario del
+  `collector`, la configuración de la API, el disco de PostgreSQL y el
+  Gateway del que cuelga la ruta.
+- `templates/` — una plantilla por objeto de la aplicación.
+- `templates/_helpers.tpl` — las etiquetas comunes y la regla del tag, que
+  usan varias plantillas.
+
+En el clúster, la configuración que no es secreta no sale del `.env`, sino
+de los ConfigMaps del chart, que se rellenan con `values.yaml`. La plantilla
+de los pods de la API lleva una suma de cada ConfigMap que lee, así que si
+un `helm upgrade` cambia uno de esos valores, cambia la suma y Kubernetes
+recrea los pods con el valor nuevo. El `collector` no lo necesita, porque
+cada ejecución es un pod nuevo.
+
+Las migraciones las aplica un hook de Helm, un Job que no se instala con lo
+demás sino en el momento que marca su anotación. En la primera instalación
+corre después de crearlo todo, porque necesita PostgreSQL, y en cada
+upgrade corre antes de tocar la API. El Job se queda hasta el siguiente
+upgrade, con sus logs.
+
+El disco de PostgreSQL (`postgres.storage`) solo se elige al crear el
+StatefulSet. Kubernetes no deja cambiar `volumeClaimTemplates` después, así
+que cambiarlo en una instalación que ya existe hace fallar el upgrade.
+
+Para revisar el chart y ver qué cambiaría antes de desplegar:
+
+```bash
+helm lint --strict charts/project0                                                 # lo mismo que hace el CI
+helm template project0 charts/project0 -n project0 --no-hooks | kubectl diff -f -  # la diferencia con el clúster
+```
+
+El diff va sin los hooks porque Kubernetes no deja cambiar el pod de un
+Job ya creado. Con una imagen nueva, el Job de las migraciones daría error
+en vez de enseñar la diferencia, y Helm lo recrea en cada upgrade de todos
+modos.
 
 ### Desplegar una versión nueva
 
 Cada push a `main` sube las tres imágenes con el SHA corto del commit. Para
-desplegarlas, se pone ese tag en el `image:` de `k8s/migrations-job.yaml`,
-`k8s/api-deployment.yaml`, `k8s/collector-cronjob.yaml` y
-`k8s/frontend-deployment.yaml`, y:
+desplegarlas, se pone ese tag en `appVersion`, en
+`charts/project0/Chart.yaml`, y:
 
 ```bash
-kubectl delete job migrations                 # el spec de un Job no se puede cambiar
-kubectl apply -f k8s/migrations-job.yaml
-kubectl wait --for=condition=complete job/migrations --timeout=5m
-kubectl diff -f k8s/                          # qué va a cambiar
-kubectl apply -f k8s/
-kubectl rollout status deployment/api         # espera al rolling update
-kubectl rollout status deployment/frontend
+helm upgrade project0 charts/project0 -n project0 --wait --timeout 5m
+helm history project0 -n project0                     # la revisión nueva, en deployed
 ```
+
+Helm lanza primero las migraciones y espera a que acaben, porque el código
+nuevo puede necesitar una columna nueva. Si fallan, el upgrade se para, la
+versión anterior sigue atendiendo y el motivo está en
+`kubectl logs job/migrations -n project0`. Después Helm aplica lo demás, y
+Kubernetes sustituye los pods de la API y del frontend de uno en uno. Con
+`--wait`, Helm no da el despliegue por bueno hasta que los nuevos están
+listos.
 
 El CronJob usa la imagen nueva desde su siguiente ejecución.
 
-Las migraciones van primero porque el código nuevo puede necesitar una
-columna nueva. Si el Job falla, la migración que falla se deshace y la API
-se queda como estaba. El motivo está en `kubectl logs job/migrations`.
+Un cambio en `values.yaml` o en una plantilla se despliega igual. Si
+cambian las plantillas o lo que se puede configurar, se sube también
+`version` en `Chart.yaml`.
 
-El commit del YAML se hace después de comprobar que funciona, para que lo
-que hay en `main` coincida siempre con lo desplegado.
+El commit se hace después de comprobar que funciona, para que lo que hay en
+`main` coincida siempre con lo desplegado.
+
+Los cambios se hacen siempre en el chart. Aplicar un manifiesto suelto con
+`kubectl apply` sobre la aplicación haría a `kubectl` dueño de esos campos,
+y el siguiente `helm upgrade` fallaría por conflicto.
+
+### Volver atrás
 
 Si el despliegue no termina, los pods viejos siguen atendiendo hasta que el
-nuevo pasa la readiness. Para ver qué falla y volver a la versión del
-último commit:
+nuevo pasa la readiness. Para ver qué falla:
 
 ```bash
-kubectl get pods
-kubectl describe pod <pod nuevo>              # los eventos, al final
-git restore k8s/api-deployment.yaml
-kubectl apply -f k8s/
+kubectl get pods -n project0
+kubectl describe pod <pod nuevo> -n project0          # los eventos, al final
 ```
+
+Para volver a una revisión anterior:
+
+```bash
+helm history project0 -n project0
+helm rollback project0 <revisión> -n project0 --wait --timeout 5m
+```
+
+El rollback crea una revisión nueva con lo que tenía la elegida. No vuelve a
+lanzar las migraciones ni deshace las que ya se aplicaron, porque solo van
+hacia delante. Tampoco toca el repo, así que después hay que dejar los
+ficheros como el clúster, por ejemplo con `git restore`, o el siguiente
+`upgrade` volvería a traer lo que falló.
+
+Un upgrade que falla puede dejar aplicada una parte de los objetos. Si un
+ConfigMap ya cambió en el upgrade fallido, el que lo arregla no cambia la
+suma y no recrea los pods, así que conviene comprobar que tienen la
+configuración nueva, por ejemplo con
+`kubectl exec -n project0 deploy/api -- printenv CACHE_TTL_SECONDS`.
+
+### De manifiestos sueltos a Helm
+
+Antes del chart, la aplicación se desplegaba con manifiestos sueltos y
+`kubectl apply`. Se pasó a Helm sin caída, adoptando los objetos que ya
+corrían en vez de recrearlos. Para eso se les puso la etiqueta
+`app.kubernetes.io/managed-by: Helm` y las dos anotaciones
+`meta.helm.sh/…` con las que Helm reconoce lo suyo.
+
+Helm 4 aplica con server-side apply, en el que el apiserver apunta qué
+herramienta es dueña de cada campo (los `managedFields`). Los campos que
+había escrito `kubectl` seguían siendo también suyos y bloqueaban los
+cambios, así que se quitó a `kubectl` de los `managedFields` de cada objeto
+con `kubectl patch`.
 
 ### PostgreSQL
 
@@ -1014,7 +1145,7 @@ crea a partir de `volumeClaimTemplates`. Si se borra el pod, vuelve con el
 mismo nombre y el mismo disco, aunque con otra IP.
 
 El disco usa la StorageClass `standard-retain`, definida en
-`k8s/01-storageclass.yaml`. Es igual que la `standard` de kind, pero con
+`platform/storageclass.yaml`. Es igual que la `standard` de kind, pero con
 `reclaimPolicy: Retain`. Con la de kind, borrar el PVC borraría también los
 datos. Con esta, el PV queda en `Released` y los datos siguen en el nodo
 hasta que alguien los borre a mano. Ninguna de las dos sobrevive a
@@ -1038,10 +1169,10 @@ el `collector` no vuelve a pedir las que ya tiene, ejecutarlo más a menudo
 tampoco gastaría peticiones de más.
 
 ```bash
-kubectl get cronjob collector                 # horario y última ejecución
-kubectl get jobs                              # una por hora, Complete o Failed
-kubectl logs -l app.kubernetes.io/name=collector --prefix --tail=-1
-kubectl create job collector-manual --from=cronjob/collector   # ejecutarlo ya
+kubectl get cronjob collector -n project0     # horario y última ejecución
+kubectl get jobs -n project0                  # una por hora, Complete o Failed
+kubectl logs -n project0 -l app.kubernetes.io/name=collector --prefix --tail=-1
+kubectl create job collector-manual -n project0 --from=cronjob/collector   # ejecutarlo ya
 ```
 
 Se guardan los Jobs, con sus logs, de las 3 últimas ejecuciones buenas y de
@@ -1059,9 +1190,10 @@ Cuando algo va mal:
 - Si termina con error se reintenta una vez, y si pasa de 10 minutos se
   corta.
 
-Cada ejecución mira las últimas `MATCH_COUNT` partidas (20, en el ConfigMap
-`collector-config`). Si se juegan más con el clúster parado, las más
-antiguas se recuperan lanzándolo a mano con un `MATCH_COUNT` más alto.
+Cada ejecución mira las últimas `MATCH_COUNT` partidas (20, en
+`collector.matchCount` de `values.yaml`). Si se juegan más con el clúster
+parado, las más antiguas se recuperan lanzándolo a mano con un
+`MATCH_COUNT` más alto.
 
 ### Frontend
 
@@ -1076,31 +1208,19 @@ nueva, como el resto del código. La sirven dos réplicas detrás del Service
 
 El tráfico de fuera entra por Traefik, que lee los `Gateway` y `HTTPRoute`
 de Gateway API. Su configuración está en `platform/`, aparte de la de la
-aplicación. Se instala una vez por clúster, en este orden:
-
-```bash
-# 1. Los tipos de Gateway API, que no vienen con Kubernetes
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.3/standard-install.yaml
-
-# 2. Traefik
-helm repo add traefik https://traefik.github.io/charts
-helm install traefik traefik/traefik --version 42.1.3 \
-  --namespace traefik --create-namespace \
-  --values platform/helm/traefik-values.yaml
-
-# 3. El Gateway public, que acepta rutas de project0
-kubectl apply -f platform/
-```
+aplicación, y se instala una vez por clúster (ver
+[Instalar desde cero](#instalar-desde-cero)).
 
 En kind, Traefik escucha en el 80 de `project0-worker`, que kind une con el
 80 de la máquina. En un clúster real iría detrás de un Service
 `LoadBalancer`.
 
-Para cambiar un value, se edita `traefik-values.yaml` y se ejecuta el mismo
-comando con `upgrade` en vez de `install`, siempre con `--values`.
+Para cambiar un value de Traefik, se edita `traefik-values.yaml` y se
+ejecuta el comando de la instalación con `upgrade` en vez de `install`,
+siempre con `--values`.
 
-Las reglas de project0 van en la HTTPRoute `project0`, en
-`k8s/project0-httproute.yaml`, colgada del Gateway `public`:
+Las reglas de project0 van en la HTTPRoute `project0`, una plantilla más del
+chart, colgada del Gateway `public` (`gateway` en `values.yaml`):
 
 ```
 /api/matches   →  Service api, como /matches
@@ -1112,18 +1232,18 @@ filtro `URLRewrite`. Solo se publica la ruta que usa la página. `/health`,
 `/ready`, `/docs` y el resto de la API se quedan dentro del clúster.
 
 ```bash
-helm list -n traefik                  # la release y su revisión
-kubectl get gateway -n traefik        # public, con PROGRAMMED True
-kubectl describe httproute project0   # Accepted y ResolvedRefs en True
-curl -i http://localhost/api/matches  # la API, a través de Traefik
+helm list -n traefik                              # la release y su revisión
+kubectl get gateway -n traefik                    # public, con PROGRAMMED True
+kubectl describe httproute project0 -n project0   # Accepted y ResolvedRefs en True
+curl -i http://localhost/api/matches              # la API, a través de Traefik
 ```
 
 ## Estructura
 
 ```
-test_api.py             los tests de la API                  → se lanzan con pytest
+test_api.py             los tests de la API                   → se lanzan con pytest
 conftest.py             prepara la base y los datos de test
-collector.py            baja partidas de Riot y las guarda   → servicio collector
+collector.py            baja partidas de Riot y las guarda    → servicio collector
 api.py                  sirve lo guardado, cinco endpoints    → servicio api
 config.py               la configuración, en un solo sitio    → lo importan los dos
 migrations/             el esquema, versionado paso a paso    → servicio flyway y Job migrations
@@ -1135,9 +1255,9 @@ frontend/borrador/      notas para trabajar el diseño aparte
 Dockerfile              la imagen de collector y api
 docker-compose.yml      los seis servicios, el volumen y los healthchecks
 docker-compose.test.yml la base y el Redis de test, aparte
-kind-config.yaml        el clúster local de Kubernetes       → kind create cluster
-k8s/                    los manifiestos del clúster           → kubectl apply -f k8s/
-platform/               la entrada al clúster (el Gateway)    → kubectl apply -f platform/
+kind-config.yaml        el clúster local de Kubernetes        → kind create cluster
+charts/project0/        el chart de Helm de la aplicación     → helm install / upgrade
+platform/               namespace, StorageClass y Gateway     → kubectl apply -f platform/
 platform/helm/          los values del chart de Traefik       → helm install / upgrade
 requirements.txt        dependencias de Python, con versiones fijadas
 requirements-dev.txt    pytest, Ruff y compañía, fuera de la imagen
