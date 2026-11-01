@@ -41,10 +41,22 @@ jobs:
 
       - run: pytest -v
 
+  chart-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # La misma versión de Helm que en local, para que el CI dé lo mismo
+      - uses: azure/setup-helm@v5
+        with:
+          version: v4.3.1
+
+      - run: helm lint --strict charts/project0
+
   build:
-    # Solo se construye si el código pasa el lint y los tests, porque estas
-    # imágenes son las que se acabarán desplegando.
-    needs: [lint, tests]
+    # Solo se construye si pasan el lint, los tests y el chart, porque estas
+    # imágenes son las que se acabarán desplegando con él.
+    needs: [lint, tests, chart-lint]
     # Una copia de este job por imagen. Todas llevan el SHA del mismo commit,
     # así que se despliegan juntas con el mismo tag.
     strategy:
