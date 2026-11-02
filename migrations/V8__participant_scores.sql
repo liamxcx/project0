@@ -29,19 +29,23 @@ scores AS (
            -- Cada estadística se divide por la mejor de los diez, para que una
            -- partida larga no dé notas más altas que una corta
            CASE WHEN players = 10 THEN
-               ROUND(10 * (
+               10 * (
                      kda / NULLIF(MAX(kda) OVER match, 0)
                    + kill_participation / NULLIF(MAX(kill_participation) OVER match, 0)
                    + damage / NULLIF(MAX(damage) OVER match, 0)
-                   + vision / NULLIF(MAX(vision) OVER match, 0)
-               ) / 4, 1)
+                   -- La visión cuenta la mitad porque se puede inflar poniendo
+                   -- guardianes sin que cueste nada
+                   + 0.5 * vision / NULLIF(MAX(vision) OVER match, 0)
+               ) / 3.5
            END AS score
     FROM stats
     WINDOW match AS (PARTITION BY match_id)
 )
 SELECT match_id,
        participant_id,
-       score,
+       -- Se redondea al final, porque ordenar por la nota redondeada daría
+       -- empates que no son reales
+       ROUND(score, 1) AS score,
        -- Las partidas guardadas antes de tener el daño o los diez jugadores no
        -- tienen nota, así que tampoco se les pone sello
        CASE
