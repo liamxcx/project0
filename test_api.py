@@ -69,6 +69,35 @@ def test_matches_filters_by_patch(seeded_db):
     assert response.json() == []
 
 
+def test_matches_returns_pages_of_20(seeded_db):
+    # Veinte partidas con Jinx, más recientes que las de SEED_SQL
+    with psycopg.connect(DB_URL) as connection:
+        connection.execute(
+            """
+            INSERT INTO matches (match_id, played_at, duration_seconds, queue_id, game_version)
+            SELECT 'EUW1_J' || n, '2026-10-01 20:00+02'::timestamptz + n * interval '1 hour',
+                   1800, 420, '16.20.123.4567'
+            FROM generate_series(1, 20) AS n;
+
+            INSERT INTO participants
+                (match_id, participant_id, puuid, champion, kills, deaths, assists, win)
+            SELECT 'EUW1_J' || n, 1, 'yo', 'Jinx', 5, 5, 5, true
+            FROM generate_series(1, 20) AS n;
+            """
+        )
+
+    first_page = client.get("/matches").json()
+    assert len(first_page) == 20
+    assert all(m["champion"] == "Jinx" for m in first_page)
+
+    # La segunda página son las tres de SEED_SQL, que son más antiguas
+    second_page = client.get("/matches", params={"offset": 20}).json()
+    assert [m["match_id"] for m in second_page] == ["EUW1_3", "EUW1_2", "EUW1_1"]
+
+    # Un offset negativo no tiene sentido y FastAPI lo rechaza
+    assert client.get("/matches", params={"offset": -1}).status_code == 422
+
+
 def test_matches_includes_badge(full_match):
     response = client.get("/matches")
 

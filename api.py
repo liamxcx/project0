@@ -3,7 +3,7 @@ import logging
 
 import psycopg
 import redis
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from psycopg.rows import dict_row
 
@@ -106,8 +106,8 @@ def summoners():
 
 
 @app.get("/matches")
-def matches(patch: str | None = None):
-    key = f"matches:{patch or 'latest'}"
+def matches(patch: str | None = None, offset: int = Query(default=0, ge=0)):
+    key = f"matches:{patch or 'all'}:{offset}"
 
     cached = cache_get(key)
     if cached is not None:
@@ -140,11 +140,10 @@ def matches(patch: str | None = None):
             WHERE p.puuid IS NOT NULL
               AND (%(patch)s::text IS NULL OR {PATCH_SQL} = %(patch)s)
             ORDER BY m.played_at DESC
-            LIMIT %(limit)s
+            -- De 20 en 20. La página pide la siguiente con offset=20, 40...
+            LIMIT 20 OFFSET %(offset)s
             """,
-            # Sin parche, las 20 últimas. Con parche, todas las de ese parche,
-            # porque LIMIT NULL en PostgreSQL es sin límite.
-            {"patch": patch, "limit": None if patch else 20},
+            {"patch": patch, "offset": offset},
         )
         rows = jsonable_encoder(cursor.fetchall())
 
