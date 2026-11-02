@@ -54,6 +54,27 @@ PATCH_SQL = (
     " || '.' || split_part(m.game_version, '.', 2)"
 )
 
+# Las partidas que cuentan para las estadísticas: las de un parche si se pide,
+# y si no, las de la temporada actual. Va dentro de un WITH selected AS (...).
+SELECTED_MATCHES_SQL = f"""
+    SELECT m.match_id
+    FROM participants p
+    JOIN matches m ON m.match_id = p.match_id
+    WHERE p.puuid IS NOT NULL
+      AND CASE
+          -- La temporada es el primer número de la versión interna, el mismo
+          -- que el de la partida más reciente
+          WHEN %(patch)s::text IS NULL THEN
+              split_part(m.game_version, '.', 1) = (
+                  SELECT split_part(game_version, '.', 1)
+                  FROM matches
+                  ORDER BY played_at DESC
+                  LIMIT 1
+              )
+          ELSE {PATCH_SQL} = %(patch)s
+      END
+"""
+
 
 # Solo dice que el proceso responde. No comprueba nada externo, porque
 # Kubernetes reinicia el contenedor si falla y reiniciar no arregla la base.
@@ -295,6 +316,47 @@ def patches():
     return rows
 
 
+@app.get("/summary")
+def summary(patch: str | None = None):
+    key = f"summary:{patch or 'season'}"
+
+    cached = cache_get(key)
+    if cached is not None:
+        return json.loads(cached)
+
+    with (
+        psycopg.connect(DB_URL, row_factory=dict_row) as connection,
+        connection.cursor() as cursor,
+    ):
+        cursor.execute(
+            f"""
+            WITH selected AS ({SELECTED_MATCHES_SQL})
+            SELECT COUNT(*) AS games,
+                   COUNT(*) FILTER (WHERE p.win) AS wins,
+                   COUNT(*) FILTER (WHERE NOT p.win) AS losses,
+                   ROUND(100.0 * COUNT(*) FILTER (WHERE p.win) / NULLIF(COUNT(*), 0), 1)
+                       AS winrate_pct,
+                   ROUND(AVG(p.kills), 1) AS avg_kills,
+                   ROUND(AVG(p.deaths), 1) AS avg_deaths,
+                   ROUND(AVG(p.assists), 1) AS avg_assists,
+                   -- Con los totales y no como media de cada partida, porque una
+                   -- partida sin muertes daría un ratio enorme que se comería la media
+                   ROUND((SUM(p.kills) + SUM(p.assists))::numeric
+                         / GREATEST(SUM(p.deaths), 1), 2) AS kda_ratio,
+                   ROUND(AVG(m.duration_seconds)) AS avg_duration_seconds
+            FROM participants p
+            JOIN matches m ON m.match_id = p.match_id
+            WHERE p.puuid IS NOT NULL
+              AND p.match_id IN (SELECT match_id FROM selected)
+            """,
+            {"patch": patch},
+        )
+        row = jsonable_encoder(cursor.fetchone())
+
+    cache_set(key, json.dumps(row))
+    return row
+
+
 @app.get("/champions")
 def champions(patch: str | None = None):
     # Lleva "list" para no chocar con las claves de /champions/{champion}
@@ -310,24 +372,7 @@ def champions(patch: str | None = None):
     ):
         cursor.execute(
             f"""
-            WITH selected AS (
-                SELECT m.match_id
-                FROM participants p
-                JOIN matches m ON m.match_id = p.match_id
-                WHERE p.puuid IS NOT NULL
-                  AND CASE
-                      -- Sin parche, la temporada actual. Es el primer número de la
-                      -- versión interna, el mismo que el de la partida más reciente.
-                      WHEN %(patch)s::text IS NULL THEN
-                          split_part(m.game_version, '.', 1) = (
-                              SELECT split_part(game_version, '.', 1)
-                              FROM matches
-                              ORDER BY played_at DESC
-                              LIMIT 1
-                          )
-                      ELSE {PATCH_SQL} = %(patch)s
-                  END
-            )
+            WITH selected AS ({SELECTED_MATCHES_SQL})
             {CHAMPION_STATS_SELECT}
               AND match_id IN (SELECT match_id FROM selected)
             GROUP BY champion
