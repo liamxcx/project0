@@ -70,6 +70,33 @@ def ready():
     return {"estado": "listo"}
 
 
+# Solo los invocadores seguidos tienen fila en summoners, porque de los otros
+# nueve jugadores de cada partida no se guarda la identidad
+@app.get("/summoners")
+def summoners():
+    key = "summoners:all"
+
+    cached = cache_get(key)
+    if cached is not None:
+        return json.loads(cached)
+
+    with (
+        psycopg.connect(DB_URL, row_factory=dict_row) as connection,
+        connection.cursor() as cursor,
+    ):
+        cursor.execute(
+            """
+            SELECT game_name, tag_line
+            FROM summoners
+            ORDER BY game_name
+            """
+        )
+        rows = jsonable_encoder(cursor.fetchall())
+
+    cache_set(key, json.dumps(rows))
+    return rows
+
+
 @app.get("/matches")
 def matches():
     key = "matches:latest"

@@ -34,6 +34,13 @@ def test_ready_returns_503_when_postgres_is_down(monkeypatch):
     assert response.status_code == 503
 
 
+def test_summoners_returns_followed_summoners(seeded_db):
+    response = client.get("/summoners")
+
+    assert response.status_code == 200
+    assert response.json() == [{"game_name": "Invocador", "tag_line": "TEST"}]
+
+
 def test_matches_returns_only_own_matches(seeded_db):
     response = client.get("/matches")
 
