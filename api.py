@@ -340,17 +340,8 @@ def summary(patch: str | None = None):
                    COUNT(*) FILTER (WHERE p.win) AS wins,
                    COUNT(*) FILTER (WHERE NOT p.win) AS losses,
                    ROUND(100.0 * COUNT(*) FILTER (WHERE p.win) / NULLIF(COUNT(*), 0), 1)
-                       AS winrate_pct,
-                   ROUND(AVG(p.kills), 1) AS avg_kills,
-                   ROUND(AVG(p.deaths), 1) AS avg_deaths,
-                   ROUND(AVG(p.assists), 1) AS avg_assists,
-                   -- Con los totales y no como media de cada partida, porque una
-                   -- partida sin muertes daría un ratio enorme que se comería la media
-                   ROUND((SUM(p.kills) + SUM(p.assists))::numeric
-                         / GREATEST(SUM(p.deaths), 1), 2) AS kda_ratio,
-                   ROUND(AVG(m.duration_seconds)) AS avg_duration_seconds
+                       AS winrate_pct
             FROM participants p
-            JOIN matches m ON m.match_id = p.match_id
             WHERE p.puuid IS NOT NULL
               AND p.match_id IN (SELECT match_id FROM selected)
             """,

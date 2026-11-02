@@ -166,29 +166,25 @@ def test_summary_of_the_season(seeded_db):
     response = client.get("/summary")
 
     assert response.status_code == 200
-    # Las tres partidas de SEED_SQL: 14/13/29 en total y 5.400 segundos
+    # Las tres partidas de SEED_SQL: dos victorias y una derrota
     assert response.json() == {
         "games": 3,
         "wins": 2,
         "losses": 1,
         "winrate_pct": 66.7,
-        "avg_kills": 4.7,
-        "avg_deaths": 4.3,
-        "avg_assists": 9.7,
-        "kda_ratio": 3.31,
-        "avg_duration_seconds": 1800,
     }
 
 
 def test_summary_filters_by_patch(seeded_db):
     response = client.get("/summary", params={"patch": "26.17"})
 
-    summary = response.json()
-    # EUW1_1 y EUW1_2: una victoria y una derrota, (13 + 9) / 9 y 3.300 segundos
-    assert summary["games"] == 2
-    assert summary["winrate_pct"] == 50.0
-    assert summary["kda_ratio"] == 2.44
-    assert summary["avg_duration_seconds"] == 1650
+    # EUW1_1 y EUW1_2: una victoria y una derrota
+    assert response.json() == {
+        "games": 2,
+        "wins": 1,
+        "losses": 1,
+        "winrate_pct": 50.0,
+    }
 
 
 def test_champions_groups_by_champion(seeded_db):
