@@ -140,6 +140,57 @@ def test_champions_groups_by_champion(seeded_db):
     assert ahri["avg_kills"] == 6.5
 
 
+def test_champions_counts_every_match_of_the_season(seeded_db):
+    # Veinte partidas con Jinx, más recientes que las de SEED_SQL
+    with psycopg.connect(DB_URL) as connection:
+        connection.execute(
+            """
+            INSERT INTO matches (match_id, played_at, duration_seconds, queue_id, game_version)
+            SELECT 'EUW1_J' || n, '2026-10-01 20:00+02'::timestamptz + n * interval '1 hour',
+                   1800, 420, '16.20.123.4567'
+            FROM generate_series(1, 20) AS n;
+
+            INSERT INTO participants
+                (match_id, participant_id, puuid, champion, kills, deaths, assists, win)
+            SELECT 'EUW1_J' || n, 1, 'yo', 'Jinx', 5, 5, 5, true
+            FROM generate_series(1, 20) AS n;
+            """
+        )
+
+    response = client.get("/champions")
+
+    # No se queda en las 20 últimas: Ahri y Lux siguen contando
+    champions = response.json()
+    assert [c["champion"] for c in champions] == ["Jinx", "Ahri", "Lux"]
+    assert champions[0]["games"] == 20
+
+
+def test_champions_ignores_previous_seasons(seeded_db):
+    # Una partida con Zed de la temporada anterior, la 15
+    with psycopg.connect(DB_URL) as connection:
+        connection.execute(
+            """
+            INSERT INTO matches (match_id, played_at, duration_seconds, queue_id, game_version)
+            VALUES ('EUW1_0', '2025-12-20 20:00+01', 1800, 420, '15.24.123.4567');
+
+            INSERT INTO participants
+                (match_id, participant_id, puuid, champion, kills, deaths, assists, win)
+            VALUES ('EUW1_0', 1, 'yo', 'Zed', 5, 5, 5, true);
+            """
+        )
+
+    response = client.get("/champions")
+
+    assert [c["champion"] for c in response.json()] == ["Ahri", "Lux"]
+
+
+def test_champions_filters_by_patch(seeded_db):
+    response = client.get("/champions", params={"patch": "26.17"})
+
+    # Lux solo jugó en la 26.18
+    assert [c["champion"] for c in response.json()] == ["Ahri"]
+
+
 def test_champion_stats_is_case_insensitive(seeded_db):
     response = client.get("/champions/ahri")
 

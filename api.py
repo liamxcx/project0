@@ -297,8 +297,9 @@ def patches():
 
 
 @app.get("/champions")
-def champions():
-    key = "champions:all"
+def champions(patch: str | None = None):
+    # Lleva "list" para no chocar con las claves de /champions/{champion}
+    key = f"champions:list:{patch or 'season'}"
 
     cached = cache_get(key)
     if cached is not None:
@@ -309,11 +310,31 @@ def champions():
         connection.cursor() as cursor,
     ):
         cursor.execute(
-            CHAMPION_STATS_SELECT
-            + """
+            f"""
+            WITH selected AS (
+                SELECT m.match_id
+                FROM participants p
+                JOIN matches m ON m.match_id = p.match_id
+                WHERE p.puuid IS NOT NULL
+                  AND CASE
+                      -- Sin parche, la temporada actual. Es el primer número de la
+                      -- versión interna, el mismo que el de la partida más reciente.
+                      WHEN %(patch)s::text IS NULL THEN
+                          split_part(m.game_version, '.', 1) = (
+                              SELECT split_part(game_version, '.', 1)
+                              FROM matches
+                              ORDER BY played_at DESC
+                              LIMIT 1
+                          )
+                      ELSE {PATCH_SQL} = %(patch)s
+                  END
+            )
+            {CHAMPION_STATS_SELECT}
+              AND match_id IN (SELECT match_id FROM selected)
             GROUP BY champion
             ORDER BY games DESC, champion
-            """
+            """,
+            {"patch": patch},
         )
         rows = jsonable_encoder(cursor.fetchall())
 
