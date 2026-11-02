@@ -127,8 +127,12 @@ def summoners():
 
 
 @app.get("/matches")
-def matches(patch: str | None = None, offset: int = Query(default=0, ge=0)):
-    key = f"matches:{patch or 'all'}:{offset}"
+def matches(
+    patch: str | None = None,
+    champion: str | None = None,
+    offset: int = Query(default=0, ge=0),
+):
+    key = f"matches:{patch or 'all'}:{champion or 'all'}:{offset}"
 
     cached = cache_get(key)
     if cached is not None:
@@ -160,11 +164,12 @@ def matches(patch: str | None = None, offset: int = Query(default=0, ge=0)):
             -- solo los invocadores seguidos tienen puuid
             WHERE p.puuid IS NOT NULL
               AND (%(patch)s::text IS NULL OR {PATCH_SQL} = %(patch)s)
+              AND (%(champion)s::text IS NULL OR p.champion = %(champion)s)
             ORDER BY m.played_at DESC
             -- De 20 en 20. La página pide la siguiente con offset=20, 40...
             LIMIT 20 OFFSET %(offset)s
             """,
-            {"patch": patch, "offset": offset},
+            {"patch": patch, "champion": champion, "offset": offset},
         )
         rows = jsonable_encoder(cursor.fetchall())
 

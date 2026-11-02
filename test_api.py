@@ -69,6 +69,17 @@ def test_matches_filters_by_patch(seeded_db):
     assert response.json() == []
 
 
+def test_matches_filters_by_champion(seeded_db):
+    response = client.get("/matches", params={"champion": "Ahri"})
+
+    # Tus dos partidas con Ahri. La Ahri rival de EUW1_3 no es tuya.
+    assert [m["match_id"] for m in response.json()] == ["EUW1_2", "EUW1_1"]
+
+    # Se combina con el parche: Lux solo jugó en la 26.18
+    response = client.get("/matches", params={"champion": "Lux", "patch": "26.17"})
+    assert response.json() == []
+
+
 def test_matches_returns_pages_of_20(seeded_db):
     # Veinte partidas con Jinx, más recientes que las de SEED_SQL
     with psycopg.connect(DB_URL) as connection:
