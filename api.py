@@ -142,6 +142,123 @@ def matches():
     return rows
 
 
+def load_match_detail(match_id):
+    """Devuelve el detalle de una partida, o None si no hay ninguna tuya con ese id."""
+    with (
+        psycopg.connect(DB_URL, row_factory=dict_row) as connection,
+        connection.cursor() as cursor,
+    ):
+        # Hoy solo se sigue a un invocador. Con varios en la misma partida
+        # habría que indicar de cuál se quiere el detalle.
+        cursor.execute(
+            """
+            SELECT m.match_id,
+                   m.played_at,
+                   m.duration_seconds,
+                   -- El parche público va 10 por delante del interno; ver el README
+                   (split_part(m.game_version, '.', 1)::int + 10)
+                       || '.' || split_part(m.game_version, '.', 2) AS patch,
+                   p.participant_id,
+                   p.champion,
+                   p.position,
+                   p.kills,
+                   p.deaths,
+                   p.assists,
+                   p.win,
+                   p.damage_to_champions,
+                   p.damage_taken,
+                   p.gold_earned,
+                   p.minions_killed + p.neutral_minions_killed AS cs,
+                   p.vision_score,
+                   p.wards_placed,
+                   ROUND(100.0 * (p.kills + p.assists) / NULLIF(t.kills, 0), 1)
+                       AS kill_participation_pct,
+                   ROUND(100.0 * p.damage_to_champions / NULLIF(t.damage, 0), 1)
+                       AS damage_share_pct,
+                   ARRAY[p.item0, p.item1, p.item2, p.item3, p.item4, p.item5, p.item6]
+                       AS items,
+                   ARRAY[p.summoner1_id, p.summoner2_id] AS summoner_spells
+            FROM participants p
+            JOIN matches m ON m.match_id = p.match_id
+            -- Totales de cada equipo. Las partidas guardadas antes de tener a
+            -- los diez no tienen team_id, y ahí los porcentajes salen a NULL.
+            LEFT JOIN (
+                SELECT team_id,
+                       SUM(kills) AS kills,
+                       SUM(damage_to_champions) AS damage
+                FROM participants
+                WHERE match_id = %(match_id)s
+                GROUP BY team_id
+            ) t ON t.team_id = p.team_id
+            WHERE p.match_id = %(match_id)s
+              AND p.puuid IS NOT NULL
+            """,
+            {"match_id": match_id},
+        )
+        me = cursor.fetchone()
+        if me is None:
+            return None
+
+        cursor.execute(
+            """
+            SELECT item_id, timestamp_ms / 60000 AS minute
+            FROM item_purchases
+            WHERE match_id = %s AND participant_id = %s
+            ORDER BY timestamp_ms, id
+            """,
+            (match_id, me["participant_id"]),
+        )
+        me["purchases"] = cursor.fetchall()
+
+        cursor.execute(
+            """
+            SELECT p.participant_id,
+                   p.team_id,
+                   p.champion,
+                   p.position,
+                   p.kills,
+                   p.deaths,
+                   p.assists,
+                   p.win,
+                   su.game_name || '#' || su.tag_line AS riot_id,
+                   sc.score,
+                   sc.badge
+            FROM participants p
+            JOIN participant_scores sc
+                ON sc.match_id = p.match_id AND sc.participant_id = p.participant_id
+            LEFT JOIN summoners su ON su.puuid = p.puuid
+            WHERE p.match_id = %s
+            ORDER BY p.participant_id
+            """,
+            (match_id,),
+        )
+        players = cursor.fetchall()
+
+    # Los datos de la partida van fuera de me, porque son de los diez
+    match_fields = ["match_id", "played_at", "duration_seconds", "patch"]
+    detail = {field: me.pop(field) for field in match_fields}
+    detail["me"] = me
+    detail["players"] = players
+    return jsonable_encoder(detail)
+
+
+@app.get("/matches/{match_id}")
+def match_detail(match_id: str):
+    key = f"match:{match_id}"
+
+    cached = cache_get(key)
+    if cached is not None:
+        detail = json.loads(cached)
+    else:
+        detail = load_match_detail(match_id)
+        cache_set(key, json.dumps(detail))
+
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"Sin la partida {match_id}")
+
+    return detail
+
+
 @app.get("/champions")
 def champions():
     key = "champions:all"

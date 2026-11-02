@@ -37,6 +37,29 @@ SEED_SQL = """
         ('EUW1_3', 6, NULL, 'Ahri',  'MIDDLE',   5,  5,  5, false);
 """
 
+# Una cuarta partida con los diez jugadores, para lo que necesita al equipo
+# entero: la nota, los sellos y los porcentajes. Tú eres el jugador 1, el
+# mejor en todo, y ganas. Las compras del jugador 6 no deben salir en las tuyas.
+FULL_MATCH_SQL = """
+    INSERT INTO matches (match_id, played_at, duration_seconds, queue_id, game_version)
+    VALUES ('EUW1_4', '2026-09-04 20:00+02', 1800, 420, '16.18.123.4567');
+
+    INSERT INTO participants
+        (match_id, participant_id, puuid, champion, kills, deaths, assists,
+         win, team_id, damage_to_champions, vision_score)
+    SELECT 'EUW1_4', n, CASE WHEN n = 1 THEN 'yo' END, 'Ahri',
+           CASE WHEN n = 1 THEN 10 ELSE 1 END, 5, 1,
+           n <= 5, CASE WHEN n <= 5 THEN 100 ELSE 200 END,
+           CASE WHEN n = 1 THEN 30000 ELSE 10000 END, 20
+    FROM generate_series(1, 10) AS n;
+
+    INSERT INTO item_purchases (match_id, participant_id, item_id, timestamp_ms)
+    VALUES
+        ('EUW1_4', 1, 1055, 1500),
+        ('EUW1_4', 1, 3089, 725000),
+        ('EUW1_4', 6, 1056, 2000);
+"""
+
 CLEAR_SQL = "TRUNCATE summoners, matches, participants, item_purchases, skill_levelups"
 
 
@@ -57,6 +80,15 @@ def seeded_db():
 
     with psycopg.connect(DB_URL) as connection:
         connection.execute(CLEAR_SQL)
+
+
+@pytest.fixture
+def full_match(seeded_db):
+    """Añade FULL_MATCH_SQL a los datos de seeded_db, que la borra al acabar."""
+    from config import DB_URL
+
+    with psycopg.connect(DB_URL) as connection:
+        connection.execute(FULL_MATCH_SQL)
 
 
 def pytest_configure(config):

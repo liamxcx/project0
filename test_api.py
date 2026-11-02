@@ -58,30 +58,46 @@ def test_matches_returns_only_own_matches(seeded_db):
     assert matches[0]["patch"] == "26.18"
 
 
-def test_matches_includes_badge(seeded_db):
-    # Las partidas de SEED_SQL solo tienen dos jugadores, así que no tienen
-    # nota. Esta tiene los diez, y tú eres el mejor en todo y ganas.
-    with psycopg.connect(DB_URL) as connection:
-        connection.execute(
-            """
-            INSERT INTO matches (match_id, played_at, duration_seconds, queue_id, game_version)
-            VALUES ('EUW1_4', '2026-09-04 20:00+02', 1800, 420, '16.18.123.4567');
-
-            INSERT INTO participants
-                (match_id, participant_id, puuid, champion, kills, deaths, assists,
-                 win, team_id, damage_to_champions, vision_score)
-            SELECT 'EUW1_4', n, CASE WHEN n = 1 THEN 'yo' END, 'Ahri',
-                   CASE WHEN n = 1 THEN 10 ELSE 1 END, 5, 1,
-                   n <= 5, CASE WHEN n <= 5 THEN 100 ELSE 200 END,
-                   CASE WHEN n = 1 THEN 30000 ELSE 10000 END, 20
-            FROM generate_series(1, 10) AS n;
-            """
-        )
-
+def test_matches_includes_badge(full_match):
     response = client.get("/matches")
 
+    # Las partidas de SEED_SQL solo tienen dos jugadores, así que no tienen nota
     badges = {m["match_id"]: m["badge"] for m in response.json()}
     assert badges == {"EUW1_4": "MVP", "EUW1_3": None, "EUW1_2": None, "EUW1_1": None}
+
+
+def test_match_detail_returns_me_and_players(full_match):
+    response = client.get("/matches/EUW1_4")
+
+    assert response.status_code == 200
+    detail = response.json()
+    assert detail["patch"] == "26.18"
+
+    me = detail["me"]
+    assert me["participant_id"] == 1
+    # (10 + 1) de los 14 asesinatos de tu equipo
+    assert me["kill_participation_pct"] == 78.6
+    # 30.000 de los 70.000 de daño de tu equipo
+    assert me["damage_share_pct"] == 42.9
+    # Solo tus compras, en orden y en minutos
+    assert me["purchases"] == [
+        {"item_id": 1055, "minute": 0},
+        {"item_id": 3089, "minute": 12},
+    ]
+
+    players = detail["players"]
+    assert len(players) == 10
+    # Solo los invocadores seguidos tienen nombre
+    assert [p["riot_id"] for p in players if p["riot_id"]] == ["Invocador#TEST"]
+    # Los cinco rivales empatan, y el sello va al de número más bajo
+    badges = {p["participant_id"]: p["badge"] for p in players if p["badge"]}
+    assert badges == {1: "MVP", 6: "BASTION"}
+
+
+def test_match_detail_returns_404_for_unknown_match(seeded_db):
+    response = client.get("/matches/EUW1_999")
+
+    assert response.status_code == 404
 
 
 def test_champions_groups_by_champion(seeded_db):
