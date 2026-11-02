@@ -123,9 +123,12 @@ def matches():
                    m.game_version,
                    -- El parche público va 10 por delante del interno; ver el README
                    (split_part(m.game_version, '.', 1)::int + 10)
-                       || '.' || split_part(m.game_version, '.', 2) AS patch
+                       || '.' || split_part(m.game_version, '.', 2) AS patch,
+                   s.badge
             FROM participants p
             JOIN matches m ON m.match_id = p.match_id
+            JOIN participant_scores s
+                ON s.match_id = p.match_id AND s.participant_id = p.participant_id
             -- participants guarda a los diez jugadores de cada partida, y
             -- solo los invocadores seguidos tienen puuid
             WHERE p.puuid IS NOT NULL

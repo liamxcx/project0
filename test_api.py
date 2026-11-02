@@ -58,6 +58,32 @@ def test_matches_returns_only_own_matches(seeded_db):
     assert matches[0]["patch"] == "26.18"
 
 
+def test_matches_includes_badge(seeded_db):
+    # Las partidas de SEED_SQL solo tienen dos jugadores, así que no tienen
+    # nota. Esta tiene los diez, y tú eres el mejor en todo y ganas.
+    with psycopg.connect(DB_URL) as connection:
+        connection.execute(
+            """
+            INSERT INTO matches (match_id, played_at, duration_seconds, queue_id, game_version)
+            VALUES ('EUW1_4', '2026-09-04 20:00+02', 1800, 420, '16.18.123.4567');
+
+            INSERT INTO participants
+                (match_id, participant_id, puuid, champion, kills, deaths, assists,
+                 win, team_id, damage_to_champions, vision_score)
+            SELECT 'EUW1_4', n, CASE WHEN n = 1 THEN 'yo' END, 'Ahri',
+                   CASE WHEN n = 1 THEN 10 ELSE 1 END, 5, 1,
+                   n <= 5, CASE WHEN n <= 5 THEN 100 ELSE 200 END,
+                   CASE WHEN n = 1 THEN 30000 ELSE 10000 END, 20
+            FROM generate_series(1, 10) AS n;
+            """
+        )
+
+    response = client.get("/matches")
+
+    badges = {m["match_id"]: m["badge"] for m in response.json()}
+    assert badges == {"EUW1_4": "MVP", "EUW1_3": None, "EUW1_2": None, "EUW1_1": None}
+
+
 def test_champions_groups_by_champion(seeded_db):
     response = client.get("/champions")
 
