@@ -47,6 +47,14 @@ CHAMPION_STATS_SELECT = """
 """
 
 
+# El parche público va 10 por delante del interno; ver el README. Se mete en
+# las consultas con un f-string, y la tabla matches tiene que llevar el alias m.
+PATCH_SQL = (
+    "(split_part(m.game_version, '.', 1)::int + 10)"
+    " || '.' || split_part(m.game_version, '.', 2)"
+)
+
+
 # Solo dice que el proceso responde. No comprueba nada externo, porque
 # Kubernetes reinicia el contenedor si falla y reiniciar no arregla la base.
 @app.get("/health")
@@ -110,7 +118,7 @@ def matches():
         connection.cursor() as cursor,
     ):
         cursor.execute(
-            """
+            f"""
             SELECT m.match_id,
                    p.champion,
                    p.position,
@@ -121,9 +129,7 @@ def matches():
                    m.played_at,
                    m.duration_seconds,
                    m.game_version,
-                   -- El parche público va 10 por delante del interno; ver el README
-                   (split_part(m.game_version, '.', 1)::int + 10)
-                       || '.' || split_part(m.game_version, '.', 2) AS patch,
+                   {PATCH_SQL} AS patch,
                    s.badge
             FROM participants p
             JOIN matches m ON m.match_id = p.match_id
@@ -151,13 +157,11 @@ def load_match_detail(match_id):
         # Hoy solo se sigue a un invocador. Con varios en la misma partida
         # habría que indicar de cuál se quiere el detalle.
         cursor.execute(
-            """
+            f"""
             SELECT m.match_id,
                    m.played_at,
                    m.duration_seconds,
-                   -- El parche público va 10 por delante del interno; ver el README
-                   (split_part(m.game_version, '.', 1)::int + 10)
-                       || '.' || split_part(m.game_version, '.', 2) AS patch,
+                   {PATCH_SQL} AS patch,
                    p.participant_id,
                    p.champion,
                    p.position,
