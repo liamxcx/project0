@@ -263,6 +263,35 @@ def match_detail(match_id: str):
     return detail
 
 
+@app.get("/patches")
+def patches():
+    key = "patches:all"
+
+    cached = cache_get(key)
+    if cached is not None:
+        return json.loads(cached)
+
+    with (
+        psycopg.connect(DB_URL, row_factory=dict_row) as connection,
+        connection.cursor() as cursor,
+    ):
+        cursor.execute(
+            f"""
+            SELECT {PATCH_SQL} AS patch,
+                   COUNT(*) AS games
+            FROM participants p
+            JOIN matches m ON m.match_id = p.match_id
+            WHERE p.puuid IS NOT NULL
+            GROUP BY patch
+            ORDER BY MAX(m.played_at) DESC
+            """
+        )
+        rows = jsonable_encoder(cursor.fetchall())
+
+    cache_set(key, json.dumps(rows))
+    return rows
+
+
 @app.get("/champions")
 def champions():
     key = "champions:all"

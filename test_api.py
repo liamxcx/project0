@@ -100,6 +100,17 @@ def test_match_detail_returns_404_for_unknown_match(seeded_db):
     assert response.status_code == 404
 
 
+def test_patches_counts_own_matches_newest_first(seeded_db):
+    response = client.get("/patches")
+
+    assert response.status_code == 200
+    # EUW1_1 y EUW1_2 son de la 16.17 y EUW1_3 de la 16.18. Los rivales no cuentan.
+    assert response.json() == [
+        {"patch": "26.18", "games": 1},
+        {"patch": "26.17", "games": 2},
+    ]
+
+
 def test_champions_groups_by_champion(seeded_db):
     response = client.get("/champions")
 
