@@ -359,8 +359,7 @@ def summary(patch: str | None = None):
 
 @app.get("/champions")
 def champions(patch: str | None = None):
-    # Lleva "list" para no chocar con las claves de /champions/{champion}
-    key = f"champions:list:{patch or 'season'}"
+    key = f"champions:{patch or 'season'}"
 
     cached = cache_get(key)
     if cached is not None:
@@ -384,33 +383,3 @@ def champions(patch: str | None = None):
 
     cache_set(key, json.dumps(rows))
     return rows
-
-
-@app.get("/champions/{champion}")
-def champion_stats(champion: str):
-    key = f"champions:{champion.lower()}"
-
-    cached = cache_get(key)
-    if cached is not None:
-        row = json.loads(cached)
-    else:
-        with (
-            psycopg.connect(DB_URL, row_factory=dict_row) as connection,
-            connection.cursor() as cursor,
-        ):
-            cursor.execute(
-                CHAMPION_STATS_SELECT
-                + """
-                  AND LOWER(champion) = LOWER(%s)
-                GROUP BY champion
-                """,
-                (champion,),
-            )
-            row = jsonable_encoder(cursor.fetchone())
-
-        cache_set(key, json.dumps(row))
-
-    if row is None:
-        raise HTTPException(status_code=404, detail=f"Sin partidas con {champion}")
-
-    return row

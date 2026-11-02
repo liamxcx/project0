@@ -249,26 +249,6 @@ def test_champions_filters_by_patch(seeded_db):
     assert [c["champion"] for c in response.json()] == ["Ahri"]
 
 
-def test_champion_stats_is_case_insensitive(seeded_db):
-    response = client.get("/champions/ahri")
-
-    assert response.status_code == 200
-    assert response.json()["champion"] == "Ahri"
-
-
-def test_champion_stats_ignores_opponents(seeded_db):
-    # Yasuo está en la base, pero solo en filas de rivales
-    response = client.get("/champions/Yasuo")
-
-    assert response.status_code == 404
-
-
-def test_champion_stats_returns_404_when_not_played(seeded_db):
-    response = client.get("/champions/Garen")
-
-    assert response.status_code == 404
-
-
 @pytest.mark.with_cache
 def test_second_call_does_not_hit_postgres(seeded_db):
     first = client.get("/matches")
