@@ -106,8 +106,8 @@ def summoners():
 
 
 @app.get("/matches")
-def matches():
-    key = "matches:latest"
+def matches(patch: str | None = None):
+    key = f"matches:{patch or 'latest'}"
 
     cached = cache_get(key)
     if cached is not None:
@@ -138,9 +138,13 @@ def matches():
             -- participants guarda a los diez jugadores de cada partida, y
             -- solo los invocadores seguidos tienen puuid
             WHERE p.puuid IS NOT NULL
+              AND (%(patch)s::text IS NULL OR {PATCH_SQL} = %(patch)s)
             ORDER BY m.played_at DESC
-            LIMIT 20
-            """
+            LIMIT %(limit)s
+            """,
+            # Sin parche, las 20 últimas. Con parche, todas las de ese parche,
+            # porque LIMIT NULL en PostgreSQL es sin límite.
+            {"patch": patch, "limit": None if patch else 20},
         )
         rows = jsonable_encoder(cursor.fetchall())
 

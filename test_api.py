@@ -58,6 +58,17 @@ def test_matches_returns_only_own_matches(seeded_db):
     assert matches[0]["patch"] == "26.18"
 
 
+def test_matches_filters_by_patch(seeded_db):
+    response = client.get("/matches", params={"patch": "26.17"})
+
+    assert response.status_code == 200
+    assert [m["match_id"] for m in response.json()] == ["EUW1_2", "EUW1_1"]
+
+    # Un parche sin partidas devuelve una lista vacía, no un error
+    response = client.get("/matches", params={"patch": "26.99"})
+    assert response.json() == []
+
+
 def test_matches_includes_badge(full_match):
     response = client.get("/matches")
 
