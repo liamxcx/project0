@@ -115,7 +115,7 @@ def summoners():
     ):
         cursor.execute(
             """
-            SELECT game_name, tag_line
+            SELECT game_name, tag_line, profile_icon_id, summoner_level
             FROM summoners
             ORDER BY game_name
             """

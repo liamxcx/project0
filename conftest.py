@@ -17,8 +17,8 @@ os.environ["REDIS_URL"] = "redis://localhost:6380/0"
 # contar nunca. Hay dos con Yasuo, que tú no has jugado, y uno con Ahri, que
 # sí, para comprobar que sus partidas no se suman a las tuyas.
 SEED_SQL = """
-    INSERT INTO summoners (puuid, game_name, tag_line)
-    VALUES ('yo', 'Invocador', 'TEST');
+    INSERT INTO summoners (puuid, game_name, tag_line, profile_icon_id, summoner_level)
+    VALUES ('yo', 'Invocador', 'TEST', 29, 100);
 
     INSERT INTO matches (match_id, played_at, duration_seconds, queue_id, game_version)
     VALUES

@@ -38,7 +38,14 @@ def test_summoners_returns_followed_summoners(seeded_db):
     response = client.get("/summoners")
 
     assert response.status_code == 200
-    assert response.json() == [{"game_name": "Invocador", "tag_line": "TEST"}]
+    assert response.json() == [
+        {
+            "game_name": "Invocador",
+            "tag_line": "TEST",
+            "profile_icon_id": 29,
+            "summoner_level": 100,
+        }
+    ]
 
 
 def test_matches_returns_only_own_matches(seeded_db):
