@@ -65,26 +65,27 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
 
 ### Qué hay hecho
 
-- **`collector`** — dado un Riot ID: PUUID (ACCOUNT-V1), identificadores
+- **`collector`** — dado un Riot ID: PUUID (ACCOUNT-V1), icono y nivel
+  (SUMMONER-V4), una foto de la clasificatoria (LEAGUE-V4), identificadores
   de las últimas partidas de ranked solo (MATCH-V5), y de cada una su detalle y su
   timeline. Guarda la partida, los diez participantes y los eventos de
   compra y de habilidades, sin duplicar. Antes de descargar consulta
   cuáles ya están en la base y se las salta, así que solo pide a Riot lo
   que le falta. Con reintentos ante fallos de red y control del límite de
   peticiones.
-- **`db`** — cinco tablas en PostgreSQL, volumen con nombre para
+- **`db`** — las tablas en PostgreSQL, volumen con nombre para
   que los datos sobrevivan a los reinicios y arranque ordenado con
   healthcheck.
 - **`flyway`** — aplica las migraciones pendientes al arrancar y termina.
   Los servicios que usan la base esperan a que acabe.
-- **`api`** — cinco endpoints con FastAPI, agregados calculados en SQL y
+- **`api`** — los endpoints con FastAPI, agregados calculados en SQL y
   documentación interactiva automática en `/docs`.
 - **`redis`** — caché de respuestas de la API, con caducidad automática y
   opcional: si Redis no responde, la API consulta PostgreSQL y sigue
   funcionando.
 - **`frontend`** — una página estática que pide los datos a la API desde el
   navegador, por la misma puerta por la que llega la página.
-- **Tests** — pytest sobre los cinco endpoints y la caché, contra un
+- **Tests** — pytest sobre todos los endpoints y la caché, contra un
   PostgreSQL y un Redis propios, con datos inventados.
 - **CI** — GitHub Actions pasa Ruff, ejecuta los tests, revisa el chart de
   Helm y construye las imágenes en cada push, y marca cada commit en verde
@@ -98,8 +99,21 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
 
 ### Qué falta
 
-- Gráfica de winrate y comparar varios invocadores
+- La página definitiva con todos los datos de la API (en marcha)
+- Seguir a varios invocadores, no solo a uno
 - Copia de seguridad automática de la base de datos
+- Configurar el `collector` con el PUUID en vez del Riot ID. Si el jugador
+  cambia de nombre hoy hay que tocar la configuración, y si otro coge el
+  nombre antiguo el `collector` seguiría a esa otra persona
+- Gráfica de la evolución de los LP en los últimos 30 días, con una foto de
+  `ranked_snapshots` por día
+- El "+LP" de cada partida. Riot no lo da, así que haría falta una foto de la
+  clasificatoria antes y después de cada partida, con el `collector` lanzado
+  cada pocos minutos
+- Bajar las partidas de toda la temporada y no solo las de los últimos meses,
+  para que el resumen de la temporada salga de las partidas guardadas
+- Un CronJob que borre las partidas de hace muchos parches, que ya no sirven
+  para analizar nada
 
 ## Requisitos
 
@@ -190,15 +204,22 @@ Ver [Migraciones](#migraciones).
 
 ## Base de datos
 
-Cinco tablas:
+Seis tablas y una vista:
 
-- `summoners` — traduce cada PUUID a un Riot ID legible
+- `summoners` — traduce cada PUUID a un Riot ID legible, con su icono de
+  perfil y su nivel
 - `matches` — fecha, duración, tipo de cola y parche de cada partida
 - `participants` — los diez jugadores de cada partida: campeón, posición,
   KDA, resultado, oro, daño hecho y recibido, CS, visión, objetos finales,
   hechizos de invocador y equipo
 - `item_purchases` — cada compra de cada jugador, con su minuto
 - `skill_levelups` — cada subida de habilidad, con su minuto
+- `ranked_snapshots` — una foto de la clasificatoria solo/duo en cada vuelta
+  del `collector`: liga, división, LP, victorias, derrotas y el corte del
+  siguiente escalón. Se guardan todas para poder dibujar más adelante la
+  evolución de los LP
+- `participant_scores` — la vista con la nota y el sello de cada jugador
+  (ver [La nota y los sellos](#la-nota-y-los-sellos))
 
 Todos esos datos vienen en la misma respuesta de MATCH-V5, así que
 guardarlos no cuesta ninguna petición extra a Riot.
@@ -303,6 +324,51 @@ Una clave primaria crea su índice automáticamente. La anterior,
 porque esa columna ya no está. Por eso `V6` crea `idx_participants_puuid`
 aparte.
 
+### La nota y los sellos
+
+Cada jugador de cada partida tiene una nota de 0 a 10, y el mejor de cada
+equipo se lleva un sello: **MVP** en el equipo que gana y **BASTION** en el
+que pierde. La idea es la de op.gg, pero op.gg no publica su fórmula, así que
+esta es propia.
+
+La nota sale de cuatro estadísticas. Cada una se divide por la mejor de los
+diez jugadores de esa partida, así que queda entre 0 y 1 y una partida larga
+no da notas más altas que una corta.
+
+- KDA, `(kills + asistencias) / muertes`, contando 0 muertes como 1
+- participación en asesinatos
+- daño a campeones
+- puntuación de visión, que cuenta la mitad
+
+```
+nota = 10 × (kda + participación + daño + 0,5 × visión) / 3,5
+```
+
+El 3,5 es la suma de los pesos, así que quien sea el mejor en las cuatro saca
+un 10. La visión cuenta la mitad porque se puede inflar poniendo guardianes
+sin que cueste nada. Con el mismo peso que las demás, un Blitzcrank 3/7/12
+salía BASTION en una partida en la que deeplol lo ponía octavo de diez. El
+daño recibido se descartó, porque recibir mucho no dice por sí solo que se
+haya jugado bien.
+
+Se calcula en la vista `participant_scores` (`V8`). Una vista es una consulta
+guardada con nombre, que no guarda filas y se calcula cada vez que se lee,
+así que siempre sale de lo que haya en `participants`. Se eligió una vista
+normal y no una materializada para no tener que refrescarla después de cada
+vuelta del `collector`.
+
+Reglas de los sellos:
+
+- Solo hay uno por equipo. Si dos notas empatan, gana el `participant_id` más
+  bajo, para que el resultado no cambie de una consulta a otra.
+- Sin nota no hay sello. Las partidas guardadas antes de tener a los diez
+  jugadores o el daño tienen esas columnas a `NULL`, y su nota también.
+- La nota se redondea a un decimal al final, después de elegir el sello.
+  Redondeando antes, un 7,46 y un 7,44 empatarían en 7,4.
+
+`/matches` devuelve el sello del invocador en cada partida, y
+`/matches/{match_id}` la nota y el sello de los diez jugadores.
+
 ### El timeline
 
 Los objetos finales (`item0`…`item6`) dicen cómo acabó la build, no en qué
@@ -351,12 +417,6 @@ ORDER BY ip.timestamp_ms;
 Los `item_id` son números; la traducción a nombre e icono sale de Data
 Dragon, igual que con los campeones. Se guarda el número porque si Riot
 renombra un objeto, el historial no queda con un nombre que ya no existe.
-
-Sobre lo que se puede concluir con estos datos: comparar winrates por
-build necesita decenas de partidas en cada rama, y un parche dura dos
-semanas. Con pocas partidas esos porcentajes no son fiables. El historial
-propio sí vale ("con esta build llevo 12-4"), siempre que se enseñe sobre
-cuántas partidas está calculado.
 
 ### Insertar sin duplicar
 
@@ -410,22 +470,36 @@ publica `/matches`, como `http://localhost/api/matches` (ver
 
 Endpoints:
 
-- `GET /health` — devuelve `{"estado": "ok"}`. No consulta la base de
-  datos: solo confirma que el servicio responde.
-- `GET /ready` — devuelve `{"estado": "listo"}` si PostgreSQL responde a un
-  `SELECT 1`, y un 503 si no. En Kubernetes, `/health` es la liveness probe
-  y `/ready` la readiness probe.
-- `GET /matches` — las 20 partidas más recientes, de la más nueva a la
-  más antigua. Cruza `participants` con `matches` y devuelve identificador,
-  campeón, posición, KDA, resultado, fecha, duración y parche, este último
-  en las dos numeraciones: `game_version` tal como lo da Riot y `patch`
-  como lo ve el jugador.
-- `GET /champions` — un resumen por campeón: partidas jugadas, ganadas,
-  winrate y KDA medio. Los agregados los calcula PostgreSQL con
-  `GROUP BY`; ninguno de esos números está guardado en ninguna tabla.
-- `GET /champions/{champion}` — lo mismo para un solo campeón. No
-  distingue mayúsculas (`/champions/zeri` vale) y devuelve 404 si no hay
-  partidas con ese campeón.
+| Endpoint | Para qué | Parámetros |
+|---|---|---|
+| `GET /health` | Dice que el proceso responde, sin consultar nada. Es la liveness probe en Kubernetes | |
+| `GET /ready` | Hace un `SELECT 1` contra PostgreSQL y devuelve 503 si no responde. Es la readiness probe | |
+| `GET /summoners` | Los invocadores seguidos, con su icono de perfil y su nivel | |
+| `GET /matches` | El historial de 20 en 20, de la partida más nueva a la más antigua, con el sello [MVP o BASTION](#la-nota-y-los-sellos) | `patch`, `champion`, `offset` |
+| `GET /matches/{match_id}` | El detalle de una partida: tus estadísticas, objetos, hechizos, compras con su minuto y los diez jugadores con su nota. 404 si no existe | |
+| `GET /patches` | Los parches que tienen partidas y cuántas hay en cada uno, del más reciente al más antiguo | |
+| `GET /summary` | Partidas, victorias, derrotas y winrate de la temporada o de un parche | `patch` |
+| `GET /rank` | La última foto de la clasificatoria solo/duo: liga, división, LP, balance de la temporada y corte del siguiente escalón. `null` si no hay ninguna | |
+| `GET /champions` | Estadísticas por campeón de la temporada o de un parche, del más jugado al menos | `patch` |
+
+Los parámetros son opcionales y se pueden combinar, por ejemplo
+`/matches?patch=26.17&champion=Ahri&offset=20`:
+
+- `patch` es el parche como lo ve el jugador (`26.17`). Sin él, `/summary` y
+  `/champions` usan la temporada actual y `/matches` todas las partidas.
+- `champion` es la clave interna de Riot (`Kaisa`, `MonkeyKing`) y distingue
+  mayúsculas.
+- `offset` es cuántas partidas saltarse: `0` da las 20 primeras y `20` las
+  siguientes. Un número negativo devuelve 422.
+
+Riot no da la temporada de forma fiable, así que se deduce del primer número
+de la versión interna (`16` en 2026). La temporada actual es la de la partida
+más reciente.
+
+`/summary` y `/rank` dan victorias y derrotas por caminos distintos.
+`/summary` las cuenta en las partidas guardadas, que solo llegan hasta donde
+empezó a recoger el collector. `/rank` las copia de Riot, que tiene la
+temporada entera, así que el balance de la temporada sale de `/rank`.
 
 Todos los endpoints de datos filtran por `puuid IS NOT NULL`. `participants`
 guarda a los diez jugadores de cada partida y solo los invocadores seguidos
@@ -436,17 +510,21 @@ parámetro para elegir de cuál.
 Al levantar `api`, Compose arranca antes `db`, `flyway` y `redis`: espera
 al healthcheck de los dos primeros y a que `flyway` termine bien.
 
-Los tres endpoints de datos se cachean en Redis con estas claves:
+Los endpoints de datos se cachean en Redis con estas claves:
 
 ```
-GET /matches              →  matches:latest
-GET /champions            →  champions:all
-GET /champions/{champion} →  champions:<campeón en minúsculas>
+GET /summoners            →  summoners:all
+GET /matches              →  matches:<parche o all>:<campeón o all>:<offset>
+GET /matches/{match_id}   →  match:<match_id>
+GET /patches              →  patches:all
+GET /summary              →  summary:<parche o season>
+GET /rank                 →  rank:latest
+GET /champions            →  champions:<parche o season>
 ```
 
-`/health` y `/ready` no se cachean. Y las respuestas vacías
-también se guardan (`champions:garen` vale `null`), para que preguntar por
-un campeón que no existe no consulte PostgreSQL cada vez.
+`/health` y `/ready` no se cachean. Las respuestas vacías también se guardan.
+Una partida que no existe queda en Redis como `null`, y la API responde 404
+sin volver a consultar PostgreSQL.
 
 FastAPI genera la documentación sola a partir de las rutas registradas:
 
@@ -457,42 +535,20 @@ Comprobación rápida:
 
 ```bash
 curl http://localhost:8000/health
-curl -s http://localhost:8000/matches | python3 -m json.tool
-curl -s http://localhost:8000/champions | python3 -m json.tool
-curl -s http://localhost:8000/champions/zeri | python3 -m json.tool
+curl -s "http://localhost:8000/matches?patch=26.21&champion=Yunara" | python3 -m json.tool
+curl -s http://localhost:8000/rank | python3 -m json.tool
 ```
 
-Un campeón de `/champions`:
+Las comillas de las URL con `&` hacen falta porque, sin ellas, la shell corta
+la orden en el `&` y manda el `curl` a segundo plano.
 
-```json
-{
-  "champion": "Zeri",
-  "games": 6,
-  "wins": 3,
-  "winrate_pct": 50.0,
-  "avg_kills": 9.3,
-  "avg_deaths": 4.8,
-  "avg_assists": 6.3
-}
-```
+`next_cutoff_lp`, en `/rank`, son los LP del último Gran Maestro, que es lo que
+hay que superar para subir. Riot lo recalcula cada día, así que cambia aunque
+tú no juegues. En Master, Gran Maestro y Challenger la división siempre es `I`.
 
-Una partida de `/matches`:
-
-```json
-{
-  "match_id": "EUW1_7979729853",
-  "champion": "Zeri",
-  "position": "BOTTOM",
-  "kills": 12,
-  "deaths": 8,
-  "assists": 7,
-  "win": false,
-  "played_at": "2026-09-09T22:14:03+02:00",
-  "duration_seconds": 2520,
-  "game_version": "16.17.810.4348",
-  "patch": "26.17"
-}
-```
+Cómo es cada respuesta se ve en `http://localhost:8000/docs`. En cada endpoint,
+*Try it out* y *Execute* llaman a la API de verdad y enseñan el JSON que
+devuelve.
 
 ## Migraciones
 
@@ -691,15 +747,22 @@ Los tests viven en `test_api.py` y usan su propia base de datos y su
 propio Redis, que se levantan aparte con `docker-compose.test.yml`:
 
 ```bash
-docker compose -f docker-compose.test.yml up -d
+docker compose -f docker-compose.test.yml up -d --wait db-test redis-test
+docker compose -f docker-compose.test.yml run --rm flyway-test
 source .venv/bin/activate
 pytest
 ```
 
-Los contenedores se quedan levantados entre ejecuciones, así que el primer
-comando solo hace falta una vez. Sin ellos, `/health` pasa igual y el resto
-falla con un error de conexión al puerto 5433 o al 6380. Para tirarlos al
-acabar:
+Los dos primeros comandos son los mismos que usa el CI. Un `up -d` a secas
+vuelve antes de que `flyway-test` acabe de crear las tablas, y si `pytest`
+llega antes falla con `relation "summoners" does not exist`. `--wait` espera
+a que la base y Redis estén sanos y `run` espera a que Flyway termine.
+
+Los contenedores se quedan levantados entre ejecuciones, así que basta con
+lanzar `pytest`. El `run` de `flyway-test` hay que repetirlo después de añadir
+una migración, porque si no los tests corren contra el esquema anterior. Sin
+los contenedores, `/health` pasa igual y el resto falla con un error de
+conexión al puerto 5433 o al 6380. Para tirarlos al acabar:
 
 ```bash
 docker compose -f docker-compose.test.yml down
@@ -1244,7 +1307,7 @@ curl -i http://localhost/api/matches              # la API, a través de Traefik
 test_api.py             los tests de la API                   → se lanzan con pytest
 conftest.py             prepara la base y los datos de test
 collector.py            baja partidas de Riot y las guarda    → servicio collector
-api.py                  sirve lo guardado, cinco endpoints    → servicio api
+api.py                  sirve lo guardado por HTTP            → servicio api
 config.py               la configuración, en un solo sitio    → lo importan los dos
 migrations/             el esquema, versionado paso a paso    → servicio flyway y Job migrations
 migrations/Dockerfile   la imagen de migraciones para el clúster
@@ -1269,10 +1332,9 @@ backups/                copias de la base con pg_dump (fuera del repo)
 
 ## Notas
 
-Las rutas usan hosts distintos según la API. Las que usa este proyecto
-(ACCOUNT-V1 y MATCH-V5) van por región grande: `europe.api.riotgames.com`.
-Otras, como LEAGUE-V4 para el rango, usan la plataforma:
-`euw1.api.riotgames.com`.
+Las rutas usan hosts distintos según la API. ACCOUNT-V1 y MATCH-V5 van por
+región grande, `europe.api.riotgames.com`. LEAGUE-V4 y SUMMONER-V4, que dan
+el rango y el icono, van por plataforma, `euw1.api.riotgames.com`.
 
 `api` arranca uvicorn con `--host 0.0.0.0`. Por defecto uvicorn escucha en
 `127.0.0.1`, que dentro del contenedor significa solo el propio contenedor:
@@ -1282,13 +1344,11 @@ el puerto quedaría publicado sin nadie escuchando detrás.
 del compose: `collector` usa el `CMD` de la imagen (`python collector.py`)
 y `api` lo sustituye por uvicorn.
 
-El servicio `db` tiene un healthcheck con `pg_isready`, y `collector` usa
-`depends_on` con `condition: service_healthy`. Sin eso, `depends_on`
-solo esperaría a que el contenedor arrancase, no a que PostgreSQL
-aceptase conexiones, y la aplicación podría fallar al conectar.
-
-`config.py` centraliza la lectura del `.env`. `collector.py` y `api.py`
-importan de ahí en vez de construir cada uno su cadena de conexión.
+El servicio `db` tiene un healthcheck con `pg_isready`, y `flyway` usa
+`depends_on` con `condition: service_healthy`. Sin eso, `depends_on` solo
+esperaría a que el contenedor arrancase, no a que PostgreSQL aceptase
+conexiones, y las migraciones podrían fallar al conectar. `collector` y `api`
+esperan a su vez a que `flyway` termine bien.
 
 Las tres variables de Riot son la excepción y se leen en `collector.py`.
 Importar `config.py` ejecuta el fichero entero, así que si estuvieran ahí la
@@ -1324,9 +1384,6 @@ delante en el primer número (interna `16.17` = pública `26.17`), porque
 cada serie interna corresponde a un año natural. El campo `patch` de
 `/matches` hace esa conversión al vuelo; en la base solo se guarda el
 valor original.
-
-Los porcentajes viajan como números (`winrate_pct: 66.7`), sin el símbolo.
-Del formato se encarga quien los muestra.
 
 Los valores que llegan por la URL se pasan a la consulta como parámetros
 (`%s` y una tupla), nunca interpolados en el texto SQL. Interpolarlos
