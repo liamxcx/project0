@@ -38,8 +38,14 @@ MATCH_COUNT = int(os.getenv("MATCH_COUNT", "20"))
 # Solo se procesan partidas de Ranked Solo/Duo.
 RANKED_SOLO_QUEUE = 420
 
+# LEAGUE-V4 nombra la misma cola con texto y no con número
+RANKED_SOLO_QUEUE_TYPE = "RANKED_SOLO_5x5"
+
 # ACCOUNT-V1 y MATCH-V5 usan región grande (europe), no plataforma (euw1)
 RIOT_BASE_URL = "https://europe.api.riotgames.com"
+
+# LEAGUE-V4, al revés, usa la plataforma
+RIOT_PLATFORM_URL = "https://euw1.api.riotgames.com"
 
 DB_HOST = os.getenv("DB_HOST", "db")
 

@@ -11,7 +11,9 @@ from config import (
     DB_URL,
     MATCH_COUNT,
     RANKED_SOLO_QUEUE,
+    RANKED_SOLO_QUEUE_TYPE,
     RIOT_BASE_URL,
+    RIOT_PLATFORM_URL,
     required_env,
 )
 
@@ -27,6 +29,13 @@ RIOT_TAG_LINE = required_env("RIOT_TAG_LINE")
 # Con --refetch se vuelven a pedir a Riot las partidas ya guardadas, para
 # rellenar columnas añadidas después. Sin él, las que ya están se saltan.
 refetch = "--refetch" in sys.argv
+
+# En estos rangos se sube por plazas y no al llegar a 100 LP. El corte es el
+# LP del último jugador de la liga siguiente.
+NEXT_APEX_LEAGUE = {
+    "MASTER": "grandmasterleagues",
+    "GRANDMASTER": "challengerleagues",
+}
 
 
 def fetch(url, params=None, attempts=3):
@@ -143,6 +152,59 @@ def save_timeline(cursor, match_id):
     return len(purchases), len(level_ups)
 
 
+def save_ranked(cursor, puuid):
+    """Guarda una foto de la clasificatoria de Solo/Duo del invocador.
+
+    Devuelve la entrada de Riot y el corte, o None si no tiene clasificatoria.
+    """
+    response = fetch(f"{RIOT_PLATFORM_URL}/lol/league/v4/entries/by-puuid/{puuid}")
+
+    if response is None or response.status_code != 200:
+        raise RuntimeError("Sin respuesta de LEAGUE-V4")
+
+    # Riot devuelve una entrada por cola, también la de Flex
+    solo = next(
+        (e for e in response.json() if e["queueType"] == RANKED_SOLO_QUEUE_TYPE), None
+    )
+    if solo is None:
+        return None
+
+    cutoff = None
+    league = NEXT_APEX_LEAGUE.get(solo["tier"])
+    if league:
+        league_response = fetch(
+            f"{RIOT_PLATFORM_URL}/lol/league/v4/{league}/by-queue/"
+            f"{RANKED_SOLO_QUEUE_TYPE}"
+        )
+        if league_response is None or league_response.status_code != 200:
+            raise RuntimeError(f"Sin la lista de {league}")
+
+        # Con la liga vacía, a principio de temporada, no hay corte
+        cutoff = min(
+            (e["leaguePoints"] for e in league_response.json()["entries"]),
+            default=None,
+        )
+
+    cursor.execute(
+        """
+        INSERT INTO ranked_snapshots
+            (puuid, tier, division, league_points, wins, losses, next_cutoff_lp)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """,
+        (
+            puuid,
+            solo["tier"],
+            solo["rank"],
+            solo["leaguePoints"],
+            solo["wins"],
+            solo["losses"],
+            cutoff,
+        ),
+    )
+
+    return solo, cutoff
+
+
 log.info("Consultando datos de %s#%s", RIOT_GAME_NAME, RIOT_TAG_LINE)
 
 account_response = fetch(
@@ -204,6 +266,31 @@ with (
         """,
         (puuid, RIOT_GAME_NAME, RIOT_TAG_LINE),
     )
+    # Se confirma ya, para que la clasificatoria y las partidas lo encuentren
+    # aunque uno de los dos falle
+    connection.commit()
+
+    # Si falla la clasificatoria, las partidas se guardan igual
+    try:
+        ranked = save_ranked(cursor, puuid)
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        log.exception("Clasificatoria no guardada")
+    else:
+        if ranked is None:
+            log.info("Sin clasificatoria de Solo/Duo esta temporada")
+        else:
+            solo, cutoff = ranked
+            log.info(
+                "Clasificatoria: %s %s, %s LP, %sV %sD, corte %s",
+                solo["tier"],
+                solo["rank"],
+                solo["leaguePoints"],
+                solo["wins"],
+                solo["losses"],
+                cutoff,
+            )
 
     # Se comprueba sobre item_purchases, que es la última tabla que se
     # rellena. Una partida que esté ahí se guardó entera. Mirando matches se
