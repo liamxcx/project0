@@ -236,6 +236,20 @@ if account_response.status_code != 200:
 
 puuid = account_response.json()["puuid"]
 
+# El icono y el nivel están en otra API, SUMMONER-V4. Si falla, el invocador
+# se guarda igual y conserva los que tenía.
+summoner_response = fetch(
+    f"{RIOT_PLATFORM_URL}/lol/summoner/v4/summoners/by-puuid/{puuid}"
+)
+if summoner_response is not None and summoner_response.status_code == 200:
+    summoner = summoner_response.json()
+    profile_icon_id = summoner["profileIconId"]
+    summoner_level = summoner["summonerLevel"]
+else:
+    log.warning("Sin icono ni nivel de SUMMONER-V4")
+    profile_icon_id = None
+    summoner_level = None
+
 # Sin el filtro de cola Riot devuelve las últimas partidas de cualquier
 # modo, y las normales y los swiftplay acabarían mezclados con las ranked.
 ids_response = fetch(
@@ -260,11 +274,17 @@ with (
     # El invocador va primero porque las participaciones lo referencian
     cursor.execute(
         """
-        INSERT INTO summoners (puuid, game_name, tag_line)
-        VALUES (%s, %s, %s)
-        ON CONFLICT (puuid) DO NOTHING
+        INSERT INTO summoners
+            (puuid, game_name, tag_line, profile_icon_id, summoner_level)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (puuid) DO UPDATE SET
+            game_name       = EXCLUDED.game_name,
+            tag_line        = EXCLUDED.tag_line,
+            -- Con NULL, porque SUMMONER-V4 falló, se queda el de la vuelta anterior
+            profile_icon_id = COALESCE(EXCLUDED.profile_icon_id, summoners.profile_icon_id),
+            summoner_level  = COALESCE(EXCLUDED.summoner_level, summoners.summoner_level)
         """,
-        (puuid, RIOT_GAME_NAME, RIOT_TAG_LINE),
+        (puuid, RIOT_GAME_NAME, RIOT_TAG_LINE, profile_icon_id, summoner_level),
     )
     # Se confirma ya, para que la clasificatoria y las partidas lo encuentren
     # aunque uno de los dos falle
