@@ -158,6 +158,19 @@ def test_match_detail_returns_404_for_unknown_match(seeded_db):
     assert response.status_code == 404
 
 
+def test_match_detail_is_cached_by_the_browser(full_match):
+    response = client.get("/matches/EUW1_4")
+
+    assert response.headers["cache-control"] == "max-age=3600"
+
+
+# Un 404 no se guarda, porque la partida puede aparecer más tarde
+def test_missing_match_is_not_cached_by_the_browser(seeded_db):
+    response = client.get("/matches/EUW1_999")
+
+    assert "cache-control" not in response.headers
+
+
 def test_patches_counts_own_matches_newest_first(seeded_db):
     response = client.get("/patches")
 

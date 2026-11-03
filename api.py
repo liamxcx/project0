@@ -3,7 +3,7 @@ import logging
 
 import psycopg
 import redis
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.encoders import jsonable_encoder
 from psycopg.rows import dict_row
 
@@ -275,8 +275,13 @@ def load_match_detail(match_id):
     return jsonable_encoder(detail)
 
 
+# Una partida jugada no cambia, así que el navegador puede reutilizarla. Una
+# hora y no más, por si la respuesta cambia de forma al desplegar.
+MATCH_DETAIL_MAX_AGE_SECONDS = 3600
+
+
 @app.get("/matches/{match_id}")
-def match_detail(match_id: str):
+def match_detail(match_id: str, response: Response):
     key = f"match:{match_id}"
 
     cached = cache_get(key)
@@ -286,9 +291,12 @@ def match_detail(match_id: str):
         detail = load_match_detail(match_id)
         cache_set(key, json.dumps(detail))
 
+    # El 404 crea su propia respuesta, sin el Cache-Control de abajo. Así el
+    # navegador no guarda una partida que puede llegar en la siguiente vuelta.
     if detail is None:
         raise HTTPException(status_code=404, detail=f"Sin la partida {match_id}")
 
+    response.headers["Cache-Control"] = f"max-age={MATCH_DETAIL_MAX_AGE_SECONDS}"
     return detail
 
 
