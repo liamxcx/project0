@@ -4,3 +4,4 @@ FROM nginxinc/nginx-unprivileged:1.30-alpine
 
 COPY index.html /usr/share/nginx/html/
 COPY emblems/ /usr/share/nginx/html/emblems/
+COPY fonts/ /usr/share/nginx/html/fonts/
