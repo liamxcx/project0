@@ -72,10 +72,8 @@ services:
     ports:
       - "127.0.0.1:8080:80"
     volumes:
-      # Solo lo que usa la página, para no servir también el Dockerfile y la configuración
-      - ./frontend/index.html:/usr/share/nginx/html/index.html:ro
-      - ./frontend/emblems:/usr/share/nginx/html/emblems:ro
-      - ./frontend/fonts:/usr/share/nginx/html/fonts:ro
+      # Solo public/, para no servir también el Dockerfile y la configuración
+      - ./frontend/public:/usr/share/nginx/html:ro
       - ./frontend/nginx-compose.conf:/etc/nginx/conf.d/default.conf:ro
     # nginx busca el nombre api al arrancar, y falla si el contenedor no existe
     depends_on:

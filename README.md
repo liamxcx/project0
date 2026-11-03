@@ -680,8 +680,9 @@ fuera de Git. Se hace a mano, y la copia automática está en
 
 ## Frontend
 
-Una página en `frontend/index.html`, servida por nginx, que pide los datos
-a la API y los pinta. En Compose se abre en `http://localhost:8080`, y en el
+Una página en `frontend/public/`, servida por nginx, que pide los datos
+a la API y los pinta. Todo lo que hay en esa carpeta es público, y lo que no
+está en ella no se sirve. En Compose se abre en `http://localhost:8080`, y en el
 clúster en `http://localhost` (ver [Kubernetes](#kubernetes)).
 
 En Compose, nginx hace también de puerta de entrada, como Traefik en el
@@ -695,14 +696,14 @@ Las rutas internas de la API (`/health`, `/ready`, `/docs`, `/redoc` y
 `/openapi.json`) no se publican, y por la puerta de entrada devuelven 404.
 Desde el propio ordenador siguen en `http://localhost:8000`.
 
-Solo se montan `index.html` y la carpeta `emblems/`, como bind mounts de
-solo lectura, así que editar el HTML y recargar el navegador basta: no hay
-que reconstruir ni reiniciar nada. Si el cambio no se ve, suele ser la caché
+Solo se monta `frontend/public/`, como bind mount de solo lectura, así que
+editar la página y recargar el navegador basta: no hay que reconstruir ni
+reiniciar nada. Si el cambio no se ve, suele ser la caché
 del navegador (`Cmd + Shift + R`).
 
 ### Emblemas de rango
 
-Los emblemas de `frontend/emblems/` son los oficiales de Riot, de
+Los emblemas de `frontend/public/emblems/` son los oficiales de Riot, de
 `ranked-emblems-latest.zip`, en la sección *Icons and Emblems* de la
 documentación de League of Legends del portal de desarrolladores. Data
 Dragon no los tiene. nginx los sirve en `/emblems/`, montados en Compose y
@@ -716,12 +717,12 @@ Para rehacerlos si Riot los cambia:
 unzip -j ranked-emblems-latest.zip "Ranked Emblems Latest/Rank=*" -d /tmp/emblems
 for f in /tmp/emblems/Rank=*.png; do
   name=$(basename "$f" .png | sed 's/^Rank=//' | tr '[:upper:]' '[:lower:]')
-  sips -Z 256 "$f" --out "frontend/emblems/$name.png" >/dev/null
+  sips -Z 256 "$f" --out "frontend/public/emblems/$name.png" >/dev/null
 done
 ```
 
 `sips` viene con macOS. En Linux, ImageMagick hace lo mismo con
-`magick "$f" -resize 256x256 "frontend/emblems/$name.png"`.
+`magick "$f" -resize 256x256 "frontend/public/emblems/$name.png"`.
 
 ### Sin CORS
 
@@ -1344,8 +1345,7 @@ api.py                  sirve lo guardado por HTTP            → servicio api
 config.py               la configuración, en un solo sitio    → lo importan los dos
 migrations/             el esquema, versionado paso a paso    → servicio flyway y Job migrations
 migrations/Dockerfile   la imagen de migraciones para el clúster
-frontend/index.html     la página que consume la API          → servicio frontend
-frontend/emblems/       los emblemas de rango, de Riot        → servicio frontend
+frontend/public/        la página, sus emblemas y su fuente   → servicio frontend
 frontend/Dockerfile     la imagen del frontend para el clúster
 frontend/nginx-compose.conf la puerta de entrada en Compose   → servicio frontend
 frontend/borrador/      notas para trabajar el diseño aparte
