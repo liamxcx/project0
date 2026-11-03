@@ -187,6 +187,36 @@ def test_summary_filters_by_patch(seeded_db):
     }
 
 
+def test_rank_returns_the_latest_snapshot(seeded_db):
+    # Dos fotos: la de ayer y la de hoy, con 24 LP más y una victoria más
+    with psycopg.connect(DB_URL) as connection:
+        connection.execute(
+            """
+            INSERT INTO ranked_snapshots
+                (puuid, taken_at, tier, division, league_points, wins, losses,
+                 next_cutoff_lp)
+            VALUES
+                ('yo', '2026-11-02 20:00+01', 'MASTER', 'I', 861, 617, 601, 1640),
+                ('yo', '2026-11-03 20:00+01', 'MASTER', 'I', 885, 618, 601, 1651);
+            """
+        )
+
+    rank = client.get("/rank").json()
+
+    assert rank["league_points"] == 885
+    assert rank["games"] == 1219
+    # 618 de 1.219
+    assert rank["winrate_pct"] == 50.7
+    assert rank["next_cutoff_lp"] == 1651
+
+
+def test_rank_is_null_without_snapshots(seeded_db):
+    response = client.get("/rank")
+
+    assert response.status_code == 200
+    assert response.json() is None
+
+
 def test_champions_groups_by_champion(seeded_db):
     response = client.get("/champions")
 

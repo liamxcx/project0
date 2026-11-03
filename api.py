@@ -353,6 +353,43 @@ def summary(patch: str | None = None):
     return row
 
 
+# Hoy solo se sigue a un invocador, así que vale la foto más reciente de la
+# tabla. Con varios habría que indicar de cuál se quiere el rango.
+@app.get("/rank")
+def rank():
+    key = "rank:latest"
+
+    cached = cache_get(key)
+    if cached is not None:
+        return json.loads(cached)
+
+    with (
+        psycopg.connect(DB_URL, row_factory=dict_row) as connection,
+        connection.cursor() as cursor,
+    ):
+        cursor.execute(
+            """
+            SELECT tier,
+                   division,
+                   league_points,
+                   wins + losses AS games,
+                   wins,
+                   losses,
+                   ROUND(100.0 * wins / NULLIF(wins + losses, 0), 1) AS winrate_pct,
+                   next_cutoff_lp,
+                   taken_at
+            FROM ranked_snapshots
+            ORDER BY taken_at DESC
+            LIMIT 1
+            """
+        )
+        # Sin ninguna foto, porque no hay clasificatoria, la API devuelve null
+        row = jsonable_encoder(cursor.fetchone())
+
+    cache_set(key, json.dumps(row))
+    return row
+
+
 @app.get("/champions")
 def champions(patch: str | None = None):
     key = f"champions:{patch or 'season'}"

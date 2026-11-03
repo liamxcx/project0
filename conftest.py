@@ -60,7 +60,10 @@ FULL_MATCH_SQL = """
         ('EUW1_4', 6, 1056, 2000);
 """
 
-CLEAR_SQL = "TRUNCATE summoners, matches, participants, item_purchases, skill_levelups"
+CLEAR_SQL = (
+    "TRUNCATE summoners, matches, participants, item_purchases, skill_levelups, "
+    "ranked_snapshots"
+)
 
 
 @pytest.fixture
