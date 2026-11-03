@@ -526,6 +526,11 @@ GET /champions            →  champions:<parche o season>
 Una partida que no existe queda en Redis como `null`, y la API responde 404
 sin volver a consultar PostgreSQL.
 
+Además de Redis, `/matches/{match_id}` lleva `Cache-Control: max-age=3600`,
+así que el navegador reutiliza el detalle de una partida durante una hora.
+El 404 no lo lleva, porque la partida puede llegar en la siguiente vuelta
+del `collector`.
+
 FastAPI genera la documentación sola a partir de las rutas registradas:
 
 - `http://localhost:8000/docs` — documentación navegable
@@ -680,15 +685,43 @@ a la API y los pinta. En Compose se abre en `http://localhost:8080`, y en el
 clúster en `http://localhost` (ver [Kubernetes](#kubernetes)).
 
 En Compose, nginx hace también de puerta de entrada, como Traefik en el
-clúster. Su configuración está en `frontend/nginx-compose.conf`: pasa
-`/api/matches` a la API como `/matches` y sirve lo demás desde el disco.
-Por eso levantar el `frontend` levanta también la API, y las respuestas de
-la API llegan con `Server: nginx`.
+clúster. Su configuración está en `frontend/nginx-compose.conf`: pasa todo
+lo que empieza por `/api/` a la API quitándole el prefijo (`/api/rank` llega
+como `/rank`) y sirve lo demás desde el disco. Por eso levantar el
+`frontend` levanta también la API, y las respuestas de la API llegan con
+`Server: nginx`.
 
-Solo se monta `index.html`, como bind mount de solo lectura, así que editar
-el HTML y recargar el navegador basta: no hay que reconstruir ni reiniciar
-nada. Si el cambio no se ve, suele ser la caché del navegador
-(`Cmd + Shift + R`).
+Las rutas internas de la API (`/health`, `/ready`, `/docs`, `/redoc` y
+`/openapi.json`) no se publican, y por la puerta de entrada devuelven 404.
+Desde el propio ordenador siguen en `http://localhost:8000`.
+
+Solo se montan `index.html` y la carpeta `emblems/`, como bind mounts de
+solo lectura, así que editar el HTML y recargar el navegador basta: no hay
+que reconstruir ni reiniciar nada. Si el cambio no se ve, suele ser la caché
+del navegador (`Cmd + Shift + R`).
+
+### Emblemas de rango
+
+Los emblemas de `frontend/emblems/` son los oficiales de Riot, de
+`ranked-emblems-latest.zip`, en la sección *Icons and Emblems* de la
+documentación de League of Legends del portal de desarrolladores. Data
+Dragon no los tiene. nginx los sirve en `/emblems/`, montados en Compose y
+copiados dentro de la imagen en el clúster.
+
+Vienen a 1000 × 1000 píxeles y unos 500 KB cada uno, así que se reducen a
+256 y se renombran como el `tier` de `/rank` en minúsculas (`master.png`).
+Para rehacerlos si Riot los cambia:
+
+```bash
+unzip -j ranked-emblems-latest.zip "Ranked Emblems Latest/Rank=*" -d /tmp/emblems
+for f in /tmp/emblems/Rank=*.png; do
+  name=$(basename "$f" .png | sed 's/^Rank=//' | tr '[:upper:]' '[:lower:]')
+  sips -Z 256 "$f" --out "frontend/emblems/$name.png" >/dev/null
+done
+```
+
+`sips` viene con macOS. En Linux, ImageMagick hace lo mismo con
+`magick "$f" -resize 256x256 "frontend/emblems/$name.png"`.
 
 ### Sin CORS
 
@@ -1312,6 +1345,7 @@ config.py               la configuración, en un solo sitio    → lo importan l
 migrations/             el esquema, versionado paso a paso    → servicio flyway y Job migrations
 migrations/Dockerfile   la imagen de migraciones para el clúster
 frontend/index.html     la página que consume la API          → servicio frontend
+frontend/emblems/       los emblemas de rango, de Riot        → servicio frontend
 frontend/Dockerfile     la imagen del frontend para el clúster
 frontend/nginx-compose.conf la puerta de entrada en Compose   → servicio frontend
 frontend/borrador/      notas para trabajar el diseño aparte

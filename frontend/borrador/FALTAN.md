@@ -6,9 +6,11 @@ cuando quede vacío.
 
 ## Nombres e imágenes de Data Dragon
 
-La API devuelve claves internas y números, y la página tiene que convertirlos
-en nombres e imágenes. Todo sale de Data Dragon, que es público.
+Decidido: la página los pide directamente a Data Dragon, el CDN público de
+Riot, que responde con `Access-Control-Allow-Origin: *`. Falta escribirlo en
+la página.
 
+- **Versión.** La última de `api/versions.json` (hoy `16.21.1`).
 - **Nombre legible del campeón.** La API devuelve `Kaisa` o `MonkeyKing` y la
   página tiene que escribir "Kai'Sa" o "Wukong". Está en
   `data/es_ES/champion.json`.
@@ -19,11 +21,6 @@ en nombres e imágenes. Todo sale de Data Dragon, que es público.
   (`img/champion/splash/{clave}_0.jpg`).
 - **Icono de perfil.** `/summoners` devuelve `profile_icon_id` y la imagen está
   en `img/profileicon/{id}.png`.
-- **Emblema del rango.** Data Dragon no lo tiene, así que hay que decidir de
-  dónde sale.
-- **Versión de Data Dragon.** Las rutas llevan la versión del parche, así que
-  hay que decidir de dónde la saca la página para no tocar código en cada
-  parche.
 
 ## Región
 
