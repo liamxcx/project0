@@ -20,7 +20,7 @@ function icon(summoner) {
 
   const image = el("img", {
     className: "summoner-icon",
-    attrs: { src: url, alt: "", width: "30", height: "30" },
+    attrs: { src: url, alt: "", width: "36", height: "36" },
   });
   // Si Data Dragon contestó pero ese icono no existe, también van las iniciales
   const fallBack = () => image.replaceWith(placeholder(summoner.game_name));

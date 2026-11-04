@@ -150,8 +150,8 @@ input:focus-visible {
 
 .summoner-icon,
 .summoner-initials {
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   flex: none;
 }
 
@@ -161,7 +161,7 @@ input:focus-visible {
   justify-content: center;
   background: var(--accent);
   color: var(--bg);
-  font: 700 11px/1 "Archivo", sans-serif;
+  font: 700 13px/1 "Archivo", sans-serif;
 }
 
 .summoner-name {
