@@ -60,6 +60,7 @@ a:hover {
   color: #fff;
 }
 
+a:focus-visible,
 button:focus-visible,
 input:focus-visible {
   outline: 2px solid var(--accent);
@@ -186,6 +187,33 @@ input:focus-visible {
 }
 
 /* En pantallas estrechas las dos columnas de la portada van una debajo de otra */
+.profile {
+  border-top: 2px solid var(--accent);
+}
+
+/* Se queda arriba al bajar, para tener siempre a mano
+   la vuelta a la portada y el selector de parche */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 32px;
+  border-bottom: 2px solid var(--border);
+  background: var(--bg);
+}
+
+.logo,
+.logo:hover {
+  font: 900 22px/1 "Archivo", sans-serif;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
 @media (max-width: 800px) {
   .home {
     min-height: auto;
@@ -200,5 +228,9 @@ input:focus-visible {
   .home-intro,
   .home-side {
     padding: 40px 24px;
+  }
+
+  .topbar {
+    padding: 16px 24px;
   }
 }

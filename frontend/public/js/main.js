@@ -6,7 +6,8 @@ const profile = parseProfilePath(location.pathname);
 
 if (profile) {
   document.getElementById("home").hidden = true;
-  renderProfile(document.getElementById("profile"), profile);
+  document.getElementById("profile").hidden = false;
+  renderProfile(document.getElementById("profile-content"), profile);
 } else {
   renderHome(document.getElementById("followed"));
 }

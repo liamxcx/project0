@@ -14,21 +14,21 @@ function notice(text) {
   return el("div", {}, el("p", {}, text), home);
 }
 
-export async function renderProfile(section, riotId) {
-  section.hidden = false;
+export async function renderProfile(content, riotId) {
   try {
     const summoners = await getJson("/summoners");
     // La API solo tiene datos de los invocadores seguidos. Con otro Riot ID
     // enseñaría esos datos debajo de un nombre que no es el suyo
     const summoner = summoners.find((followed) => sameRiotId(followed, riotId));
     if (!summoner) {
-      section.replaceChildren(notice("No seguimos a este invocador."));
+      content.replaceChildren(notice("No seguimos a este invocador."));
       return;
     }
     const tag = el("span", { className: "summoner-tag" }, `#${summoner.tag_line}`);
-    section.replaceChildren(el("h1", {}, summoner.game_name, tag));
+    document.title = `${summoner.game_name}#${summoner.tag_line} · Project0`;
+    content.replaceChildren(el("h1", {}, summoner.game_name, tag));
   } catch (error) {
     console.error("No se ha podido cargar el perfil.", error);
-    section.replaceChildren(notice("No se ha podido cargar el perfil."));
+    content.replaceChildren(notice("No se ha podido cargar el perfil."));
   }
 }
