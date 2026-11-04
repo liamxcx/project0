@@ -13,16 +13,21 @@
 
 :root {
   --bg: #100f0e;
+  --bg-deep: #0b0a0a;
   --panel: #181615;
   --line: #221f1d;
   --border: #2c2926;
+  --border-strong: #3a3633;
   --text: #f3f2f2;
+  --text-light: #cfcac6;
   --text-soft: #a5a09c;
   --text-muted: #8a8683;
   --text-faint: #6f6a66;
   --text-dim: #57534f;
   --accent: #ec3013;
   --accent-hover: #ff6a4f;
+  --win: #2fbd77;
+  --bolt: #3fd8ff;
 }
 
 *,
@@ -60,6 +65,7 @@ a:hover {
   color: #fff;
 }
 
+a:focus-visible,
 button:focus-visible,
 input:focus-visible {
   outline: 2px solid var(--accent);
@@ -186,6 +192,259 @@ input:focus-visible {
 }
 
 /* En pantallas estrechas las dos columnas de la portada van una debajo de otra */
+.profile {
+  border-top: 2px solid var(--accent);
+}
+
+/* Se queda arriba al bajar, para tener siempre a mano
+   la vuelta a la portada y el selector de parche */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 32px;
+  border-bottom: 2px solid var(--border);
+  background: var(--bg);
+}
+
+.logo,
+.logo:hover {
+  font: 900 22px/1 "Archivo", sans-serif;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-deep);
+  border-bottom: 2px solid var(--border);
+}
+
+.hero-splash {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 58% 28%;
+  filter: grayscale(0.6) saturate(1.15) contrast(1.12) brightness(0.62);
+  transform-origin: 58% 28%;
+  animation: hero-zoom 20s ease-in-out infinite alternate;
+}
+
+/* El splash en color, visible solo por la franja que cruza el héroe. Lleva el
+   mismo zoom que el de debajo para que las dos imágenes coincidan */
+.hero-reveal {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 58% 28%;
+  transform-origin: 58% 28%;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(105deg, transparent 40%, #000 50%, transparent 60%);
+  mask-image: linear-gradient(105deg, transparent 40%, #000 50%, transparent 60%);
+  -webkit-mask-size: 250% 100%;
+  mask-size: 250% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: 100% 0;
+  mask-position: 100% 0;
+  animation:
+    hero-zoom 20s ease-in-out infinite alternate,
+    hero-reveal 15s ease-in-out infinite;
+}
+
+.fx-sweep {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.18) 50%,
+    transparent 60%
+  );
+  background-size: 250% 100%;
+  background-position: 100% 0;
+  animation: hero-sweep 15s ease-in-out infinite;
+}
+
+@keyframes hero-zoom {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.08);
+  }
+}
+
+/* La franja cruza en el primer 30 % del ciclo y el resto se queda fuera */
+@keyframes hero-sweep {
+  0% {
+    background-position: 100% 0;
+  }
+  30%,
+  100% {
+    background-position: 0% 0;
+  }
+}
+
+@keyframes hero-reveal {
+  0% {
+    -webkit-mask-position: 100% 0;
+    mask-position: 100% 0;
+  }
+  30%,
+  100% {
+    -webkit-mask-position: 0% 0;
+    mask-position: 0% 0;
+  }
+}
+
+.hero.fx-off .hero-splash {
+  animation: none;
+}
+
+.hero.fx-off .hero-reveal,
+.hero.fx-off .fx-sweep {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-splash {
+    animation: none;
+  }
+
+  .hero-reveal,
+  .fx-sweep {
+    display: none;
+  }
+}
+
+.fx-toggle {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(12, 11, 11, 0.72);
+  border: 2px solid var(--border-strong);
+  color: var(--text);
+  font: 700 10px/1 "Archivo", sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.fx-toggle:hover {
+  border-color: var(--bolt);
+  color: var(--bolt);
+}
+
+.fx-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--win);
+}
+
+.fx-toggle[aria-pressed="false"] .fx-dot {
+  background: var(--accent);
+}
+
+/* Oscurece la izquierda para que el texto se lea encima de cualquier splash */
+.hero-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(16, 15, 14, 0.94) 0%,
+    rgba(16, 15, 14, 0.7) 45%,
+    rgba(16, 15, 14, 0.25) 100%
+  );
+}
+
+.hero-body {
+  position: relative;
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 36px 36px 30px;
+}
+
+.hero-kicker {
+  margin: 0 0 10px;
+  font: 600 11px/1 "Archivo", sans-serif;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.hero-meta {
+  margin: 0;
+  font: 500 13px/1.4 "Archivo", sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-light);
+}
+
+.hero-name {
+  margin: 0;
+  font: 900 clamp(56px, 9vw, 124px) / 0.86 "Archivo", sans-serif;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+}
+
+.hero-rule {
+  width: 180px;
+  height: 2px;
+  margin: 18px 0 22px;
+  background: var(--accent);
+}
+
+.hero-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px 44px;
+}
+
+.stat-value {
+  margin: 0;
+  font: 800 30px/1 "Archivo", sans-serif;
+}
+
+.stat-value.win {
+  color: var(--win);
+}
+
+.stat-label {
+  margin: 6px 0 0;
+  font: 500 10px/1 "Archivo", sans-serif;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+.hero-message {
+  margin: 0;
+  color: var(--text-soft);
+}
+
 @media (max-width: 800px) {
   .home {
     min-height: auto;
@@ -200,5 +459,14 @@ input:focus-visible {
   .home-intro,
   .home-side {
     padding: 40px 24px;
+  }
+
+  .topbar {
+    padding: 16px 24px;
+  }
+
+  .hero-body {
+    min-height: 360px;
+    padding: 28px 24px 24px;
   }
 }

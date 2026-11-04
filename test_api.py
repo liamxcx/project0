@@ -253,6 +253,28 @@ def test_champions_groups_by_champion(seeded_db):
     assert ahri["winrate_pct"] == 50.0
     # (10 + 3) / 2
     assert ahri["avg_kills"] == 6.5
+    # (10 + 3 + 5 + 4) / (2 + 7)
+    assert ahri["kda_ratio"] == 2.44
+
+
+# Sin muertes no se puede dividir, así que el ratio llega vacío
+def test_champions_kda_ratio_is_null_without_deaths(seeded_db):
+    with psycopg.connect(DB_URL) as connection:
+        connection.execute(
+            """
+            INSERT INTO matches (match_id, played_at, duration_seconds, queue_id, game_version)
+            VALUES ('EUW1_T', '2026-09-05 20:00+02', 1800, 420, '16.18.123.4567');
+
+            INSERT INTO participants
+                (match_id, participant_id, puuid, champion, kills, deaths, assists, win)
+            VALUES ('EUW1_T', 1, 'yo', 'Teemo', 4, 0, 6, true);
+            """
+        )
+
+    response = client.get("/champions")
+
+    teemo = next(c for c in response.json() if c["champion"] == "Teemo")
+    assert teemo["kda_ratio"] is None
 
 
 def test_champions_counts_every_match_of_the_season(seeded_db):

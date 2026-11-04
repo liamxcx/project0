@@ -41,7 +41,11 @@ CHAMPION_STATS_SELECT = """
            ROUND(100.0 * COUNT(*) FILTER (WHERE win) / COUNT(*), 1) AS winrate_pct,
            ROUND(AVG(kills), 1) AS avg_kills,
            ROUND(AVG(deaths), 1) AS avg_deaths,
-           ROUND(AVG(assists), 1) AS avg_assists
+           ROUND(AVG(assists), 1) AS avg_assists,
+           -- Con las sumas y no con las medias redondeadas, para que salga
+           -- exacto. Sin ninguna muerte da null, porque no se puede dividir
+           ROUND((SUM(kills) + SUM(assists))::numeric / NULLIF(SUM(deaths), 0), 2)
+               AS kda_ratio
     FROM participants
     WHERE puuid IS NOT NULL
 """
