@@ -1,5 +1,6 @@
 import { getJson } from "../api.js";
 import { el } from "../dom.js";
+import { renderHero } from "./hero.js";
 
 // Riot no distingue mayúsculas en el Riot ID, así que aquí tampoco
 function sameRiotId(summoner, { gameName, tagLine }) {
@@ -24,9 +25,10 @@ export async function renderProfile(content, riotId) {
       content.replaceChildren(notice("No seguimos a este invocador."));
       return;
     }
-    const tag = el("span", { className: "summoner-tag" }, `#${summoner.tag_line}`);
     document.title = `${summoner.game_name}#${summoner.tag_line} · Project0`;
-    content.replaceChildren(el("h1", {}, summoner.game_name, tag));
+    const hero = el("section", { className: "hero" });
+    content.replaceChildren(hero);
+    renderHero(hero, summoner);
   } catch (error) {
     console.error("No se ha podido cargar el perfil.", error);
     content.replaceChildren(notice("No se ha podido cargar el perfil."));

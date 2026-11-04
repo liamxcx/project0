@@ -61,3 +61,10 @@ export function profileIconUrl(iconId) {
   if (version === null || iconId === null || iconId === undefined) return null;
   return `${BASE_URL}/cdn/${version}/img/profileicon/${encodeURIComponent(iconId)}.png`;
 }
+
+// La imagen grande del campeón. No lleva versión, pero la clave tiene que ir
+// escrita como en Data Dragon. Si no ha cargado, se prueba con la de la API
+export function championSplashUrl(key) {
+  const id = champions.get(String(key).toLowerCase())?.id ?? key;
+  return `${BASE_URL}/cdn/img/champion/splash/${encodeURIComponent(id)}_0.jpg`;
+}
