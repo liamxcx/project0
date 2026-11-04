@@ -75,9 +75,12 @@ services:
       # Solo public/, para no servir también el Dockerfile y la configuración
       - ./frontend/public:/usr/share/nginx/html:ro
       - ./frontend/nginx-compose.conf:/etc/nginx/conf.d/default.conf:ro
-    # nginx busca el nombre api al arrancar, y falla si el contenedor no existe
+    # nginx busca la IP de api al arrancar y se queda con ella. Si Compose
+    # recrea la API, cambia de IP, así que nginx se reinicia con ella
     depends_on:
-      - api
+      api:
+        condition: service_started
+        restart: true
     logging: *default-logging
 
 volumes:
