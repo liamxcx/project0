@@ -100,20 +100,8 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
 ### Qué falta
 
 - La página definitiva con todos los datos de la API (en marcha)
-- Seguir a varios invocadores, no solo a uno
-- Copia de seguridad automática de la base de datos
-- Configurar el `collector` con el PUUID en vez del Riot ID. Si el jugador
-  cambia de nombre hoy hay que tocar la configuración, y si otro coge el
-  nombre antiguo el `collector` seguiría a esa otra persona
-- Gráfica de la evolución de los LP en los últimos 30 días, con una foto de
-  `ranked_snapshots` por día
-- El "+LP" de cada partida. Riot no lo da, así que haría falta una foto de la
-  clasificatoria antes y después de cada partida, con el `collector` lanzado
-  cada pocos minutos
-- Bajar las partidas de toda la temporada y no solo las de los últimos meses,
-  para que el resumen de la temporada salga de las partidas guardadas
-- Un CronJob que borre las partidas de hace muchos parches, que ya no sirven
-  para analizar nada
+
+El resto, y la deuda técnica, están en [MEJORAS.md](MEJORAS.md).
 
 ## Requisitos
 
@@ -676,7 +664,7 @@ estaba.
 
 La copia va en formato custom de `pg_dump` y la carpeta `backups/` está
 fuera de Git. Se hace a mano, y la copia automática está en
-[Qué falta](#qué-falta).
+[MEJORAS.md](MEJORAS.md).
 
 ## Frontend
 
@@ -1359,6 +1347,7 @@ platform/helm/          los values del chart de Traefik       → helm install /
 requirements.txt        dependencias de Python, con versiones fijadas
 requirements-dev.txt    pytest, Ruff y compañía, fuera de la imagen
 .github/workflows/      el pipeline de GitHub Actions         → se ejecuta en cada push
+MEJORAS.md              lo que falta por hacer y la deuda técnica
 backups/                copias de la base con pg_dump (fuera del repo)
 .env                    los valores reales (fuera del repo y de la imagen)
 .env.example            las mismas claves, sin valores
@@ -1433,27 +1422,3 @@ Códigos de error habituales de la API:
 - `429` — límite de peticiones superado (el script espera y reintenta)
 
 Tras regenerar la clave puede tardar unos segundos en ser válida.
-
-## Deuda técnica
-
-- Un pool de conexiones en la API. Hoy cada petición abre su propia
-  conexión a PostgreSQL y la cierra al terminar, con su conexión TCP y su
-  autenticación cada vez. Con un usuario no se nota, pero con más tráfico sí.
-  `psycopg` trae uno. Aplazado hasta tener tests que comprueben que las
-  respuestas no cambian.
-- Invalidar la caché desde el `collector` cuando guarde partidas nuevas, en
-  vez de esperar a que caduque el TTL.
-- Decidir si `/docs` y `/redoc` se desactivan al desplegar fuera de local.
-  Se hace con `docs_url=None` al crear la aplicación.
-- Los contenedores del Dockerfile corren como root. La imagen base de Python
-  no trae usuario propio y nunca se añadió uno, así que `collector` y `api`
-  arrancan con todos los permisos dentro del contenedor.
-  Se arregla creando un usuario sin privilegios y poniendo `USER` después del
-  `pip install`, que sí necesita root. La del frontend no tiene el problema,
-  porque parte de `nginx-unprivileged`, que corre sin root.
-- El `collector` no atiende SIGTERM. Es el PID 1 de su contenedor y Python no
-  prepara nada para esa señal, así que la ignora. Al pararlo, con
-  `kubectl delete`, por el tope de 10 minutos o al vaciar un nodo, espera
-  los 30 s de gracia y muere con SIGKILL, con código 137, que se confunde
-  con un `OOMKilled`. No se pierden datos, porque la partida a medias se
-  deshace. Se arregla saliendo del programa al recibir `signal.SIGTERM`.
