@@ -78,11 +78,6 @@ input:focus-visible {
   color: var(--text-muted);
 }
 
-.counter {
-  font: 400 11px/1 "Archivo", sans-serif;
-  color: var(--text-dim);
-}
-
 /* Portada */
 
 .home {
@@ -137,6 +132,57 @@ input:focus-visible {
   padding-bottom: 10px;
   margin-bottom: 4px;
   border-bottom: 2px solid var(--border);
+}
+
+.summoner-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 2px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+}
+
+.summoner-row:hover {
+  background: var(--panel);
+  color: var(--text);
+}
+
+.summoner-icon,
+.summoner-initials {
+  width: 30px;
+  height: 30px;
+  flex: none;
+}
+
+.summoner-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--bg);
+  font: 700 11px/1 "Archivo", sans-serif;
+}
+
+.summoner-name {
+  flex: 1;
+  min-width: 0;
+  font: 600 17px/1.2 "Archivo", sans-serif;
+}
+
+.summoner-tag {
+  color: var(--text-faint);
+}
+
+.row-arrow {
+  font: 700 15px/1 "Archivo", sans-serif;
+  color: var(--accent);
+}
+
+.list-message {
+  margin: 16px 2px;
+  font: 400 14px/1.5 "Archivo", sans-serif;
+  color: var(--text-soft);
 }
 
 /* En pantallas estrechas las dos columnas de la portada van una debajo de otra */

@@ -8,6 +8,7 @@ const LANGUAGE = "es_ES";
 // de pintarse y no deben quedarse mucho rato en blanco si Riot no responde
 const TIMEOUT_MS = 5000;
 
+let version = null;
 let champions = new Map();
 let items = new Map();
 let spells = new Map();
@@ -32,6 +33,7 @@ async function load() {
     items = new Map(Object.entries(itemData.data));
     // Los hechizos vienen por nombre (SummonerFlash) y la API los da por número (4)
     spells = new Map(Object.values(spellData.data).map((spell) => [spell.key, spell]));
+    version = latest;
   } catch (error) {
     console.warn("Data Dragon no está disponible, se usan las claves internas.", error);
   }
@@ -51,4 +53,11 @@ export function itemName(id) {
 
 export function spellName(id) {
   return spells.get(String(id))?.name ?? String(id);
+}
+
+// Sin Data Dragon no hay versión con la que construir la dirección, así que
+// devuelve null y quien la pida enseña otra cosa en su lugar
+export function profileIconUrl(iconId) {
+  if (version === null || iconId === null || iconId === undefined) return null;
+  return `${BASE_URL}/cdn/${version}/img/profileicon/${encodeURIComponent(iconId)}.png`;
 }
