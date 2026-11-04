@@ -17,6 +17,7 @@
   --panel: #181615;
   --line: #221f1d;
   --border: #2c2926;
+  --border-strong: #3a3633;
   --text: #f3f2f2;
   --text-light: #cfcac6;
   --text-soft: #a5a09c;
@@ -26,6 +27,7 @@
   --accent: #ec3013;
   --accent-hover: #ff6a4f;
   --win: #2fbd77;
+  --bolt: #3fd8ff;
 }
 
 *,
@@ -232,6 +234,135 @@ input:focus-visible {
   object-fit: cover;
   object-position: 58% 28%;
   filter: grayscale(0.6) saturate(1.15) contrast(1.12) brightness(0.62);
+  transform-origin: 58% 28%;
+  animation: hero-zoom 20s ease-in-out infinite alternate;
+}
+
+/* El splash en color, visible solo por la franja que cruza el héroe. Lleva el
+   mismo zoom que el de debajo para que las dos imágenes coincidan */
+.hero-reveal {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 58% 28%;
+  transform-origin: 58% 28%;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(105deg, transparent 40%, #000 50%, transparent 60%);
+  mask-image: linear-gradient(105deg, transparent 40%, #000 50%, transparent 60%);
+  -webkit-mask-size: 250% 100%;
+  mask-size: 250% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: 100% 0;
+  mask-position: 100% 0;
+  animation:
+    hero-zoom 20s ease-in-out infinite alternate,
+    hero-reveal 15s ease-in-out infinite;
+}
+
+.fx-sweep {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.18) 50%,
+    transparent 60%
+  );
+  background-size: 250% 100%;
+  background-position: 100% 0;
+  animation: hero-sweep 15s ease-in-out infinite;
+}
+
+@keyframes hero-zoom {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.08);
+  }
+}
+
+/* La franja cruza en el primer 30 % del ciclo y el resto se queda fuera */
+@keyframes hero-sweep {
+  0% {
+    background-position: 100% 0;
+  }
+  30%,
+  100% {
+    background-position: 0% 0;
+  }
+}
+
+@keyframes hero-reveal {
+  0% {
+    -webkit-mask-position: 100% 0;
+    mask-position: 100% 0;
+  }
+  30%,
+  100% {
+    -webkit-mask-position: 0% 0;
+    mask-position: 0% 0;
+  }
+}
+
+.hero.fx-off .hero-splash {
+  animation: none;
+}
+
+.hero.fx-off .hero-reveal,
+.hero.fx-off .fx-sweep {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-splash {
+    animation: none;
+  }
+
+  .hero-reveal,
+  .fx-sweep {
+    display: none;
+  }
+}
+
+.fx-toggle {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(12, 11, 11, 0.72);
+  border: 2px solid var(--border-strong);
+  color: var(--text);
+  font: 700 10px/1 "Archivo", sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.fx-toggle:hover {
+  border-color: var(--bolt);
+  color: var(--bolt);
+}
+
+.fx-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--win);
+}
+
+.fx-toggle[aria-pressed="false"] .fx-dot {
+  background: var(--accent);
 }
 
 /* Oscurece la izquierda para que el texto se lea encima de cualquier splash */

@@ -23,13 +23,41 @@ function stat(value, label, className = "") {
 }
 
 function splash(champion) {
-  const image = el("img", {
-    className: "hero-splash",
-    attrs: { src: championSplashUrl(champion), alt: "" },
-  });
+  const url = championSplashUrl(champion);
+  const image = el("img", { className: "hero-splash", attrs: { src: url, alt: "" } });
+  // La misma imagen en color, que solo se ve por la franja de luz. Usa la
+  // misma dirección, así que el navegador no la descarga dos veces
+  const reveal = el("img", { className: "hero-reveal", attrs: { src: url, alt: "" } });
   // Sin la imagen queda el fondo oscuro, que también se lee bien
-  image.addEventListener("error", () => image.remove(), { once: true });
-  return image;
+  image.addEventListener(
+    "error",
+    () => {
+      image.remove();
+      reveal.remove();
+    },
+    { once: true },
+  );
+  return { image, reveal };
+}
+
+// El movimiento es solo decoración, así que se puede apagar, y empieza
+// apagado si el sistema pide menos movimiento
+function effectsToggle(hero) {
+  const label = el("span");
+  const button = el(
+    "button",
+    { className: "fx-toggle", attrs: { type: "button", "aria-label": "Efectos del héroe" } },
+    el("span", { className: "fx-dot" }),
+    label,
+  );
+  const setOn = (on) => {
+    hero.classList.toggle("fx-off", !on);
+    button.setAttribute("aria-pressed", String(on));
+    label.textContent = on ? "On" : "Off";
+  };
+  button.addEventListener("click", () => setOn(hero.classList.contains("fx-off")));
+  setOn(!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  return button;
 }
 
 export async function renderHero(hero, summoner) {
@@ -65,9 +93,13 @@ export async function renderHero(hero, summoner) {
     // La API da null cuando no hay ninguna muerte
     const ratio = top.kda_ratio === null ? "Perfecto" : formatNumber(top.kda_ratio, 2);
 
+    const { image, reveal } = splash(top.champion);
     hero.replaceChildren(
-      splash(top.champion),
+      image,
       el("div", { className: "hero-shade" }),
+      reveal,
+      el("div", { className: "fx-sweep" }),
+      effectsToggle(hero),
       el(
         "div",
         { className: "hero-body" },
