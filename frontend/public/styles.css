@@ -1,0 +1,158 @@
+/* La fuente se sirve desde la propia página, no desde Google Fonts. Es un solo
+   fichero variable que cubre todos los grosores, y solo las letras latinas. */
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("/fonts/archivo-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  --bg: #100f0e;
+  --panel: #181615;
+  --line: #221f1d;
+  --border: #2c2926;
+  --text: #f3f2f2;
+  --text-soft: #a5a09c;
+  --text-muted: #8a8683;
+  --text-faint: #6f6a66;
+  --text-dim: #57534f;
+  --accent: #ec3013;
+  --accent-hover: #ff6a4f;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Archivo", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Sin esto, una clase con display ganaría al atributo hidden y la sección se
+   seguiría viendo */
+[hidden] {
+  display: none !important;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+::selection {
+  background: var(--accent);
+  color: #fff;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.accent {
+  color: var(--accent);
+}
+
+.eyebrow {
+  margin: 0;
+  font: 600 11px/1 "Archivo", sans-serif;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.counter {
+  font: 400 11px/1 "Archivo", sans-serif;
+  color: var(--text-dim);
+}
+
+/* Portada */
+
+.home {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  border-top: 2px solid var(--accent);
+}
+
+.home-intro {
+  padding: 56px 48px 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 40px;
+  border-right: 2px solid var(--border);
+}
+
+.logo-large {
+  margin: 0;
+  font: 900 clamp(44px, 8vw, 150px) / 0.86 "Archivo", sans-serif;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+}
+
+.rule {
+  height: 2px;
+  max-width: 560px;
+  margin: 28px 0 20px;
+  background: var(--accent);
+}
+
+.home-text {
+  margin: 0;
+  max-width: 460px;
+  font: 400 15px/1.55 "Archivo", sans-serif;
+  color: var(--text-soft);
+  text-wrap: pretty;
+}
+
+.home-side {
+  padding: 56px 48px 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.list-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  margin-bottom: 4px;
+  border-bottom: 2px solid var(--border);
+}
+
+/* En pantallas estrechas las dos columnas de la portada van una debajo de otra */
+@media (max-width: 800px) {
+  .home {
+    min-height: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .home-intro {
+    border-right: 0;
+    border-bottom: 2px solid var(--border);
+  }
+
+  .home-intro,
+  .home-side {
+    padding: 40px 24px;
+  }
+}
