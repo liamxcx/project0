@@ -219,11 +219,23 @@ input:focus-visible {
   color: var(--text);
 }
 
+/* El héroe a la izquierda y las tarjetas a la derecha, como en la maqueta */
+.overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(300px, 0.9fr);
+  border-bottom: 2px solid var(--border);
+}
+
 .hero {
   position: relative;
   overflow: hidden;
   background: var(--bg-deep);
-  border-bottom: 2px solid var(--border);
+  border-right: 2px solid var(--border);
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
 }
 
 .hero-splash {
@@ -445,6 +457,146 @@ input:focus-visible {
   color: var(--text-soft);
 }
 
+.card {
+  padding: 24px 26px;
+  border-bottom: 2px solid var(--border);
+}
+
+.card-title {
+  margin: 0 0 16px;
+  font: 600 11px/1 "Archivo", sans-serif;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.card-message {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.tier-iron { --tier: #7d6f68; }
+.tier-bronze { --tier: #a5694f; }
+.tier-silver { --tier: #8fa0ab; }
+.tier-gold { --tier: #d6a84a; }
+.tier-platinum { --tier: #4fb3a9; }
+.tier-emerald { --tier: #34a86a; }
+.tier-diamond { --tier: #5a7dd6; }
+.tier-master { --tier: #b05cf0; }
+.tier-grandmaster { --tier: #e0453a; }
+.tier-challenger { --tier: #f0c35a; }
+
+.rank-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.rank-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  flex: none;
+  border: 2px solid var(--border-strong);
+}
+
+.rank-emblem {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+}
+
+.rank-name {
+  margin: 0;
+  font: 800 34px/1 "Archivo", sans-serif;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.rank-lp {
+  margin: 8px 0 0;
+  font: 700 18px/1 "Archivo", sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.rank-progress {
+  margin-top: 20px;
+}
+
+.rank-progress-head,
+.rank-progress-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.rank-progress-head {
+  align-items: baseline;
+  font: 500 10px/1 "Archivo", sans-serif;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+}
+
+.rank-missing {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.rank-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.rank-track {
+  flex: 1;
+  height: 6px;
+  background: color-mix(in srgb, var(--tier) 18%, transparent);
+}
+
+.rank-fill {
+  height: 100%;
+  background: var(--tier);
+}
+
+.rank-pct {
+  flex: none;
+  font: 700 11px/1 "Archivo", sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: var(--tier);
+}
+
+.rank-progress-foot {
+  margin-top: 6px;
+  font: 400 10px/1 "Archivo", sans-serif;
+  letter-spacing: 0.1em;
+  color: var(--text-faint);
+}
+
+.rank-updated {
+  margin: 18px 0 0;
+  font: 400 10px/1 "Archivo", sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.rank-max {
+  margin: 20px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font: 600 10px/1 "Archivo", sans-serif;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #f19000;
+}
+
 @media (max-width: 800px) {
   .home {
     min-height: auto;
@@ -463,6 +615,15 @@ input:focus-visible {
 
   .topbar {
     padding: 16px 24px;
+  }
+
+  .overview {
+    grid-template-columns: 1fr;
+  }
+
+  .hero {
+    border-right: 0;
+    border-bottom: 2px solid var(--border);
   }
 
   .hero-body {
