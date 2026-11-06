@@ -1,6 +1,8 @@
 import { getJson } from "../api.js";
 import { el } from "../dom.js";
+import { saveSelectedPatch, selectedPatch } from "../patch.js";
 import { renderHero } from "./hero.js";
+import { renderPatchSelect } from "./patch-select.js";
 import { renderRank } from "./rank.js";
 import { renderSummary } from "./summary.js";
 
@@ -43,7 +45,17 @@ export async function renderProfile(content, riotId) {
     });
     renderHero(hero, summoner, patches);
     renderRank(rank, rankData);
-    renderSummary(summary, rankData, patches);
+    patches.then((list) => {
+      const patch = selectedPatch(list);
+      renderSummary(summary, rankData, list, patch);
+      // Sin parches no hay nada que elegir
+      if (list.length === 0) return;
+      const container = document.getElementById("patch-select");
+      renderPatchSelect(container, list, rankData, patch, (chosen) => {
+        saveSelectedPatch(chosen);
+        renderSummary(summary, rankData, list, chosen);
+      });
+    });
   } catch (error) {
     console.error("No se ha podido cargar el perfil.", error);
     content.replaceChildren(notice("No se ha podido cargar el perfil."));

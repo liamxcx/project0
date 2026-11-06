@@ -1,3 +1,4 @@
+import { getJson } from "../api.js";
 import { el } from "../dom.js";
 import { formatNumber } from "../format.js";
 import { seasonOf } from "../season.js";
@@ -11,20 +12,23 @@ function stat(value, label) {
   );
 }
 
+// Cada petición lleva un turno. Si se elige otro parche mientras llega una
+// respuesta, esa respuesta ya no vale
+let latest = 0;
+
 // project0 aún no tiene todas las partidas de esta temporada, así que el total
 // sale de Riot. Con la de enero puede salir de /summary (ver MEJORAS.md)
-export async function renderSummary(card, rankData, patches) {
+export async function renderSummary(card, rankData, patches, patch) {
+  const turn = ++latest;
   const message = (text) => el("p", { className: "card-message" }, text);
+  const season = seasonOf(patches);
+  const period = patch ? `Parche ${patch}` : season ? `Temporada ${season}` : null;
+  const title = el("p", { className: "card-title" }, period ? `Resumen · ${period}` : "Resumen");
   try {
-    const [rank, patchList] = await Promise.all([rankData, patches]);
-    const season = seasonOf(patchList);
-    const title = el(
-      "p",
-      { className: "card-title" },
-      season ? `Resumen · Temporada ${season}` : "Resumen",
-    );
-    if (rank === null) {
-      card.replaceChildren(title, message("Sin partidas clasificatorias esta temporada."));
+    const data = patch ? await getJson("/summary", { patch }) : await rankData;
+    if (turn !== latest) return;
+    if (data === null || data.games === 0) {
+      card.replaceChildren(title, message("Sin partidas en este periodo."));
       return;
     }
     card.replaceChildren(
@@ -32,13 +36,14 @@ export async function renderSummary(card, rankData, patches) {
       el(
         "div",
         { className: "summary-stats" },
-        stat(formatNumber(rank.games, 0), "Partidas"),
-        stat(`${rank.wins}V ${rank.losses}D`, "Victorias / derrotas"),
-        stat(`${formatNumber(rank.winrate_pct, 0)}%`, "Winrate"),
+        stat(formatNumber(data.games, 0), "Partidas"),
+        stat(`${data.wins}V ${data.losses}D`, "Victorias / derrotas"),
+        stat(`${formatNumber(data.winrate_pct, 0)}%`, "Winrate"),
       ),
     );
   } catch (error) {
+    if (turn !== latest) return;
     console.error("No se ha podido cargar el resumen.", error);
-    card.replaceChildren(message("No se ha podido cargar el resumen."));
+    card.replaceChildren(title, message("No se ha podido cargar el resumen."));
   }
 }

@@ -608,6 +608,100 @@ input:focus-visible {
   color: var(--text-muted);
 }
 
+.patch-select {
+  position: relative;
+}
+
+.patch-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  background: var(--panel);
+  border: 2px solid var(--border-strong);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.patch-button:hover {
+  border-color: var(--text-dim);
+}
+
+.patch-button[aria-expanded="true"] {
+  border-color: var(--accent);
+}
+
+.patch-eyebrow {
+  font: 600 10px/1 "Archivo", sans-serif;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.patch-current {
+  min-width: 62px;
+  font: 700 14px/1 "Archivo", sans-serif;
+  text-align: left;
+}
+
+.patch-caret {
+  font: 500 9px/1 "Archivo", sans-serif;
+  color: var(--text-muted);
+}
+
+/* No se sale de la pantalla en móvil, y con muchos parches se desplaza */
+.patch-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 10;
+  min-width: min(310px, calc(100vw - 32px));
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 2px solid var(--border-strong);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+
+.patch-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 11px 14px 11px 12px;
+  background: transparent;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-soft);
+  text-align: left;
+  cursor: pointer;
+}
+
+.patch-option:hover,
+.patch-option.is-selected {
+  background: var(--line);
+}
+
+.patch-option.is-selected {
+  border-left-color: var(--accent);
+  color: var(--text);
+}
+
+.patch-option-label {
+  font: 700 14px/1 "Archivo", sans-serif;
+  white-space: nowrap;
+}
+
+.patch-option-meta {
+  font: 500 10px/1 "Archivo", sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
 .rank-max {
   margin: 20px 0 0;
   padding-top: 14px;
