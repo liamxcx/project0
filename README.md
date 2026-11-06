@@ -535,9 +535,8 @@ curl -s http://localhost:8000/rank | python3 -m json.tool
 Las comillas de las URL con `&` hacen falta porque, sin ellas, la shell corta
 la orden en el `&` y manda el `curl` a segundo plano.
 
-`next_cutoff_lp`, en `/rank`, son los LP del último Gran Maestro, que es lo que
-hay que superar para subir. Riot lo recalcula cada día, así que cambia aunque
-tú no juegues. En Master, Gran Maestro y Challenger la división siempre es `I`.
+`next_cutoff_lp`, en `/rank`, son los LP que hacen falta para subir desde Master
+o Grandmaster. Riot lo recalcula cada día, así que cambia aunque tú no juegues.
 
 Cómo es cada respuesta se ve en `http://localhost:8000/docs`. En cada endpoint,
 *Try it out* y *Execute* llaman a la API de verdad y enseñan el JSON que
