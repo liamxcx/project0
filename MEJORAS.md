@@ -9,8 +9,9 @@ hace, se borra de aquí y pasa al README.
   de enero de 2027. Si la imagen sigue siendo privada, antes hay que crear uno
   nuevo y volver a crear el Secret `ghcr-pull`.
 - En enero de 2027, con la temporada nueva, el resumen de la temporada puede
-  salir de las partidas guardadas, como el resto del perfil, en vez de los
-  totales de Riot de `/rank`.
+  salir de las partidas guardadas en vez de los totales de Riot de `/rank`.
+  Hasta entonces, el héroe y el resto del perfil solo cuentan las partidas que
+  tiene project0, así que no tienen por qué cuadrar con la clasificatoria.
 
 ## Funcionalidad
 
