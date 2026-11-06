@@ -16,8 +16,8 @@ hace, se borra de aquí y pasa al README.
 ## Funcionalidad
 
 - Seguir a varios invocadores, no solo a uno. La API tendrá que recibir el
-  invocador en `/rank`, `/matches`, `/summary` y `/champions`, porque hoy
-  mezclaría los datos de todos.
+  invocador en `/rank`, `/rank/history`, `/matches`, `/summary` y
+  `/champions`, porque hoy mezclaría los datos de todos.
 - Configurar el `collector` con el PUUID en vez del Riot ID. Si el jugador
   cambia de nombre hoy hay que tocar la configuración, y si otro coge el
   nombre antiguo el `collector` seguiría a esa otra persona.

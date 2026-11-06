@@ -402,6 +402,59 @@ def rank():
     return row
 
 
+# Rangos con divisiones, de menor a mayor. Cada uno son 400 LP: cuatro de 100
+DIVISION_TIERS = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "EMERALD", "DIAMOND"]
+DIVISIONS = ["IV", "III", "II", "I"]
+
+
+# LP contados desde Hierro IV con 0, para que la gráfica no baje a 0 al subir de
+# división. Master, Grandmaster y Challenger siguen la cuenta donde acaba Diamante
+def ladder_lp(tier, division, league_points):
+    if tier in DIVISION_TIERS:
+        return (
+            DIVISION_TIERS.index(tier) * 400
+            + DIVISIONS.index(division) * 100
+            + league_points
+        )
+    return len(DIVISION_TIERS) * 400 + league_points
+
+
+# Como en /rank, hoy solo se sigue a un invocador, así que valen todas las fotos
+@app.get("/rank/history")
+def rank_history():
+    key = "rank:history"
+
+    cached = cache_get(key)
+    if cached is not None:
+        return json.loads(cached)
+
+    with (
+        psycopg.connect(DB_URL, row_factory=dict_row) as connection,
+        connection.cursor() as cursor,
+    ):
+        # La última foto de cada día de los últimos 30. Los días se cuentan en
+        # UTC, la zona de la base, para no meter la zona horaria en la API
+        cursor.execute(
+            """
+            SELECT DISTINCT ON (taken_at::date)
+                   taken_at::date AS day,
+                   tier,
+                   division,
+                   league_points
+            FROM ranked_snapshots
+            WHERE taken_at >= now() - interval '30 days'
+            ORDER BY taken_at::date, taken_at DESC
+            """
+        )
+        rows = jsonable_encoder(cursor.fetchall())
+
+    for row in rows:
+        row["ladder_lp"] = ladder_lp(row["tier"], row["division"], row["league_points"])
+
+    cache_set(key, json.dumps(rows))
+    return rows
+
+
 @app.get("/champions")
 def champions(patch: str | None = None):
     key = f"champions:{patch or 'season'}"
