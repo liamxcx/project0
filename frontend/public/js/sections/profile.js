@@ -1,6 +1,10 @@
 import { getJson } from "../api.js";
 import { el } from "../dom.js";
+import { saveSelectedPatch, selectedPatch } from "../patch.js";
 import { renderHero } from "./hero.js";
+import { renderPatchSelect } from "./patch-select.js";
+import { renderRank } from "./rank.js";
+import { renderSummary } from "./summary.js";
 
 // Riot no distingue mayúsculas en el Riot ID, así que aquí tampoco
 function sameRiotId(summoner, { gameName, tagLine }) {
@@ -27,8 +31,31 @@ export async function renderProfile(content, riotId) {
     }
     document.title = `${summoner.game_name}#${summoner.tag_line} · Project0`;
     const hero = el("section", { className: "hero" });
-    content.replaceChildren(hero);
-    renderHero(hero, summoner);
+    const rank = el("section", { className: "card" });
+    const summary = el("section", { className: "card" });
+    const side = el("div", { className: "side" }, rank, summary);
+    content.replaceChildren(el("div", { className: "overview" }, hero, side));
+    // Varias secciones usan los mismos datos, así que se piden una sola vez
+    const rankData = getJson("/rank");
+    // Los parches solo dan el año de la temporada, así que si fallan, las
+    // secciones se pintan igual, sin el año
+    const patches = getJson("/patches").catch((error) => {
+      console.warn("No se ha podido cargar la lista de parches.", error);
+      return [];
+    });
+    renderHero(hero, summoner, patches);
+    renderRank(rank, rankData);
+    patches.then((list) => {
+      const patch = selectedPatch(list);
+      renderSummary(summary, rankData, list, patch);
+      // Sin parches no hay nada que elegir
+      if (list.length === 0) return;
+      const container = document.getElementById("patch-select");
+      renderPatchSelect(container, list, rankData, patch, (chosen) => {
+        saveSelectedPatch(chosen);
+        renderSummary(summary, rankData, list, chosen);
+      });
+    });
   } catch (error) {
     console.error("No se ha podido cargar el perfil.", error);
     content.replaceChildren(notice("No se ha podido cargar el perfil."));

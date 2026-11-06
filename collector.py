@@ -30,11 +30,15 @@ RIOT_TAG_LINE = required_env("RIOT_TAG_LINE")
 # rellenar columnas añadidas después. Sin él, las que ya están se saltan.
 refetch = "--refetch" in sys.argv
 
-# En estos rangos se sube por plazas y no al llegar a 100 LP. El corte es el
-# LP del último jugador de la liga siguiente.
-NEXT_APEX_LEAGUE = {
-    "MASTER": "grandmasterleagues",
-    "GRANDMASTER": "challengerleagues",
+# En estos rangos se sube por plazas. Cada día Riot ordena a todos los de Master
+# para arriba, y en EUW los 300 primeros son Challenger y los 700 siguientes GM
+APEX_LEAGUES = ["challengerleagues", "grandmasterleagues", "masterleagues"]
+
+# Para cada rango, el puesto que ocupa la última plaza del siguiente y el mínimo
+# de LP que pide Riot para entrar
+NEXT_APEX_CUTOFF = {
+    "MASTER": (1000, 200),
+    "GRANDMASTER": (300, 500),
 }
 
 
@@ -170,20 +174,25 @@ def save_ranked(cursor, puuid):
         return None
 
     cutoff = None
-    league = NEXT_APEX_LEAGUE.get(solo["tier"])
-    if league:
-        league_response = fetch(
-            f"{RIOT_PLATFORM_URL}/lol/league/v4/{league}/by-queue/"
-            f"{RANKED_SOLO_QUEUE_TYPE}"
-        )
-        if league_response is None or league_response.status_code != 200:
-            raise RuntimeError(f"Sin la lista de {league}")
+    apex = NEXT_APEX_CUTOFF.get(solo["tier"])
+    if apex:
+        position, minimum = apex
+        everyone = []
+        for league in APEX_LEAGUES:
+            league_response = fetch(
+                f"{RIOT_PLATFORM_URL}/lol/league/v4/{league}/by-queue/"
+                f"{RANKED_SOLO_QUEUE_TYPE}"
+            )
+            if league_response is None or league_response.status_code != 200:
+                raise RuntimeError(f"Sin la lista de {league}")
+            everyone += [e["leaguePoints"] for e in league_response.json()["entries"]]
 
-        # Con la liga vacía, a principio de temporada, no hay corte
-        cutoff = min(
-            (e["leaguePoints"] for e in league_response.json()["entries"]),
-            default=None,
-        )
+        # Hay que superar al que ocupa la última plaza, así que se suma 1. Si no
+        # hay tanta gente, como a principio de temporada, basta con el mínimo
+        everyone.sort(reverse=True)
+        cutoff = minimum
+        if len(everyone) >= position:
+            cutoff = max(minimum, everyone[position - 1] + 1)
 
     cursor.execute(
         """
