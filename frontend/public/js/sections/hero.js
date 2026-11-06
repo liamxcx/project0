@@ -2,16 +2,11 @@ import { getJson } from "../api.js";
 import { championName, championSplashUrl, dataDragonReady } from "../ddragon.js";
 import { el } from "../dom.js";
 import { formatNumber } from "../format.js";
+import { seasonOf } from "../season.js";
 
 // Todos los invocadores seguidos son de EUW, así que va fijo. Guardar la región
 // de cada uno está en MEJORAS.md
 const REGION = "EUW";
-
-// El parche público empieza por el año: 26.21 es de la temporada 2026
-function seasonOf(patches) {
-  if (patches.length === 0) return null;
-  return 2000 + Number(patches[0].patch.split(".")[0]);
-}
 
 function stat(value, label, className = "") {
   return el(
@@ -60,16 +55,16 @@ function effectsToggle(hero) {
   return button;
 }
 
-export async function renderHero(hero, summoner) {
+export async function renderHero(hero, summoner, patches) {
   const message = (text) => el("p", { className: "hero-message" }, text);
   try {
     // El héroe va siempre por temporada, así que no lleva parche
-    const [champions, patches] = await Promise.all([
+    const [champions, patchList] = await Promise.all([
       getJson("/champions"),
-      getJson("/patches"),
+      patches,
       dataDragonReady,
     ]);
-    const season = seasonOf(patches);
+    const season = seasonOf(patchList);
     const meta = [
       `${summoner.game_name}#${summoner.tag_line}`,
       REGION,

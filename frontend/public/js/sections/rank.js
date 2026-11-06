@@ -1,4 +1,3 @@
-import { getJson } from "../api.js";
 import { el } from "../dom.js";
 import { formatNumber, formatTimeAgo } from "../format.js";
 
@@ -93,11 +92,11 @@ function progress(rank, step) {
   );
 }
 
-export async function renderRank(card) {
+export async function renderRank(card, rankData) {
   const title = el("p", { className: "card-title" }, "Clasificatoria Solo/Duo");
   const message = (text) => el("p", { className: "card-message" }, text);
   try {
-    const rank = await getJson("/rank");
+    const rank = await rankData;
     if (rank === null) {
       card.replaceChildren(title, message("Sin clasificar esta temporada."));
       return;
