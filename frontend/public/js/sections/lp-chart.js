@@ -61,7 +61,7 @@ function header(points) {
   const peakLp = formatNumber(peak.league_points, 0);
   return [
     el("div", { className: "lp-head" }, el("p", { className: "card-title" }, "LP · Últimos 30 días"), change),
-    el("p", { className: "lp-peak" }, `Pico: ${rankName(peak.tier, peak.division)} ${peakLp} LP`),
+    el("p", { className: "lp-peak" }, `Peak: ${rankName(peak.tier, peak.division)} ${peakLp} LP`),
   ];
 }
 
