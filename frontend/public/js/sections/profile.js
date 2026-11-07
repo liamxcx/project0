@@ -2,6 +2,7 @@ import { getJson } from "../api.js";
 import { el } from "../dom.js";
 import { saveSelectedPatch, selectedPatch } from "../patch.js";
 import { renderHero } from "./hero.js";
+import { renderLpChart } from "./lp-chart.js";
 import { renderPatchSelect } from "./patch-select.js";
 import { renderRank } from "./rank.js";
 import { renderSummary } from "./summary.js";
@@ -33,7 +34,8 @@ export async function renderProfile(content, riotId) {
     const hero = el("section", { className: "hero" });
     const rank = el("section", { className: "card" });
     const summary = el("section", { className: "card" });
-    const side = el("div", { className: "side" }, rank, summary);
+    const lp = el("section", { className: "card card-grow" });
+    const side = el("div", { className: "side" }, rank, summary, lp);
     content.replaceChildren(el("div", { className: "overview" }, hero, side));
     // Varias secciones usan los mismos datos, así que se piden una sola vez
     const rankData = getJson("/rank");
@@ -45,6 +47,7 @@ export async function renderProfile(content, riotId) {
     });
     renderHero(hero, summoner, patches);
     renderRank(rank, rankData);
+    renderLpChart(lp, getJson("/rank/history"));
     patches.then((list) => {
       const patch = selectedPatch(list);
       renderSummary(summary, rankData, list, patch);

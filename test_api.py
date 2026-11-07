@@ -4,7 +4,7 @@ import redis
 from fastapi.testclient import TestClient
 
 import api
-from api import app
+from api import app, ladder_lp
 from config import DB_URL
 
 # Llama a los endpoints sin levantar uvicorn ni abrir ningún puerto
@@ -235,6 +235,39 @@ def test_rank_is_null_without_snapshots(seeded_db):
 
     assert response.status_code == 200
     assert response.json() is None
+
+
+def test_rank_history_keeps_the_last_snapshot_of_each_day(seeded_db):
+    with psycopg.connect(DB_URL) as connection:
+        connection.execute(
+            """
+            INSERT INTO ranked_snapshots
+                (puuid, taken_at, tier, division, league_points, wins, losses)
+            VALUES
+                -- Dos fotos del mismo día, hace dos días: vale la de la noche
+                ('yo', date_trunc('day', now()) - interval '2 days' + interval '10 hours',
+                 'MASTER', 'I', 800, 610, 600),
+                ('yo', date_trunc('day', now()) - interval '2 days' + interval '20 hours',
+                 'MASTER', 'I', 850, 612, 600),
+                ('yo', date_trunc('day', now()) - interval '1 day' + interval '12 hours',
+                 'MASTER', 'I', 885, 618, 601),
+                -- Fuera de los 30 días
+                ('yo', now() - interval '40 days', 'DIAMOND', 'I', 50, 500, 500);
+            """
+        )
+
+    history = client.get("/rank/history").json()
+
+    assert [point["league_points"] for point in history] == [850, 885]
+    # 7 rangos con divisiones por 400, más 885
+    assert history[1]["ladder_lp"] == 3685
+
+
+def test_ladder_lp_continues_across_divisions():
+    assert ladder_lp("IRON", "IV", 0) == 0
+    assert ladder_lp("GOLD", "IV", 0) == 1200
+    # Al subir de Diamante I a Master la línea no salta
+    assert ladder_lp("DIAMOND", "I", 100) == ladder_lp("MASTER", "I", 0) == 2800
 
 
 def test_champions_groups_by_champion(seeded_db):

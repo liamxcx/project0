@@ -29,7 +29,7 @@ const DIVISIONS = ["IV", "III", "II", "I"];
 // Riot les pone división I, pero en estos tres no hay divisiones
 const APEX = ["MASTER", "GRANDMASTER", "CHALLENGER"];
 
-function rankName(tier, division) {
+export function rankName(tier, division) {
   const name = TIER_NAMES[tier] ?? tier;
   return APEX.includes(tier) ? name : `${name} ${division}`;
 }

@@ -9,14 +9,15 @@ hace, se borra de aquí y pasa al README.
   de enero de 2027. Si la imagen sigue siendo privada, antes hay que crear uno
   nuevo y volver a crear el Secret `ghcr-pull`.
 - En enero de 2027, con la temporada nueva, el resumen de la temporada puede
-  salir de las partidas guardadas, como el resto del perfil, en vez de los
-  totales de Riot de `/rank`.
+  salir de las partidas guardadas en vez de los totales de Riot de `/rank`.
+  Hasta entonces, el héroe y el resto del perfil solo cuentan las partidas que
+  tiene project0, así que no tienen por qué cuadrar con la clasificatoria.
 
 ## Funcionalidad
 
 - Seguir a varios invocadores, no solo a uno. La API tendrá que recibir el
-  invocador en `/rank`, `/matches`, `/summary` y `/champions`, porque hoy
-  mezclaría los datos de todos.
+  invocador en `/rank`, `/rank/history`, `/matches`, `/summary` y
+  `/champions`, porque hoy mezclaría los datos de todos.
 - Configurar el `collector` con el PUUID en vez del Riot ID. Si el jugador
   cambia de nombre hoy hay que tocar la configuración, y si otro coge el
   nombre antiguo el `collector` seguiría a esa otra persona.

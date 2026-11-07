@@ -468,6 +468,7 @@ Endpoints:
 | `GET /patches` | Los parches que tienen partidas y cuántas hay en cada uno, del más reciente al más antiguo | |
 | `GET /summary` | Partidas, victorias, derrotas y winrate de la temporada o de un parche | `patch` |
 | `GET /rank` | La última foto de la clasificatoria solo/duo: liga, división, LP, balance de la temporada y corte del siguiente escalón. `null` si no hay ninguna | |
+| `GET /rank/history` | La última foto de cada día de los últimos 30, para la gráfica de LP. `ladder_lp` son los LP contados desde Hierro IV, para que subir de división no parezca una bajada | |
 | `GET /champions` | Estadísticas por campeón de la temporada o de un parche, del más jugado al menos | `patch` |
 
 Los parámetros son opcionales y se pueden combinar, por ejemplo
@@ -507,6 +508,7 @@ GET /matches/{match_id}   →  match:<match_id>
 GET /patches              →  patches:all
 GET /summary              →  summary:<parche o season>
 GET /rank                 →  rank:latest
+GET /rank/history         →  rank:history
 GET /champions            →  champions:<parche o season>
 ```
 
