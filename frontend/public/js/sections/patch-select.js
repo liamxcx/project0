@@ -1,4 +1,5 @@
 import { el } from "../dom.js";
+import { dropdown } from "../dropdown.js";
 import { formatGames } from "../format.js";
 import { seasonOf } from "../season.js";
 
@@ -19,7 +20,7 @@ export async function renderPatchSelect(container, patches, rankData, selected, 
   const caret = el("span", { className: "patch-caret", attrs: { "aria-hidden": "true" } });
   const button = el(
     "button",
-    { className: "patch-button", attrs: { type: "button", "aria-haspopup": "true" } },
+    { className: "patch-button", attrs: { type: "button" } },
     el("span", { className: "patch-eyebrow" }, "Parche"),
     current,
     caret,
@@ -37,12 +38,7 @@ export async function renderPatchSelect(container, patches, rankData, selected, 
     ),
   );
   const menu = el("div", { className: "patch-menu" }, items);
-
-  function setOpen(open) {
-    menu.hidden = !open;
-    button.setAttribute("aria-expanded", String(open));
-    caret.textContent = open ? "▲" : "▼";
-  }
+  const select = dropdown("patch-select", button, caret, menu);
 
   function show(value) {
     current.textContent = value ?? "General";
@@ -50,21 +46,11 @@ export async function renderPatchSelect(container, patches, rankData, selected, 
   }
 
   function choose(value) {
-    setOpen(false);
+    select.close();
     show(value);
     onChange(value);
   }
 
-  button.addEventListener("click", () => setOpen(menu.hidden));
-  // El menú se cierra al pulsar fuera o con Escape
-  document.addEventListener("click", (event) => {
-    if (!container.contains(event.target)) setOpen(false);
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") setOpen(false);
-  });
-
-  setOpen(false);
   show(selected);
-  container.replaceChildren(el("div", { className: "patch-select" }, button, menu));
+  container.replaceChildren(select.element);
 }
