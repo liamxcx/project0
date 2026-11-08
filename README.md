@@ -463,7 +463,7 @@ Endpoints:
 | `GET /health` | Dice que el proceso responde, sin consultar nada. Es la liveness probe en Kubernetes | |
 | `GET /ready` | Hace un `SELECT 1` contra PostgreSQL y devuelve 503 si no responde. Es la readiness probe | |
 | `GET /summoners` | Los invocadores seguidos, con su icono de perfil y su nivel | |
-| `GET /matches` | El historial de 20 en 20, de la partida más nueva a la más antigua, con el sello [MVP o BASTION](#la-nota-y-los-sellos) | `patch`, `champion`, `offset` |
+| `GET /matches` | El historial de 10 en 10, de la partida más nueva a la más antigua, con el sello [MVP o BASTION](#la-nota-y-los-sellos). Viene como `{"matches": [...], "has_more": true}`, y `has_more` dice si quedan más | `patch`, `champion`, `offset` |
 | `GET /matches/{match_id}` | El detalle de una partida: tus estadísticas, objetos, hechizos, compras con su minuto y los diez jugadores con su nota. 404 si no existe | |
 | `GET /patches` | Los parches que tienen partidas y cuántas hay en cada uno, del más reciente al más antiguo | |
 | `GET /summary` | Partidas, victorias, derrotas y winrate de la temporada o de un parche | `patch` |
@@ -472,13 +472,13 @@ Endpoints:
 | `GET /champions` | Estadísticas por campeón de la temporada o de un parche, del más jugado al menos | `patch` |
 
 Los parámetros son opcionales y se pueden combinar, por ejemplo
-`/matches?patch=26.17&champion=Ahri&offset=20`:
+`/matches?patch=26.17&champion=Ahri&offset=10`:
 
 - `patch` es el parche como lo ve el jugador (`26.17`). Sin él, `/summary` y
   `/champions` usan la temporada actual y `/matches` todas las partidas.
 - `champion` es la clave interna de Riot (`Kaisa`, `MonkeyKing`) y distingue
   mayúsculas.
-- `offset` es cuántas partidas saltarse: `0` da las 20 primeras y `20` las
+- `offset` es cuántas partidas saltarse: `0` da las 10 primeras y `10` las
   siguientes. Un número negativo devuelve 422.
 
 Riot no da la temporada de forma fiable, así que se deduce del primer número

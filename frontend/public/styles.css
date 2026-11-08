@@ -28,6 +28,12 @@
   --accent-hover: #ff6a4f;
   --win: #2fbd77;
   --bolt: #3fd8ff;
+  --mvp: #f19000;
+  --bastion: #b05cf0;
+  --ratio-low: #69788d;
+  --ratio-ok: #259a7e;
+  --ratio-good: #3064d4;
+  --ratio-high: #f19000;
 }
 
 *,
@@ -883,6 +889,333 @@ input:focus-visible {
   color: #f19000;
 }
 
+.history {
+  padding: 34px 0 10px;
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 32px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--accent);
+}
+
+.section-head h2 {
+  margin: 0;
+  font: 800 26px/1 "Archivo", sans-serif;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+}
+
+.section-message {
+  margin: 0 32px;
+  padding: 28px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.history-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin: 0 32px;
+  padding: 14px 0;
+}
+
+/* Sin parches el filtro no se pinta, y no debe quedar un hueco vacío */
+.history-filters:empty {
+  display: none;
+}
+
+.filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+
+.filter-divider {
+  width: 2px;
+  height: 22px;
+  margin: 0 4px;
+  background: var(--border);
+}
+
+.filter-label {
+  font: 600 11px/1 "Archivo", sans-serif;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.filter-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.filter-button {
+  padding: 8px 12px;
+  border: 2px solid var(--border-strong);
+  background: transparent;
+  font: 700 12px/1 "Archivo", sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.filter-button:hover {
+  border-color: var(--text-dim);
+}
+
+.filter-button[aria-expanded="true"],
+.filter-button.is-selected {
+  border-color: var(--accent);
+}
+
+.filter-button.is-selected {
+  background: var(--line);
+  color: var(--text);
+}
+
+.filter-caret {
+  margin-left: 10px;
+  font: 500 9px/1 "Archivo", sans-serif;
+  color: var(--text-muted);
+}
+
+.filter-dropdown {
+  position: relative;
+}
+
+/* La caja de búsqueda se queda fija arriba y solo se desplaza la lista. Con
+   tres clases, para ganar a la altura de .filter-dropdown .patch-menu */
+.filter-dropdown .patch-menu.champion-menu {
+  display: flex;
+  flex-direction: column;
+  max-height: 245px;
+  overflow: hidden;
+}
+
+.filter-options {
+  overflow-y: auto;
+}
+
+.filter-search {
+  flex: none;
+  width: 100%;
+  padding: 11px 12px;
+  border: 0;
+  border-bottom: 2px solid var(--border-strong);
+  background: var(--bg-deep);
+  font: 600 13px/1 "Archivo", sans-serif;
+  color: var(--text);
+}
+
+.filter-search::placeholder {
+  color: var(--text-faint);
+}
+
+/* El contorno general se cortaría dentro del menú, así que se marca el borde */
+.filter-search:focus-visible {
+  outline: none;
+  border-bottom-color: var(--accent);
+}
+
+.filter-empty {
+  margin: 0;
+  padding: 12px 14px;
+  font: 500 12px/1.3 "Archivo", sans-serif;
+  color: var(--text-muted);
+}
+
+/* Centrado bajo el botón: el borde izquierdo va a su mitad y luego el menú
+   retrocede la mitad de su propio ancho */
+.filter-dropdown .patch-menu {
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 0;
+  width: max-content;
+  /* Cinco parches y medio. El último cortado avisa de que la lista sigue */
+  max-height: 205px;
+}
+
+.matches {
+  display: grid;
+  gap: 4px;
+  margin: 2px 32px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.match {
+  --result: var(--accent);
+  position: relative;
+  overflow: hidden;
+  border-left: 3px solid var(--result);
+  background: var(--panel);
+}
+
+.match.is-win {
+  --result: var(--win);
+}
+
+/* La imagen ocupa la parte izquierda y se funde hacia la derecha. Así el
+   texto de la derecha se lee sobre fondo oscuro */
+.match-splash {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 60%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+  opacity: 0.55;
+  /* La imagen se desvanece sola hacia su borde derecho, así que el corte no se
+     ve aunque el degradado de encima se aclare */
+  mask-image: linear-gradient(90deg, #000 50%, transparent 100%);
+  transition: opacity 0.2s;
+}
+
+.match::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(16, 15, 14, 0.35) 0%, rgba(16, 15, 14, 0.85) 45%, var(--panel) 62%);
+  transition: opacity 0.2s;
+}
+
+.match:hover .match-splash {
+  opacity: 0.8;
+}
+
+/* Sin esto el brillo solo se nota a la izquierda, porque la cara queda hacia
+   la mitad, donde el degradado ya tapa mucho */
+.match:hover::after {
+  opacity: 0.5;
+}
+
+/* Por encima de la imagen y del degradado */
+.match-body {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) repeat(5, minmax(0, 1fr));
+  align-items: center;
+  gap: 16px;
+  min-height: 100px;
+  padding: 14px 24px;
+}
+
+.match-body p {
+  margin: 0;
+}
+
+.match-name {
+  font: 800 20px/1.1 "Archivo", sans-serif;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+
+/* Con dos clases, para ganar al margin: 0 de .match-body p */
+.match-body .match-label {
+  margin-top: 6px;
+  font: 500 10px/1 "Archivo", sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.match-value {
+  font: 700 15px/1 "Archivo", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.match-stat:last-child {
+  text-align: right;
+}
+
+.match-result {
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--result);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px;
+  border: 1px solid currentColor;
+  font: 700 9px/1 "Archivo", sans-serif;
+  letter-spacing: 0.14em;
+}
+
+.badge svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.badge-mvp {
+  color: var(--mvp);
+}
+
+.badge-bastion {
+  color: var(--bastion);
+}
+
+.matches-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin: 0 32px;
+  padding: 20px 0 6px;
+}
+
+.more-button {
+  padding: 13px 28px;
+  border: 2px solid var(--border-strong);
+  background: transparent;
+  font: 700 11px/1 "Archivo", sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.more-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.more-button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.matches-end {
+  margin: 0;
+  font: 500 11px/1 "Archivo", sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.ratio-low { color: var(--ratio-low); }
+.ratio-ok { color: var(--ratio-ok); }
+.ratio-good { color: var(--ratio-good); }
+.ratio-high { color: var(--ratio-high); }
+
 @media (max-width: 800px) {
   .home {
     min-height: auto;
@@ -915,5 +1248,63 @@ input:focus-visible {
   .hero-body {
     min-height: 360px;
     padding: 28px 24px 24px;
+  }
+
+  .section-head,
+  .section-message,
+  .history-filters,
+  .matches,
+  .matches-footer {
+    margin-right: 24px;
+    margin-left: 24px;
+  }
+
+  /* El nombre ocupa la primera fila, KDA, ratio y resultado la segunda, y el
+     sello y la fecha la tercera */
+  .match-body {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px 12px;
+    padding: 14px 16px;
+  }
+
+  .match-champion {
+    grid-column: 1 / -1;
+  }
+
+  .match-stat:last-child {
+    grid-column: 2 / -1;
+  }
+
+  /* La barra es estrecha, así que la imagen va de lado a lado y el texto
+     queda encima de ella en toda la barra, con un oscurecido más parejo */
+  .match-splash {
+    width: 100%;
+  }
+
+  .match::after {
+    background: linear-gradient(90deg, rgba(16, 15, 14, 0.45) 0%, rgba(16, 15, 14, 0.85) 100%);
+  }
+
+  /* Con los grupos uno debajo de otro, la raya entre ellos sobra */
+  .filter-divider {
+    display: none;
+  }
+
+  /* Los botones pueden caer en cualquier lado al saltar de línea, y un menú
+     centrado en ellos se saldría de la pantalla. Aquí se abre debajo de toda
+     la fila de filtros y con su mismo ancho */
+  .history-filters {
+    position: relative;
+  }
+
+  .filter-dropdown {
+    position: static;
+  }
+
+  .filter-dropdown .patch-menu {
+    right: 0;
+    left: 0;
+    width: auto;
+    transform: none;
   }
 }

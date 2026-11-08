@@ -2,6 +2,7 @@ import { getJson } from "../api.js";
 import { el } from "../dom.js";
 import { saveSelectedPatch, selectedPatch } from "../patch.js";
 import { renderHero } from "./hero.js";
+import { renderHistory } from "./history.js";
 import { renderLpChart } from "./lp-chart.js";
 import { renderPatchSelect } from "./patch-select.js";
 import { renderRank } from "./rank.js";
@@ -36,7 +37,8 @@ export async function renderProfile(content, riotId) {
     const summary = el("section", { className: "card" });
     const lp = el("section", { className: "card card-grow" });
     const side = el("div", { className: "side" }, rank, summary, lp);
-    content.replaceChildren(el("div", { className: "overview" }, hero, side));
+    const history = el("section", { className: "history" });
+    content.replaceChildren(el("div", { className: "overview" }, hero, side), history);
     // Varias secciones usan los mismos datos, así que se piden una sola vez
     const rankData = getJson("/rank");
     // Los parches solo dan el año de la temporada, así que si fallan, las
@@ -48,6 +50,7 @@ export async function renderProfile(content, riotId) {
     renderHero(hero, summoner, patches);
     renderRank(rank, rankData);
     renderLpChart(lp, getJson("/rank/history"));
+    renderHistory(history, patches);
     patches.then((list) => {
       const patch = selectedPatch(list);
       renderSummary(summary, rankData, list, patch);

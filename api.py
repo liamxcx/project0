@@ -130,6 +130,10 @@ def summoners():
     return rows
 
 
+# Partidas por página del historial
+MATCHES_PAGE_SIZE = 10
+
+
 @app.get("/matches")
 def matches(
     patch: str | None = None,
@@ -170,15 +174,25 @@ def matches(
               AND (%(patch)s::text IS NULL OR {PATCH_SQL} = %(patch)s)
               AND (%(champion)s::text IS NULL OR p.champion = %(champion)s)
             ORDER BY m.played_at DESC
-            -- De 20 en 20. La página pide la siguiente con offset=20, 40...
-            LIMIT 20 OFFSET %(offset)s
+            -- Se pide una de más para saber si hay otra página sin contarlas
+            -- todas. La página pide la siguiente con offset=10, 20...
+            LIMIT %(limit)s OFFSET %(offset)s
             """,
-            {"patch": patch, "champion": champion, "offset": offset},
+            {
+                "patch": patch,
+                "champion": champion,
+                "offset": offset,
+                "limit": MATCHES_PAGE_SIZE + 1,
+            },
         )
         rows = jsonable_encoder(cursor.fetchall())
 
-    cache_set(key, json.dumps(rows))
-    return rows
+    page = {
+        "matches": rows[:MATCHES_PAGE_SIZE],
+        "has_more": len(rows) > MATCHES_PAGE_SIZE,
+    }
+    cache_set(key, json.dumps(page))
+    return page
 
 
 def load_match_detail(match_id):
