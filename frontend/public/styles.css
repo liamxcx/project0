@@ -1194,4 +1194,47 @@ input:focus-visible {
     min-height: 360px;
     padding: 28px 24px 24px;
   }
+
+  .section-head,
+  .section-message,
+  .history-filters,
+  .matches,
+  .matches-footer {
+    margin-right: 24px;
+    margin-left: 24px;
+  }
+
+  /* El nombre ocupa la primera fila, KDA, ratio y resultado la segunda, y el
+     sello y la fecha la tercera */
+  .match-body {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px 12px;
+    padding: 14px 16px;
+  }
+
+  .match-champion {
+    grid-column: 1 / -1;
+  }
+
+  .match-stat:last-child {
+    grid-column: 2 / -1;
+  }
+
+  /* La barra es estrecha, así que la imagen va de lado a lado y el texto
+     queda encima de ella en toda la barra, con un oscurecido más parejo */
+  .match-splash {
+    width: 100%;
+  }
+
+  .match::after {
+    background: linear-gradient(90deg, rgba(16, 15, 14, 0.45) 0%, rgba(16, 15, 14, 0.85) 100%);
+  }
+
+  /* "Más" puede quedar pegado al borde derecho, y centrado se saldría de la
+     pantalla, así que aquí se abre hacia la izquierda */
+  .filter-more .patch-menu {
+    right: 0;
+    left: auto;
+    transform: none;
+  }
 }
