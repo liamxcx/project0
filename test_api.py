@@ -52,7 +52,7 @@ def test_matches_returns_only_own_matches(seeded_db):
     response = client.get("/matches")
 
     assert response.status_code == 200
-    matches = response.json()
+    matches = response.json()["matches"]
 
     # Tres partidas propias. Los Yasuo no tienen puuid y no deben aparecer.
     assert len(matches) == 3
@@ -69,22 +69,22 @@ def test_matches_filters_by_patch(seeded_db):
     response = client.get("/matches", params={"patch": "26.17"})
 
     assert response.status_code == 200
-    assert [m["match_id"] for m in response.json()] == ["EUW1_2", "EUW1_1"]
+    assert [m["match_id"] for m in response.json()["matches"]] == ["EUW1_2", "EUW1_1"]
 
     # Un parche sin partidas devuelve una lista vacía, no un error
     response = client.get("/matches", params={"patch": "26.99"})
-    assert response.json() == []
+    assert response.json() == {"matches": [], "has_more": False}
 
 
 def test_matches_filters_by_champion(seeded_db):
     response = client.get("/matches", params={"champion": "Ahri"})
 
     # Tus dos partidas con Ahri. La Ahri rival de EUW1_3 no es tuya.
-    assert [m["match_id"] for m in response.json()] == ["EUW1_2", "EUW1_1"]
+    assert [m["match_id"] for m in response.json()["matches"]] == ["EUW1_2", "EUW1_1"]
 
     # Se combina con el parche: Lux solo jugó en la 26.18
     response = client.get("/matches", params={"champion": "Lux", "patch": "26.17"})
-    assert response.json() == []
+    assert response.json() == {"matches": [], "has_more": False}
 
 
 def test_matches_returns_pages_of_10(seeded_db):
@@ -105,12 +105,20 @@ def test_matches_returns_pages_of_10(seeded_db):
         )
 
     first_page = client.get("/matches").json()
-    assert len(first_page) == 10
-    assert all(m["champion"] == "Jinx" for m in first_page)
+    assert len(first_page["matches"]) == 10
+    assert all(m["champion"] == "Jinx" for m in first_page["matches"])
+    assert first_page["has_more"] is True
 
     # La segunda página son las tres de SEED_SQL, que son más antiguas
     second_page = client.get("/matches", params={"offset": 10}).json()
-    assert [m["match_id"] for m in second_page] == ["EUW1_3", "EUW1_2", "EUW1_1"]
+    second_ids = [m["match_id"] for m in second_page["matches"]]
+    assert second_ids == ["EUW1_3", "EUW1_2", "EUW1_1"]
+    assert second_page["has_more"] is False
+
+    # Quedan justo 10. La página está llena, pero detrás no hay ninguna más
+    last_ten = client.get("/matches", params={"offset": 3}).json()
+    assert len(last_ten["matches"]) == 10
+    assert last_ten["has_more"] is False
 
     # Un offset negativo no tiene sentido y FastAPI lo rechaza
     assert client.get("/matches", params={"offset": -1}).status_code == 422
@@ -120,7 +128,7 @@ def test_matches_includes_badge(full_match):
     response = client.get("/matches")
 
     # Las partidas de SEED_SQL solo tienen dos jugadores, así que no tienen nota
-    badges = {m["match_id"]: m["badge"] for m in response.json()}
+    badges = {m["match_id"]: m["badge"] for m in response.json()["matches"]}
     assert badges == {"EUW1_4": "MVP", "EUW1_3": None, "EUW1_2": None, "EUW1_1": None}
 
 
@@ -364,7 +372,7 @@ def test_champions_filters_by_patch(seeded_db):
 @pytest.mark.with_cache
 def test_second_call_does_not_hit_postgres(seeded_db):
     first = client.get("/matches")
-    assert len(first.json()) == 3
+    assert len(first.json()["matches"]) == 3
 
     # Si la segunda llamada consultara la base, ya no encontraría ninguna
     with psycopg.connect(DB_URL) as connection:
@@ -383,4 +391,4 @@ def test_api_works_when_redis_is_down(seeded_db, monkeypatch):
     response = client.get("/matches")
 
     assert response.status_code == 200
-    assert len(response.json()) == 3
+    assert len(response.json()["matches"]) == 3
