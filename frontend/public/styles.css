@@ -930,6 +930,20 @@ input:focus-visible {
   display: none;
 }
 
+.filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+
+.filter-divider {
+  width: 2px;
+  height: 22px;
+  margin: 0 4px;
+  background: var(--border);
+}
+
 .filter-label {
   font: 600 11px/1 "Archivo", sans-serif;
   letter-spacing: 0.18em;
@@ -973,13 +987,54 @@ input:focus-visible {
   color: var(--text-muted);
 }
 
-.filter-more {
+.filter-dropdown {
   position: relative;
+}
+
+/* La caja de búsqueda se queda fija arriba y solo se desplaza la lista. Con
+   tres clases, para ganar a la altura de .filter-dropdown .patch-menu */
+.filter-dropdown .patch-menu.champion-menu {
+  display: flex;
+  flex-direction: column;
+  max-height: 245px;
+  overflow: hidden;
+}
+
+.filter-options {
+  overflow-y: auto;
+}
+
+.filter-search {
+  flex: none;
+  width: 100%;
+  padding: 11px 12px;
+  border: 0;
+  border-bottom: 2px solid var(--border-strong);
+  background: var(--bg-deep);
+  font: 600 13px/1 "Archivo", sans-serif;
+  color: var(--text);
+}
+
+.filter-search::placeholder {
+  color: var(--text-faint);
+}
+
+/* El contorno general se cortaría dentro del menú, así que se marca el borde */
+.filter-search:focus-visible {
+  outline: none;
+  border-bottom-color: var(--accent);
+}
+
+.filter-empty {
+  margin: 0;
+  padding: 12px 14px;
+  font: 500 12px/1.3 "Archivo", sans-serif;
+  color: var(--text-muted);
 }
 
 /* Centrado bajo el botón: el borde izquierdo va a su mitad y luego el menú
    retrocede la mitad de su propio ancho */
-.filter-more .patch-menu {
+.filter-dropdown .patch-menu {
   right: auto;
   left: 50%;
   transform: translateX(-50%);
@@ -1230,11 +1285,26 @@ input:focus-visible {
     background: linear-gradient(90deg, rgba(16, 15, 14, 0.45) 0%, rgba(16, 15, 14, 0.85) 100%);
   }
 
-  /* "Más" puede quedar pegado al borde derecho, y centrado se saldría de la
-     pantalla, así que aquí se abre hacia la izquierda */
-  .filter-more .patch-menu {
+  /* Con los grupos uno debajo de otro, la raya entre ellos sobra */
+  .filter-divider {
+    display: none;
+  }
+
+  /* Los botones pueden caer en cualquier lado al saltar de línea, y un menú
+     centrado en ellos se saldría de la pantalla. Aquí se abre debajo de toda
+     la fila de filtros y con su mismo ancho */
+  .history-filters {
+    position: relative;
+  }
+
+  .filter-dropdown {
+    position: static;
+  }
+
+  .filter-dropdown .patch-menu {
     right: 0;
-    left: auto;
+    left: 0;
+    width: auto;
     transform: none;
   }
 }
