@@ -1045,6 +1045,44 @@ input:focus-visible {
   color: var(--bastion);
 }
 
+.matches-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin: 0 32px;
+  padding: 20px 0 6px;
+}
+
+.more-button {
+  padding: 13px 28px;
+  border: 2px solid var(--border-strong);
+  background: transparent;
+  font: 700 11px/1 "Archivo", sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.more-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.more-button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.matches-end {
+  margin: 0;
+  font: 500 11px/1 "Archivo", sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
 .ratio-low { color: var(--ratio-low); }
 .ratio-ok { color: var(--ratio-ok); }
 .ratio-good { color: var(--ratio-good); }

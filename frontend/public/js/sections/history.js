@@ -112,16 +112,50 @@ function row(match) {
   );
 }
 
+async function fetchPage(offset) {
+  const [page] = await Promise.all([getJson("/matches", { offset }), dataDragonReady]);
+  return page;
+}
+
+// Añade la tanda debajo de las que ya hay y deja al final el botón para pedir
+// la siguiente, o el aviso de que no quedan más
+function showPage(list, footer, page, offset) {
+  list.append(...page.matches.map(row));
+  if (!page.has_more) {
+    footer.replaceChildren(el("p", { className: "matches-end" }, "No quedan más partidas que mostrar"));
+    return;
+  }
+  const next = offset + page.matches.length;
+  const button = el("button", { className: "more-button", attrs: { type: "button" } }, "Mostrar 10 más");
+  button.addEventListener("click", async () => {
+    // Desactivado mientras llega la respuesta, para que dos clics seguidos no
+    // pidan la misma tanda dos veces y salga repetida
+    button.disabled = true;
+    try {
+      showPage(list, footer, await fetchPage(next), next);
+    } catch (error) {
+      console.error("No se han podido cargar más partidas.", error);
+      const warning = el("p", { className: "matches-end" }, "No se han podido cargar más partidas.");
+      footer.replaceChildren(warning, button);
+      button.disabled = false;
+    }
+  });
+  footer.replaceChildren(button);
+}
+
 export async function renderHistory(section) {
   const head = el("div", { className: "section-head" }, el("h2", {}, "Últimas partidas"));
   const message = (text) => el("p", { className: "section-message" }, text);
   try {
-    const [matches] = await Promise.all([getJson("/matches"), dataDragonReady]);
-    if (matches.length === 0) {
+    const page = await fetchPage(0);
+    if (page.matches.length === 0) {
       section.replaceChildren(head, message("Todavía no hay partidas guardadas."));
       return;
     }
-    section.replaceChildren(head, el("ol", { className: "matches" }, matches.map(row)));
+    const list = el("ol", { className: "matches" });
+    const footer = el("div", { className: "matches-footer" });
+    section.replaceChildren(head, list, footer);
+    showPage(list, footer, page, 0);
   } catch (error) {
     console.error("No se ha podido cargar el historial.", error);
     section.replaceChildren(head, message("No se ha podido cargar el historial."));
