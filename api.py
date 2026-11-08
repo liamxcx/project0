@@ -170,8 +170,8 @@ def matches(
               AND (%(patch)s::text IS NULL OR {PATCH_SQL} = %(patch)s)
               AND (%(champion)s::text IS NULL OR p.champion = %(champion)s)
             ORDER BY m.played_at DESC
-            -- De 20 en 20. La página pide la siguiente con offset=20, 40...
-            LIMIT 20 OFFSET %(offset)s
+            -- De 10 en 10. La página pide la siguiente con offset=10, 20...
+            LIMIT 10 OFFSET %(offset)s
             """,
             {"patch": patch, "champion": champion, "offset": offset},
         )
