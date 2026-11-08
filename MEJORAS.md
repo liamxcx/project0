@@ -54,6 +54,10 @@ hace, se borra de aquí y pasa al README.
 - Instalar el plugin `helm diff` comprobando su firma, para ver qué cambia
   antes de cada `helm upgrade`. Hoy se hace con
   `helm template … | kubectl diff -f -`.
+- Desplegarlo en público, en un servidor en la nube con su dominio. Hoy solo
+  funciona en local, así que nadie puede abrirlo desde fuera de casa. Haría
+  falta HTTPS con un certificado de verdad, que el CI despliegue solo y
+  revisar qué queda expuesto, como `/docs`.
 
 ## Observabilidad
 
