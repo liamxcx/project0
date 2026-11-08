@@ -28,6 +28,12 @@
   --accent-hover: #ff6a4f;
   --win: #2fbd77;
   --bolt: #3fd8ff;
+  --mvp: #f19000;
+  --bastion: #b05cf0;
+  --ratio-low: #69788d;
+  --ratio-ok: #259a7e;
+  --ratio-good: #3064d4;
+  --ratio-high: #f19000;
 }
 
 *,
@@ -882,6 +888,167 @@ input:focus-visible {
   text-transform: uppercase;
   color: #f19000;
 }
+
+.history {
+  padding: 34px 0 10px;
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 32px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--accent);
+}
+
+.section-head h2 {
+  margin: 0;
+  font: 800 26px/1 "Archivo", sans-serif;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+}
+
+.section-message {
+  margin: 0 32px;
+  padding: 28px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.matches {
+  display: grid;
+  gap: 4px;
+  margin: 16px 32px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.match {
+  --result: var(--accent);
+  position: relative;
+  overflow: hidden;
+  border-left: 3px solid var(--result);
+  background: var(--panel);
+}
+
+.match.is-win {
+  --result: var(--win);
+}
+
+/* La imagen ocupa la parte izquierda y se funde hacia la derecha. Así el
+   texto de la derecha se lee sobre fondo oscuro */
+.match-splash {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 60%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+  opacity: 0.55;
+  /* La imagen se desvanece sola hacia su borde derecho, así que el corte no se
+     ve aunque el degradado de encima se aclare */
+  mask-image: linear-gradient(90deg, #000 50%, transparent 100%);
+  transition: opacity 0.2s;
+}
+
+.match::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(16, 15, 14, 0.35) 0%, rgba(16, 15, 14, 0.85) 45%, var(--panel) 62%);
+  transition: opacity 0.2s;
+}
+
+.match:hover .match-splash {
+  opacity: 0.8;
+}
+
+/* Sin esto el brillo solo se nota a la izquierda, porque la cara queda hacia
+   la mitad, donde el degradado ya tapa mucho */
+.match:hover::after {
+  opacity: 0.5;
+}
+
+/* Por encima de la imagen y del degradado */
+.match-body {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) repeat(5, minmax(0, 1fr));
+  align-items: center;
+  gap: 16px;
+  min-height: 100px;
+  padding: 14px 24px;
+}
+
+.match-body p {
+  margin: 0;
+}
+
+.match-name {
+  font: 800 20px/1.1 "Archivo", sans-serif;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+
+/* Con dos clases, para ganar al margin: 0 de .match-body p */
+.match-body .match-label {
+  margin-top: 6px;
+  font: 500 10px/1 "Archivo", sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.match-value {
+  font: 700 15px/1 "Archivo", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.match-stat:last-child {
+  text-align: right;
+}
+
+.match-result {
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--result);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px;
+  border: 1px solid currentColor;
+  font: 700 9px/1 "Archivo", sans-serif;
+  letter-spacing: 0.14em;
+}
+
+.badge svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.badge-mvp {
+  color: var(--mvp);
+}
+
+.badge-bastion {
+  color: var(--bastion);
+}
+
+.ratio-low { color: var(--ratio-low); }
+.ratio-ok { color: var(--ratio-ok); }
+.ratio-good { color: var(--ratio-good); }
+.ratio-high { color: var(--ratio-high); }
 
 @media (max-width: 800px) {
   .home {
