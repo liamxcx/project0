@@ -1,10 +1,6 @@
 import { el } from "../dom.js";
-import { formatNumber } from "../format.js";
+import { formatGames } from "../format.js";
 import { seasonOf } from "../season.js";
-
-function gamesLabel(games) {
-  return `${formatNumber(games, 0)} ${games === 1 ? "partida" : "partidas"}`;
-}
 
 export async function renderPatchSelect(container, patches, rankData, selected, onChange) {
   // Con la B, "General" son los totales de Riot, así que cuenta sus partidas
@@ -14,9 +10,9 @@ export async function renderPatchSelect(container, patches, rankData, selected, 
     {
       value: null,
       label: season ? `General · Temporada ${season}` : "General",
-      meta: rank ? gamesLabel(rank.games) : "",
+      meta: rank ? formatGames(rank.games) : "",
     },
-    ...patches.map((p) => ({ value: p.patch, label: p.patch, meta: gamesLabel(p.games) })),
+    ...patches.map((p) => ({ value: p.patch, label: p.patch, meta: formatGames(p.games) })),
   ];
 
   const current = el("span", { className: "patch-current" });

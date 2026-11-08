@@ -50,7 +50,7 @@ export async function renderProfile(content, riotId) {
     renderHero(hero, summoner, patches);
     renderRank(rank, rankData);
     renderLpChart(lp, getJson("/rank/history"));
-    renderHistory(history);
+    renderHistory(history, patches);
     patches.then((list) => {
       const patch = selectedPatch(list);
       renderSummary(summary, rankData, list, patch);

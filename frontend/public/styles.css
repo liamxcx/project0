@@ -916,10 +916,83 @@ input:focus-visible {
   color: var(--text-muted);
 }
 
+.history-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin: 0 32px;
+  padding: 14px 0;
+}
+
+/* Sin parches el filtro no se pinta, y no debe quedar un hueco vacío */
+.history-filters:empty {
+  display: none;
+}
+
+.filter-label {
+  font: 600 11px/1 "Archivo", sans-serif;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.filter-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.filter-button {
+  padding: 8px 12px;
+  border: 2px solid var(--border-strong);
+  background: transparent;
+  font: 700 12px/1 "Archivo", sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.filter-button:hover {
+  border-color: var(--text-dim);
+}
+
+.filter-button[aria-expanded="true"],
+.filter-button.is-selected {
+  border-color: var(--accent);
+}
+
+.filter-button.is-selected {
+  background: var(--line);
+  color: var(--text);
+}
+
+.filter-caret {
+  margin-left: 10px;
+  font: 500 9px/1 "Archivo", sans-serif;
+  color: var(--text-muted);
+}
+
+.filter-more {
+  position: relative;
+}
+
+/* Centrado bajo el botón: el borde izquierdo va a su mitad y luego el menú
+   retrocede la mitad de su propio ancho */
+.filter-more .patch-menu {
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 0;
+  width: max-content;
+  /* Cinco parches y medio. El último cortado avisa de que la lista sigue */
+  max-height: 205px;
+}
+
 .matches {
   display: grid;
   gap: 4px;
-  margin: 16px 32px 0;
+  margin: 2px 32px 0;
   padding: 0;
   list-style: none;
 }

@@ -1,7 +1,7 @@
 import { getJson } from "../api.js";
 import { championName, championSplashUrl, dataDragonReady } from "../ddragon.js";
 import { el } from "../dom.js";
-import { formatNumber } from "../format.js";
+import { formatGames, formatNumber } from "../format.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -112,14 +112,22 @@ function row(match) {
   );
 }
 
-async function fetchPage(offset) {
-  const [page] = await Promise.all([getJson("/matches", { offset }), dataDragonReady]);
+// Cada cambio de filtro abre un turno. Una respuesta que llega de un turno
+// anterior se pidió para otra lista, así que se descarta
+let latest = 0;
+
+function message(text) {
+  return el("p", { className: "section-message" }, text);
+}
+
+async function fetchPage(patch, offset) {
+  const [page] = await Promise.all([getJson("/matches", { patch, offset }), dataDragonReady]);
   return page;
 }
 
 // Añade la tanda debajo de las que ya hay y deja al final el botón para pedir
 // la siguiente, o el aviso de que no quedan más
-function showPage(list, footer, page, offset) {
+function showPage(list, footer, page, patch, offset, turn) {
   list.append(...page.matches.map(row));
   if (!page.has_more) {
     footer.replaceChildren(el("p", { className: "matches-end" }, "No quedan más partidas que mostrar"));
@@ -132,8 +140,11 @@ function showPage(list, footer, page, offset) {
     // pidan la misma tanda dos veces y salga repetida
     button.disabled = true;
     try {
-      showPage(list, footer, await fetchPage(next), next);
+      const nextPage = await fetchPage(patch, next);
+      if (turn !== latest) return;
+      showPage(list, footer, nextPage, patch, next, turn);
     } catch (error) {
+      if (turn !== latest) return;
       console.error("No se han podido cargar más partidas.", error);
       const warning = el("p", { className: "matches-end" }, "No se han podido cargar más partidas.");
       footer.replaceChildren(warning, button);
@@ -143,21 +154,122 @@ function showPage(list, footer, page, offset) {
   footer.replaceChildren(button);
 }
 
-export async function renderHistory(section) {
-  const head = el("div", { className: "section-head" }, el("h2", {}, "Últimas partidas"));
-  const message = (text) => el("p", { className: "section-message" }, text);
+// Empieza la lista desde la primera tanda. Con patch null son todas las partidas
+async function loadMatches(results, patch) {
+  const turn = ++latest;
   try {
-    const page = await fetchPage(0);
+    const page = await fetchPage(patch, 0);
+    if (turn !== latest) return;
     if (page.matches.length === 0) {
-      section.replaceChildren(head, message("Todavía no hay partidas guardadas."));
+      const text = patch ? `No hay partidas en el parche ${patch}.` : "Todavía no hay partidas guardadas.";
+      results.replaceChildren(message(text));
       return;
     }
     const list = el("ol", { className: "matches" });
     const footer = el("div", { className: "matches-footer" });
-    section.replaceChildren(head, list, footer);
-    showPage(list, footer, page, 0);
+    results.replaceChildren(list, footer);
+    showPage(list, footer, page, patch, 0, turn);
   } catch (error) {
+    if (turn !== latest) return;
     console.error("No se ha podido cargar el historial.", error);
-    section.replaceChildren(head, message("No se ha podido cargar el historial."));
+    results.replaceChildren(message("No se ha podido cargar el historial."));
   }
+}
+
+// Con una temporada entera saldrían unos 24 botones, así que se ven los más
+// recientes y el resto va en el desplegable de "Más"
+const VISIBLE_PATCHES = 3;
+
+function renderFilters(container, patches, onChange) {
+  let selected = null;
+  const visible = [{ label: "Todos", patch: null }].concat(
+    patches.slice(0, VISIBLE_PATCHES).map(({ patch }) => ({ label: patch, patch })),
+  );
+  const older = patches.slice(VISIBLE_PATCHES);
+
+  const buttons = visible.map(({ label, patch }) =>
+    el(
+      "button",
+      { className: "filter-button", attrs: { type: "button" }, on: { click: () => choose(patch) } },
+      label,
+    ),
+  );
+
+  const moreLabel = el("span", {}, "Más");
+  const caret = el("span", { className: "filter-caret", attrs: { "aria-hidden": "true" } });
+  const more = el(
+    "button",
+    {
+      className: "filter-button",
+      attrs: { type: "button", "aria-haspopup": "true" },
+      on: { click: () => setOpen(menu.hidden) },
+    },
+    moreLabel,
+    caret,
+  );
+  // El mismo menú que el selector de arriba, para que los dos se vean iguales
+  const items = older.map(({ patch, games }) =>
+    el(
+      "button",
+      { className: "patch-option", attrs: { type: "button" }, on: { click: () => choose(patch) } },
+      el("span", { className: "patch-option-label" }, patch),
+      el("span", { className: "patch-option-meta" }, formatGames(games)),
+    ),
+  );
+  const menu = el("div", { className: "patch-menu" }, items);
+  const moreWrapper = el("div", { className: "filter-more" }, more, menu);
+
+  function setOpen(open) {
+    menu.hidden = !open;
+    more.setAttribute("aria-expanded", String(open));
+    caret.textContent = open ? "▲" : "▼";
+  }
+
+  // Si el elegido está en el desplegable, "Más" pasa a llamarse como él
+  function show() {
+    // aria-pressed le dice a un lector de pantalla cuál está elegido
+    visible.forEach(({ patch }, i) => {
+      buttons[i].classList.toggle("is-selected", patch === selected);
+      buttons[i].setAttribute("aria-pressed", String(patch === selected));
+    });
+    const inMenu = older.some(({ patch }) => patch === selected);
+    more.classList.toggle("is-selected", inMenu);
+    moreLabel.textContent = inMenu ? selected : "Más";
+    older.forEach(({ patch }, i) => items[i].classList.toggle("is-selected", patch === selected));
+  }
+
+  function choose(patch) {
+    setOpen(false);
+    if (patch === selected) return;
+    selected = patch;
+    show();
+    onChange(patch);
+  }
+
+  // El desplegable se cierra al pulsar fuera o con Escape
+  document.addEventListener("click", (event) => {
+    if (!moreWrapper.contains(event.target)) setOpen(false);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") setOpen(false);
+  });
+
+  setOpen(false);
+  show();
+  container.replaceChildren(
+    el("span", { className: "filter-label" }, "Filtrar por parche"),
+    el("div", { className: "filter-buttons" }, buttons, older.length > 0 ? moreWrapper : null),
+  );
+}
+
+export async function renderHistory(section, patches) {
+  const head = el("div", { className: "section-head" }, el("h2", {}, "Últimas partidas"));
+  const filters = el("div", { className: "history-filters" });
+  const results = el("div");
+  section.replaceChildren(head, filters, results);
+  loadMatches(results, null);
+  // Si los parches fallan, profile.js ya los da como lista vacía, y entonces
+  // el historial sale igual pero sin filtro
+  const list = await patches;
+  if (list.length > 0) renderFilters(filters, list, (patch) => loadMatches(results, patch));
 }

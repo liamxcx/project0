@@ -6,6 +6,11 @@ export function formatNumber(value, decimals) {
   });
 }
 
+// "1 partida", "12 partidas"
+export function formatGames(games) {
+  return `${formatNumber(games, 0)} ${games === 1 ? "partida" : "partidas"}`;
+}
+
 const RELATIVE = new Intl.RelativeTimeFormat("es", { numeric: "always" });
 
 // "hace 5 minutos", "hace 32 horas", "hace 3 días". Con el reloj del ordenador
