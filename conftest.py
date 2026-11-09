@@ -68,6 +68,16 @@ FULL_MATCH_SQL = """
         ('EUW1_4', 1, 1055, 1500),
         ('EUW1_4', 1, 3089, 725000),
         ('EUW1_4', 6, 1056, 2000);
+
+    -- Q, W, E y Q otra vez, y entre medias una EVOLVE, que no cuenta
+    INSERT INTO skill_levelups
+        (match_id, participant_id, skill_slot, level_up_type, timestamp_ms)
+    VALUES
+        ('EUW1_4', 1, 1, 'NORMAL', 60000),
+        ('EUW1_4', 1, 2, 'NORMAL', 150000),
+        ('EUW1_4', 1, 3, 'NORMAL', 240000),
+        ('EUW1_4', 1, 4, 'EVOLVE', 300000),
+        ('EUW1_4', 1, 1, 'NORMAL', 330000);
 """
 
 CLEAR_SQL = (

@@ -145,14 +145,18 @@ def test_match_detail_returns_me_and_players(full_match):
     assert me["kill_participation_pct"] == 78.6
     # 30.000 de los 70.000 de daño de tu equipo
     assert me["damage_share_pct"] == 42.9
-    # Solo tus compras, en orden y en minutos
-    assert me["purchases"] == [
-        {"item_id": 1055, "minute": 0},
-        {"item_id": 3089, "minute": 12},
-    ]
 
     players = detail["players"]
     assert len(players) == 10
+    # Cada uno con sus compras, en orden y en minutos. Las del 6 no se mezclan
+    assert players[0]["purchases"] == [
+        {"item_id": 1055, "minute": 0},
+        {"item_id": 3089, "minute": 12},
+    ]
+    assert players[5]["purchases"] == [{"item_id": 1056, "minute": 0}]
+    # Y sus habilidades en orden, sin la EVOLVE
+    assert players[0]["skills"] == [1, 2, 3, 1]
+    assert players[5]["skills"] == []
     # Solo los invocadores seguidos tienen nombre
     assert [p["riot_id"] for p in players if p["riot_id"]] == ["Invocador#TEST"]
     # Los cinco rivales empatan, y el sello va al de número más bajo
