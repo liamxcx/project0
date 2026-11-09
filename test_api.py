@@ -158,6 +158,13 @@ def test_match_detail_returns_me_and_players(full_match):
     # Los cinco rivales empatan, y el sello va al de número más bajo
     badges = {p["participant_id"]: p["badge"] for p in players if p["badge"]}
     assert badges == {1: "MVP", 6: "BASTION"}
+    # Cada jugador trae lo del marcador, no solo tú. El 7 tiene 157 súbditos
+    # y 10 monstruos neutrales
+    rival = players[6]
+    assert rival["damage_to_champions"] == 10000
+    assert rival["cs"] == 167
+    assert rival["items"][0] == 3089
+    assert rival["summoner_spells"] == [4, None]
 
 
 def test_match_detail_returns_404_for_unknown_match(seeded_db):

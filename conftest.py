@@ -46,11 +46,13 @@ FULL_MATCH_SQL = """
 
     INSERT INTO participants
         (match_id, participant_id, puuid, champion, kills, deaths, assists,
-         win, team_id, damage_to_champions, vision_score)
+         win, team_id, damage_to_champions, vision_score,
+         minions_killed, neutral_minions_killed, item0, summoner1_id)
     SELECT 'EUW1_4', n, CASE WHEN n = 1 THEN 'yo' END, 'Ahri',
            CASE WHEN n = 1 THEN 10 ELSE 1 END, 5, 1,
            n <= 5, CASE WHEN n <= 5 THEN 100 ELSE 200 END,
-           CASE WHEN n = 1 THEN 30000 ELSE 10000 END, 20
+           CASE WHEN n = 1 THEN 30000 ELSE 10000 END, 20,
+           150 + n, 10, 3089, 4
     FROM generate_series(1, 10) AS n;
 
     INSERT INTO item_purchases (match_id, participant_id, item_id, timestamp_ms)

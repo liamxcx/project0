@@ -271,6 +271,13 @@ def load_match_detail(match_id):
                    p.deaths,
                    p.assists,
                    p.win,
+                   -- Lo que enseña el marcador de la partida de cada jugador
+                   p.damage_to_champions,
+                   p.minions_killed + p.neutral_minions_killed AS cs,
+                   p.vision_score,
+                   ARRAY[p.item0, p.item1, p.item2, p.item3, p.item4, p.item5, p.item6]
+                       AS items,
+                   ARRAY[p.summoner1_id, p.summoner2_id] AS summoner_spells,
                    su.game_name || '#' || su.tag_line AS riot_id,
                    sc.score,
                    sc.badge
