@@ -252,17 +252,6 @@ def load_match_detail(match_id):
 
         cursor.execute(
             """
-            SELECT item_id, timestamp_ms / 60000 AS minute
-            FROM item_purchases
-            WHERE match_id = %s AND participant_id = %s
-            ORDER BY timestamp_ms, id
-            """,
-            (match_id, me["participant_id"]),
-        )
-        me["purchases"] = cursor.fetchall()
-
-        cursor.execute(
-            """
             SELECT p.participant_id,
                    p.team_id,
                    p.champion,
@@ -271,6 +260,21 @@ def load_match_detail(match_id):
                    p.deaths,
                    p.assists,
                    p.win,
+                   -- Lo que enseña el marcador de la partida de cada jugador
+                   p.damage_to_champions,
+                   p.minions_killed + p.neutral_minions_killed AS cs,
+                   p.vision_score,
+                   ARRAY[p.item0, p.item1, p.item2, p.item3, p.item4, p.item5, p.item6]
+                       AS items,
+                   ARRAY[p.summoner1_id, p.summoner2_id] AS summoner_spells,
+                   p.champ_level,
+                   p.primary_style_id,
+                   p.secondary_style_id,
+                   p.rune_ids,
+                   p.shard_ids,
+                   p.tier,
+                   p.division,
+                   p.league_points,
                    su.game_name || '#' || su.tag_line AS riot_id,
                    sc.score,
                    sc.badge
@@ -284,6 +288,42 @@ def load_match_detail(match_id):
             (match_id,),
         )
         players = cursor.fetchall()
+
+        cursor.execute(
+            """
+            SELECT participant_id, item_id, timestamp_ms / 60000 AS minute
+            FROM item_purchases
+            WHERE match_id = %s
+            ORDER BY timestamp_ms, id
+            """,
+            (match_id,),
+        )
+        purchases = cursor.fetchall()
+
+        # Solo las subidas normales. Las EVOLVE, de campeones como Kha'Zix, no
+        # gastan punto de habilidad y no forman parte del orden
+        cursor.execute(
+            """
+            SELECT participant_id, skill_slot
+            FROM skill_levelups
+            WHERE match_id = %s AND level_up_type = 'NORMAL'
+            ORDER BY timestamp_ms, id
+            """,
+            (match_id,),
+        )
+        skills = cursor.fetchall()
+
+    # Cada jugador con sus compras y sus habilidades, en el orden en que pasaron
+    for player in players:
+        number = player["participant_id"]
+        player["purchases"] = [
+            {"item_id": p["item_id"], "minute": p["minute"]}
+            for p in purchases
+            if p["participant_id"] == number
+        ]
+        player["skills"] = [
+            s["skill_slot"] for s in skills if s["participant_id"] == number
+        ]
 
     # Los datos de la partida van fuera de me, porque son de los diez
     match_fields = ["match_id", "played_at", "duration_seconds", "patch"]

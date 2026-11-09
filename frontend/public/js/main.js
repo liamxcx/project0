@@ -1,6 +1,9 @@
 import { parseProfilePath } from "./routes.js";
 import { renderHome } from "./sections/home.js";
 import { renderProfile } from "./sections/profile.js";
+import { initTooltips } from "./tooltip.js";
+
+initTooltips();
 
 const profile = parseProfilePath(location.pathname);
 

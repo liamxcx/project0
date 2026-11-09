@@ -11,6 +11,11 @@ export function formatGames(games) {
   return `${formatNumber(games, 0)} ${games === 1 ? "partida" : "partidas"}`;
 }
 
+// 1841 segundos → "30:41"
+export function formatDuration(seconds) {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
 const RELATIVE = new Intl.RelativeTimeFormat("es", { numeric: "always" });
 
 // "hace 5 minutos", "hace 32 horas", "hace 3 días". Con el reloj del ordenador

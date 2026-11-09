@@ -145,19 +145,40 @@ def test_match_detail_returns_me_and_players(full_match):
     assert me["kill_participation_pct"] == 78.6
     # 30.000 de los 70.000 de daño de tu equipo
     assert me["damage_share_pct"] == 42.9
-    # Solo tus compras, en orden y en minutos
-    assert me["purchases"] == [
-        {"item_id": 1055, "minute": 0},
-        {"item_id": 3089, "minute": 12},
-    ]
 
     players = detail["players"]
     assert len(players) == 10
+    # Cada uno con sus compras, en orden y en minutos. Las del 6 no se mezclan
+    assert players[0]["purchases"] == [
+        {"item_id": 1055, "minute": 0},
+        {"item_id": 3089, "minute": 12},
+    ]
+    assert players[5]["purchases"] == [{"item_id": 1056, "minute": 0}]
+    # Y sus habilidades en orden, sin la EVOLVE
+    assert players[0]["skills"] == [1, 2, 3, 1]
+    assert players[5]["skills"] == []
     # Solo los invocadores seguidos tienen nombre
     assert [p["riot_id"] for p in players if p["riot_id"]] == ["Invocador#TEST"]
     # Los cinco rivales empatan, y el sello va al de número más bajo
     badges = {p["participant_id"]: p["badge"] for p in players if p["badge"]}
     assert badges == {1: "MVP", 6: "BASTION"}
+    # Cada jugador trae lo del marcador, no solo tú. El 7 tiene 157 súbditos
+    # y 10 monstruos neutrales
+    rival = players[6]
+    assert rival["damage_to_champions"] == 10000
+    assert rival["cs"] == 167
+    assert rival["items"][0] == 3089
+    assert rival["summoner_spells"] == [4, None]
+    # Y el nivel, las runas y el rango, que se guardan desde la V11
+    assert rival["champ_level"] == 17
+    assert rival["primary_style_id"] == 8000
+    assert rival["rune_ids"] == [8005, 9111, 9104, 8017, 8345, 8304]
+    assert rival["shard_ids"] == [5005, 5008, 5011]
+    assert rival["tier"] == "DIAMOND"
+    assert rival["division"] == "III"
+    assert rival["league_points"] == 45
+    # Sin clasificatoria, el rango llega vacío y no como un error
+    assert players[7]["tier"] is None
 
 
 def test_match_detail_returns_404_for_unknown_match(seeded_db):

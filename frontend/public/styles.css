@@ -28,8 +28,13 @@
   --accent-hover: #ff6a4f;
   --win: #2fbd77;
   --bolt: #3fd8ff;
+  /* Alto aproximado de la barra fija de arriba y de cada partida. Con ellos se
+     calcula el panel abierto para que barra y panel llenen la pantalla */
+  --topbar-height: 72px;
+  --match-height: 100px;
   --mvp: #f19000;
-  --bastion: #b05cf0;
+  /* Cian y no morado, porque el morado es el color de Master */
+  --bastion: #3fd8ff;
   --ratio-low: #69788d;
   --ratio-ok: #259a7e;
   --ratio-good: #3064d4;
@@ -991,7 +996,7 @@ input:focus-visible {
   position: relative;
 }
 
-/* La caja de búsqueda se queda fija arriba y solo se desplaza la lista. Con
+/* El buscador se queda fijo arriba y solo se desplaza la lista. Con
    tres clases, para ganar a la altura de .filter-dropdown .patch-menu */
 .filter-dropdown .patch-menu.champion-menu {
   display: flex;
@@ -1052,16 +1057,23 @@ input:focus-visible {
   list-style: none;
 }
 
-.match {
+/* El color del resultado va en la partida entera, porque lo usan la barra y
+   el panel del detalle */
+.match-item {
   --result: var(--accent);
+  /* Al subirla con scrollIntoView, que no quede debajo de la barra fija de arriba */
+  scroll-margin-top: var(--topbar-height);
+}
+
+.match-item.is-win {
+  --result: var(--win);
+}
+
+.match {
   position: relative;
   overflow: hidden;
   border-left: 3px solid var(--result);
   background: var(--panel);
-}
-
-.match.is-win {
-  --result: var(--win);
 }
 
 /* La imagen ocupa la parte izquierda y se funde hacia la derecha. Así el
@@ -1089,13 +1101,15 @@ input:focus-visible {
   transition: opacity 0.2s;
 }
 
-.match:hover .match-splash {
+.match:hover .match-splash,
+.match-item.is-open .match-splash {
   opacity: 0.8;
 }
 
 /* Sin esto el brillo solo se nota a la izquierda, porque la cara queda hacia
    la mitad, donde el degradado ya tapa mucho */
-.match:hover::after {
+.match:hover::after,
+.match-item.is-open .match::after {
   opacity: 0.5;
 }
 
@@ -1107,8 +1121,345 @@ input:focus-visible {
   grid-template-columns: minmax(0, 1.6fr) repeat(5, minmax(0, 1fr));
   align-items: center;
   gap: 16px;
-  min-height: 100px;
-  padding: 14px 24px;
+  min-height: var(--match-height);
+  padding: 14px 48px 14px 24px;
+}
+
+/* Cubre toda la barra, por encima del texto, así que cualquier punto abre */
+.match-toggle {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* El contorno por fuera se cortaría, porque la barra recorta lo que sobresale */
+.match-toggle:focus-visible {
+  outline-offset: -3px;
+}
+
+.match-caret {
+  position: absolute;
+  top: 50%;
+  right: 18px;
+  z-index: 1;
+  transform: translateY(-50%);
+  font: 500 10px/1 "Archivo", sans-serif;
+  color: var(--text-muted);
+}
+
+/* Como mínimo, lo que queda de pantalla debajo de la barra de la partida.
+   dvh es el alto de la ventana, también en móviles con barra de dirección */
+.match-detail {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - var(--topbar-height) - var(--match-height));
+  position: relative;
+  overflow: hidden;
+  border-left: 3px solid var(--result);
+  border-bottom: 2px solid var(--border);
+  background: var(--bg-deep);
+}
+
+/* Solo el tono del campeón: borrosa, con poco color y casi transparente, para
+   no competir con los iconos del marcador */
+.match-detail::before {
+  content: "";
+  position: absolute;
+  inset: -20px;
+  background: var(--splash) center 20% / cover no-repeat;
+  opacity: 0.14;
+  filter: blur(4px) saturate(0.6);
+}
+
+/* Por encima del fondo */
+.detail-tabs,
+.detail-content {
+  position: relative;
+}
+
+/* Si el marcador no cabe a lo ancho, como en el móvil, se desliza de lado
+   como cualquier tabla ancha, en vez de apretar las columnas */
+.detail-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  overflow-x: auto;
+}
+
+.detail-tabs {
+  display: flex;
+  padding: 0 32px;
+  border-bottom: 1px solid var(--line);
+}
+
+.detail-tab {
+  margin-bottom: -1px;
+  padding: 13px 18px 11px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  font: 700 11px/1 "Archivo", sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.detail-tab:hover {
+  color: var(--text-soft);
+}
+
+.detail-tab[aria-selected="true"] {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+
+.detail-message {
+  margin: 0;
+  padding: 24px 32px;
+  font: 500 13px/1.4 "Archivo", sans-serif;
+  color: var(--text-muted);
+}
+
+/* Los iconos y el texto crecen con el alto de la ventana, entre un mínimo y
+   un máximo, para que no se vean diminutos en filas altas */
+.scoreboard {
+  --sb-icon: clamp(30px, 4.6vh, 48px);
+  /* Los objetos van en proporción al campeón, para que no desentonen */
+  --sb-item: calc(var(--sb-icon) * 0.7);
+  --sb-text: clamp(13px, 1.6vh, 15px);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  /* Tan ancho como necesiten sus columnas, y como mínimo el del panel */
+  width: max-content;
+  min-width: 100%;
+  padding: 0 0 10px;
+}
+
+/* Cada equipo se reparte la mitad del alto, y sus cinco filas a partes iguales */
+.sb-block {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.sb-block + .sb-block {
+  margin-top: 6px;
+}
+
+.sb-row {
+  flex: 1;
+  min-height: 32px;
+}
+
+/* La cabecera y las filas comparten columnas, así que cada dato queda debajo
+   de su título */
+.sb-head,
+.sb-row {
+  display: grid;
+  grid-template-columns:
+    calc(var(--sb-icon) * 2.2) minmax(150px, 1.4fr) 76px 100px 76px minmax(110px, 1fr) 110px
+    calc(var(--sb-item) * 7 + 24px);
+  gap: 12px;
+  align-items: center;
+  padding: 4px 32px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sb-head {
+  padding-top: 10px;
+  padding-bottom: 6px;
+}
+
+.sb-head p,
+.sb-cell p {
+  margin: 0;
+}
+
+.sb-team {
+  grid-column: 1 / 3;
+  white-space: nowrap;
+  font: 500 11px/1 "Archivo", sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.sb-team strong {
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.sb-team.is-win strong {
+  color: var(--win);
+}
+
+.sb-column {
+  font: 600 10px/1 "Archivo", sans-serif;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Tu fila un poco más clara, para encontrarte de un vistazo */
+.sb-row.is-me {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sb-who {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.sb-champion,
+.sb-spell,
+.sb-rune,
+.sb-item {
+  flex: none;
+  overflow: hidden;
+  background: var(--line);
+}
+
+.sb-champion img,
+.sb-spell img,
+.sb-rune img,
+.sb-item img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sb-champion {
+  position: relative;
+  width: var(--sb-icon);
+  height: var(--sb-icon);
+}
+
+.sb-level {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  padding: 1px 3px;
+  background: rgba(11, 10, 10, 0.85);
+  /* Crece con el icono: un cuarto de su lado */
+  font: 700 calc(var(--sb-icon) / 4) / 1 "Archivo", sans-serif;
+  color: var(--text);
+}
+
+.sb-spells {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sb-spell,
+.sb-rune {
+  width: calc(var(--sb-icon) / 2 - 1px);
+  height: calc(var(--sb-icon) / 2 - 1px);
+}
+
+/* Las runas son redondas y sin fondo propio */
+.sb-rune {
+  border-radius: 50%;
+  background: var(--bg-deep);
+}
+
+/* El árbol secundario se ve algo más pequeño, como en el cliente */
+.sb-rune.is-style {
+  padding: 2px;
+}
+
+.sb-rank {
+  flex: none;
+  min-width: 28px;
+  padding: 3px 4px;
+  border: 1px solid var(--tier, var(--border-strong));
+  font: 700 10px/1 "Archivo", sans-serif;
+  text-align: center;
+  color: var(--tier, var(--text-muted));
+}
+
+/* Si el nombre y el sello no caben, se cortan aquí en vez de pisar la nota */
+.sb-cell:nth-child(2) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sb-name {
+  overflow: hidden;
+  font: 600 var(--sb-text) / 1.2 "Archivo", sans-serif;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sb-score-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 11px/1 "Archivo", sans-serif;
+  color: var(--text-muted);
+}
+
+.sb-score {
+  min-width: 32px;
+  padding: 4px 0;
+  background: var(--line);
+  font: 800 13px/1 "Archivo", sans-serif;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--text-soft);
+}
+
+.sb-score.is-high {
+  background: var(--mvp);
+  color: var(--bg);
+}
+
+.sb-value {
+  font: 600 var(--sb-text) / 1 "Archivo", sans-serif;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sb-sub {
+  margin-left: 6px;
+  font: 500 11px/1 "Archivo", sans-serif;
+  color: var(--text-muted);
+}
+
+.sb-track {
+  height: 3px;
+  margin-top: 4px;
+  background: var(--line);
+}
+
+.sb-fill {
+  height: 100%;
+  background: var(--accent);
+}
+
+.sb-items {
+  display: flex;
+  gap: 3px;
+}
+
+.sb-item {
+  width: var(--sb-item);
+  height: var(--sb-item);
+}
+
+.sb-item.is-trinket {
+  margin-left: 6px;
 }
 
 .match-body p {
@@ -1211,6 +1562,354 @@ input:focus-visible {
   color: var(--text-muted);
 }
 
+/* La columna izquierda tiene un mínimo para que quepa la cuadrícula de 18
+   niveles. Las runas se quedan con lo demás, y si no les basta, los
+   fragmentos bajan debajo de los árboles en vez de salirse del panel */
+.build {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(680px, 1fr) minmax(0, max-content);
+  gap: 26px 48px;
+  padding: 18px 32px 24px;
+}
+
+/* Llena el alto del panel y reparte lo que sobra por igual entre los bloques
+   y debajo del último. El ::after vacío es ese último hueco */
+.build-main {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 22px;
+  min-width: 0;
+}
+
+.build-main::after {
+  content: "";
+}
+
+.build-right {
+  align-self: start;
+}
+
+.build-players {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+}
+
+.build-team {
+  display: flex;
+  gap: 6px;
+}
+
+/* Una raya entre tu equipo y el rival */
+.build-team + .build-team {
+  padding-left: 24px;
+  border-left: 2px solid var(--border);
+}
+
+.build-player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 4px;
+  border: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+}
+
+.build-player:hover {
+  border-color: var(--border-strong);
+}
+
+.build-player[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--line);
+}
+
+.build-champion,
+.build-item {
+  display: block;
+  flex: none;
+  overflow: hidden;
+  background: var(--line);
+}
+
+.build-champion img,
+.build-item img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.build-champion {
+  width: 40px;
+  height: 40px;
+  border: 2px solid transparent;
+}
+
+/* El MVP y el BASTION, con el color de su sello en el icono. El borde del botón
+   sigue siendo el que marca al jugador elegido */
+.build-player.is-mvp .build-champion {
+  border-color: var(--mvp);
+}
+
+.build-player.is-bastion .build-champion {
+  border-color: var(--bastion);
+}
+
+.build-score {
+  font: 700 12px/1 "Archivo", sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-soft);
+}
+
+.build-score.is-high {
+  color: var(--mvp);
+}
+
+.build-title {
+  margin: 0 0 14px;
+  font: 600 11px/1 "Archivo", sans-serif;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Sus bloques, los objetos y las habilidades, se reparten el alto como si
+   estuvieran directamente en .build-main */
+.build-left {
+  display: contents;
+}
+
+.build-head {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
+.build-head .build-title {
+  margin: 0;
+}
+
+/* Un color por habilidad, el mismo en el orden y en la cuadrícula */
+.skill-1 { --skill: #3064d4; }
+.skill-2 { --skill: #259a7e; }
+.skill-3 { --skill: #b05cf0; }
+.skill-4 { --skill: #f19000; }
+
+.skill-order {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font: 500 14px/1 "Archivo", sans-serif;
+  color: var(--text-dim);
+}
+
+.skill-order-label {
+  margin-right: 4px;
+  font: 600 10px/1 "Archivo", sans-serif;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* El icono de la habilidad, con un borde de su color para reconocerla en la
+   cuadrícula, y la tecla en la esquina */
+.skill-icon {
+  position: relative;
+  display: block;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--skill);
+  background: var(--line);
+}
+
+.skill-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.skill-letter {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  padding: 2px 3px;
+  background: var(--skill);
+  font: 800 9px/1 "Archivo", sans-serif;
+  color: var(--bg);
+}
+
+/* --levels lo pone la página: son los niveles que llegó a subir. Las casillas
+   se reparten el ancho, pero sin pasar de 44 px para no verse alargadas */
+.skill-grid {
+  display: grid;
+  grid-template-columns: 40px repeat(var(--levels), minmax(32px, 44px));
+  gap: 3px;
+}
+
+.skill-label,
+.skill-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  font: 700 12px/1 "Archivo", sans-serif;
+}
+
+.skill-label {
+  justify-content: flex-start;
+}
+
+.skill-cell {
+  background: var(--line);
+  font-variant-numeric: tabular-nums;
+}
+
+.skill-cell.is-up {
+  background: var(--skill);
+  color: var(--bg);
+}
+
+.runes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px 36px;
+}
+
+.rune-tree {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.rune-tree-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  font: 700 14px/1 "Archivo", sans-serif;
+  color: var(--text-light);
+}
+
+.rune-row {
+  display: flex;
+  gap: 14px;
+}
+
+.rune-tree-icon,
+.rune-cell,
+.shard-cell {
+  display: block;
+  flex: none;
+  overflow: hidden;
+}
+
+.rune-tree-icon img,
+.rune-cell img,
+.shard-cell img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.rune-tree-icon {
+  width: 26px;
+  height: 26px;
+}
+
+/* Las no elegidas, apagadas y en gris, para que destaquen las elegidas */
+.rune-cell,
+.shard-cell {
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: var(--bg-deep);
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+
+.rune-cell {
+  width: 42px;
+  height: 42px;
+}
+
+.rune-row.is-keystones .rune-cell {
+  width: 56px;
+  height: 56px;
+}
+
+.shard-cell {
+  width: 32px;
+  height: 32px;
+}
+
+.rune-cell.is-chosen,
+.shard-cell.is-chosen {
+  border-color: var(--mvp);
+  opacity: 1;
+  filter: none;
+}
+
+.build-timeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.build-step {
+  display: flex;
+  align-items: flex-start;
+}
+
+/* La flecha entre un minuto y el siguiente, a la altura de los iconos */
+.build-step:not(:last-child)::after {
+  content: "›";
+  margin: 0 12px;
+  font: 500 18px/32px "Archivo", sans-serif;
+  color: var(--text-dim);
+}
+
+.build-step-items {
+  display: flex;
+  gap: 2px;
+}
+
+.build-item {
+  width: 32px;
+  height: 32px;
+}
+
+.build-minute {
+  margin: 6px 0 0;
+  font: 500 11px/1 "Archivo", sans-serif;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* El tooltip con el nombre al pasar el ratón. pointer-events: none hace que
+   el ratón lo atraviese, así que nunca tapa lo que hay debajo */
+.tip {
+  position: fixed;
+  z-index: 50;
+  max-width: 260px;
+  padding: 6px 9px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  font: 600 12px/1.3 "Archivo", sans-serif;
+  color: var(--text);
+  pointer-events: none;
+}
+
 .ratio-low { color: var(--ratio-low); }
 .ratio-ok { color: var(--ratio-ok); }
 .ratio-good { color: var(--ratio-good); }
@@ -1283,6 +1982,50 @@ input:focus-visible {
 
   .match::after {
     background: linear-gradient(90deg, rgba(16, 15, 14, 0.45) 0%, rgba(16, 15, 14, 0.85) 100%);
+  }
+
+  /* En el móvil el panel tendrá su propio diseño, sin llenar la pantalla */
+  .match-detail {
+    min-height: 0;
+  }
+
+  .detail-tabs {
+    padding: 0 16px;
+  }
+
+  .sb-head,
+  .sb-row {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  /* En una pantalla estrecha, las runas van debajo y no al lado */
+  .build {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+  }
+
+  /* Cada equipo en su línea, así que la raya entre ellos va encima y no al lado */
+  .build-players {
+    flex-direction: column;
+  }
+
+  .build-team + .build-team {
+    padding-top: 12px;
+    padding-left: 0;
+    border-top: 2px solid var(--border);
+    border-left: 0;
+  }
+
+  .build-head {
+    flex-wrap: wrap;
+  }
+
+  /* Hasta 18 niveles no caben a lo ancho, así que solo la cuadrícula se
+     desliza de lado y el resto de la pestaña se queda quieto */
+  .skill-grid {
+    grid-template-columns: 40px repeat(var(--levels), 30px);
+    overflow-x: auto;
   }
 
   /* Con los grupos uno debajo de otro, la raya entre ellos sobra */

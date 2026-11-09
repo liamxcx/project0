@@ -199,7 +199,7 @@ Seis tablas y una vista:
 - `matches` — fecha, duración, tipo de cola y parche de cada partida
 - `participants` — los diez jugadores de cada partida: campeón, posición,
   KDA, resultado, oro, daño hecho y recibido, CS, visión, objetos finales,
-  hechizos de invocador y equipo
+  hechizos de invocador, equipo, nivel, runas y su rango de Solo/Duo
 - `item_purchases` — cada compra de cada jugador, con su minuto
 - `skill_levelups` — cada subida de habilidad, con su minuto
 - `ranked_snapshots` — una foto de la clasificatoria solo/duo en cada vuelta
@@ -209,8 +209,15 @@ Seis tablas y una vista:
 - `participant_scores` — la vista con la nota y el sello de cada jugador
   (ver [La nota y los sellos](#la-nota-y-los-sellos))
 
-Todos esos datos vienen en la misma respuesta de MATCH-V5, así que
-guardarlos no cuesta ninguna petición extra a Riot.
+Todos esos datos, salvo el rango, vienen en la misma respuesta de MATCH-V5,
+así que guardarlos no cuesta ninguna petición extra a Riot.
+
+El rango de cada jugador sale de LEAGUE-V4, con una petición por jugador.
+Son nueve más por partida, porque el tuyo ya se pide para
+`ranked_snapshots`. Dentro de una misma vuelta del `collector` se reutiliza
+si el jugador sale en varias partidas. Es el rango del momento en que se
+guarda la partida, porque Riot no da el que tenía al jugarla. Se pide con
+su PUUID, pero solo se guarda el rango.
 
 El CS va en dos columnas, `minions_killed` y `neutral_minions_killed`,
 porque Riot lo da así. Sumarlas es cosa de la consulta:
@@ -427,9 +434,21 @@ docker compose run --rm collector python collector.py --refetch
 Hace falta al añadir una columna nueva (las partidas viejas la tendrían a
 `NULL`) y al corregir un fallo del `collector` que haya guardado algo mal.
 
-Solo alcanza a las partidas que Riot todavía sirve, unas cien hacia atrás.
-Las más antiguas no se pueden volver a pedir, así que una columna añadida
-tarde se queda con `NULL` para siempre en esas.
+Solo vuelve a pedir las partidas de la lista que da Riot, que mide
+`MATCH_COUNT` (20 por defecto). Para llegar más atrás se sube solo para esa
+ejecución, sin tocar el `.env`:
+
+```bash
+docker compose run --rm -e MATCH_COUNT=70 collector python collector.py --refetch
+```
+
+Así también se bajan las partidas que nunca se guardaron. En Compose el
+`collector` solo corre con `up`, y si entre dos vueltas se juegan más de
+`MATCH_COUNT` partidas, las más antiguas de ese tramo se quedan sin bajar.
+
+La lista de Riot da como mucho cien partidas por petición y el `collector`
+no pide más, así que las anteriores no se pueden volver a pedir y una
+columna añadida tarde se queda con `NULL` para siempre en esas.
 
 ### El ciclo completo para añadir un dato
 
@@ -464,7 +483,7 @@ Endpoints:
 | `GET /ready` | Hace un `SELECT 1` contra PostgreSQL y devuelve 503 si no responde. Es la readiness probe | |
 | `GET /summoners` | Los invocadores seguidos, con su icono de perfil y su nivel | |
 | `GET /matches` | El historial de 10 en 10, de la partida más nueva a la más antigua, con el sello [MVP o BASTION](#la-nota-y-los-sellos). Viene como `{"matches": [...], "has_more": true}`, y `has_more` dice si quedan más | `patch`, `champion`, `offset` |
-| `GET /matches/{match_id}` | El detalle de una partida: tus estadísticas, objetos, hechizos, compras con su minuto y los diez jugadores con su nota. 404 si no existe | |
+| `GET /matches/{match_id}` | El detalle de una partida: tus estadísticas y los diez jugadores con su nota, su marcador, su nivel, sus runas, su rango, sus compras con su minuto y su orden de habilidades. 404 si no existe | |
 | `GET /patches` | Los parches que tienen partidas y cuántas hay en cada uno, del más reciente al más antiguo | |
 | `GET /summary` | Partidas, victorias, derrotas y winrate de la temporada o de un parche | `patch` |
 | `GET /rank` | La última foto de la clasificatoria solo/duo: liga, división, LP, balance de la temporada y corte del siguiente escalón. `null` si no hay ninguna | |
@@ -983,7 +1002,7 @@ Revisa el chart de Helm de la aplicación:
 helm lint --strict charts/project0
 ```
 
-Comprueba que `Chart.yaml` está completo, que las plantillas se rellenan
+Comprueba que `Chart.yaml` está completo, que los templates se rellenan
 con los values sin errores y que el resultado es YAML válido. Con `--strict`
 fallan también los avisos, no solo los errores. No comprueba que el chart
 funcione en un clúster, solo que está bien escrito.
@@ -1010,7 +1029,7 @@ Hace falta porque los tests ejecutan el código directamente y nunca usan el
 sitio.
 
 En `main` las construye para amd64 y arm64 y las sube a GitHub Container
-Registry, etiquetadas con el SHA corto del commit. Las tres llevan el mismo
+Registry, con el SHA corto del commit como tag. Las tres llevan el mismo
 tag, así que se sabe qué migraciones y qué página van con qué código. En el resto de
 ramas solo las construye para amd64 y no las sube, así que el aviso
 `No output specified with docker-container driver` del log es esperado.
@@ -1087,7 +1106,7 @@ El token de GHCR es un token classic de GitHub con solo el permiso
 
 El namespace y los Secrets van fuera del chart. Helm guarda la release
 dentro del namespace, y `helm uninstall` lo borraría con todo lo que tiene
-dentro. Y si los Secrets fueran plantillas del chart, sus valores
+dentro. Y si los Secrets fueran templates del chart, sus valores
 acabarían en el historial de cada revisión.
 
 En un clúster nuevo PostgreSQL arranca vacío. Al instalar, las migraciones
@@ -1108,18 +1127,18 @@ curl localhost:8001/ready
 `charts/project0` tiene cuatro partes:
 
 - `Chart.yaml` — el nombre y dos versiones. `version` es la del chart y se
-  sube a mano cuando cambian las plantillas o lo que se puede configurar.
+  sube a mano cuando cambian los templates o lo que se puede configurar.
   `appVersion` es el tag de las imágenes que despliega.
 - `values.yaml` — lo que puede cambiar de un clúster a otro o con el
   tiempo, como el tag, las réplicas, los recursos, el horario del
   `collector`, la configuración de la API, el disco de PostgreSQL y el
   Gateway del que cuelga la ruta.
-- `templates/` — una plantilla por objeto de la aplicación.
-- `templates/_helpers.tpl` — las etiquetas comunes y la regla del tag, que
-  usan varias plantillas.
+- `templates/` — un template por objeto de la aplicación.
+- `templates/_helpers.tpl` — los labels comunes y la regla del tag, que
+  usan varios templates.
 
 En el clúster, la configuración que no es secreta no sale del `.env`, sino
-de los ConfigMaps del chart, que se rellenan con `values.yaml`. La plantilla
+de los ConfigMaps del chart, que se rellenan con `values.yaml`. El template
 de los pods de la API lleva una suma de cada ConfigMap que lee, así que si
 un `helm upgrade` cambia uno de esos valores, cambia la suma y Kubernetes
 recrea los pods con el valor nuevo. El `collector` no lo necesita, porque
@@ -1168,8 +1187,8 @@ listos.
 
 El CronJob usa la imagen nueva desde su siguiente ejecución.
 
-Un cambio en `values.yaml` o en una plantilla se despliega igual. Si
-cambian las plantillas o lo que se puede configurar, se sube también
+Un cambio en `values.yaml` o en un template se despliega igual. Si
+cambian los templates o lo que se puede configurar, se sube también
 `version` en `Chart.yaml`.
 
 El commit se hace después de comprobar que funciona, para que lo que hay en
@@ -1212,7 +1231,7 @@ configuración nueva, por ejemplo con
 
 Antes del chart, la aplicación se desplegaba con manifiestos sueltos y
 `kubectl apply`. Se pasó a Helm sin caída, adoptando los objetos que ya
-corrían en vez de recrearlos. Para eso se les puso la etiqueta
+corrían en vez de recrearlos. Para eso se les puso el label
 `app.kubernetes.io/managed-by: Helm` y las dos anotaciones
 `meta.helm.sh/…` con las que Helm reconoce lo suyo.
 
@@ -1305,7 +1324,7 @@ Para cambiar un value de Traefik, se edita `traefik-values.yaml` y se
 ejecuta el comando de la instalación con `upgrade` en vez de `install`,
 siempre con `--values`.
 
-Las reglas de project0 van en la HTTPRoute `project0`, una plantilla más del
+Las reglas de project0 van en la HTTPRoute `project0`, un template más del
 chart, colgada del Gateway `public` (`gateway` en `values.yaml`):
 
 ```

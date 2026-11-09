@@ -39,15 +39,15 @@ hace, se borra de aquí y pasa al README.
 
 - Despliegue continuo con GitOps. Hoy el CI construye y sube la imagen, pero
   el `helm upgrade` se lanza a mano. Con Argo CD dentro del clúster, el CI
-  solo cambiaría la etiqueta de la imagen en el repo y Argo CD lo aplicaría.
+  solo cambiaría el tag de la imagen en el repo y Argo CD lo aplicaría.
   Un runner de GitHub no llega a kind, pero Argo CD sí, porque lee el repo
   desde dentro.
 - Los Secrets en Git, cifrados con Sealed Secrets o SOPS, o como referencias
   a un gestor externo con External Secrets. Hoy se crean a mano, y eso choca
   con tener todo en Git para GitOps.
 - `paths-ignore` en el workflow, para no construir una imagen igual cuando un
-  commit solo toca el README. Con GitOps, el commit del CI que cambia la
-  etiqueta tampoco debe lanzar otro build.
+  commit solo toca el README. Con GitOps, el commit del CI que cambia el
+  tag tampoco debe lanzar otro build.
 - Borrar las imágenes viejas de GHCR. Cada push a `main` sube tres imágenes
   nuevas y no se borra ninguna. Hay que conservar más versiones que las que
   guarda el historial de Helm, para no romper un rollback.

@@ -27,7 +27,7 @@ const TIER_NAMES = {
 };
 const DIVISIONS = ["IV", "III", "II", "I"];
 // Riot les pone división I, pero en estos tres no hay divisiones
-const APEX = ["MASTER", "GRANDMASTER", "CHALLENGER"];
+export const APEX = ["MASTER", "GRANDMASTER", "CHALLENGER"];
 
 export function rankName(tier, division) {
   const name = TIER_NAMES[tier] ?? tier;
