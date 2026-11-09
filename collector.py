@@ -156,6 +156,62 @@ def save_timeline(cursor, match_id):
     return len(purchases), len(level_ups)
 
 
+def runes(participant):
+    """Devuelve los dos árboles, las seis runas y los tres fragmentos.
+
+    Riot da un árbol con la descripción primaryStyle y otro con subStyle, cada
+    uno con sus runas en orden. Lo que no venga se devuelve como None.
+    """
+    perks = participant.get("perks", {})
+    styles = {style["description"]: style for style in perks.get("styles", [])}
+    primary = styles.get("primaryStyle")
+    secondary = styles.get("subStyle")
+
+    rune_ids = None
+    if primary and secondary:
+        selections = primary["selections"] + secondary["selections"]
+        rune_ids = [selection["perk"] for selection in selections]
+
+    stats = perks.get("statPerks")
+    shard_ids = [stats["offense"], stats["flex"], stats["defense"]] if stats else None
+
+    return (
+        primary["style"] if primary else None,
+        secondary["style"] if secondary else None,
+        rune_ids,
+        shard_ids,
+    )
+
+
+def solo_entry(entries):
+    """De las entradas de LEAGUE-V4 de un jugador, la de Solo/Duo o None.
+
+    Riot devuelve una entrada por cola, también la de Flex.
+    """
+    return next((e for e in entries if e["queueType"] == RANKED_SOLO_QUEUE_TYPE), None)
+
+
+def solo_rank(player_puuid, cache):
+    """Devuelve la entrada de Solo/Duo de un jugador de la partida, o None.
+
+    Se apunta en cache, porque el mismo jugador puede salir en varias partidas
+    de la misma vuelta, como un compañero de dúo. Si la petición falla no se
+    apunta, y la partida se guarda igual con el rango vacío.
+    """
+    if player_puuid in cache:
+        return cache[player_puuid]
+
+    response = fetch(
+        f"{RIOT_PLATFORM_URL}/lol/league/v4/entries/by-puuid/{player_puuid}"
+    )
+    if response is None or response.status_code != 200:
+        log.warning("Sin rango de un jugador, se guarda vacío")
+        return None
+
+    cache[player_puuid] = solo_entry(response.json())
+    return cache[player_puuid]
+
+
 def save_ranked(cursor, puuid):
     """Guarda una foto de la clasificatoria de Solo/Duo del invocador.
 
@@ -166,10 +222,7 @@ def save_ranked(cursor, puuid):
     if response is None or response.status_code != 200:
         raise RuntimeError("Sin respuesta de LEAGUE-V4")
 
-    # Riot devuelve una entrada por cola, también la de Flex
-    solo = next(
-        (e for e in response.json() if e["queueType"] == RANKED_SOLO_QUEUE_TYPE), None
-    )
+    solo = solo_entry(response.json())
     if solo is None:
         return None
 
@@ -276,6 +329,10 @@ log.info("Partidas encontradas: %s", len(match_ids))
 
 saved = 0
 
+# Rango de Solo/Duo de cada jugador ya consultado en esta vuelta, por PUUID.
+# Vive solo mientras corre el collector, no se guarda en ningún sitio
+rank_cache = {}
+
 with (
     psycopg.connect(DB_URL) as connection,
     connection.cursor() as cursor,
@@ -307,6 +364,8 @@ with (
         connection.rollback()
         log.exception("Clasificatoria no guardada")
     else:
+        # Tu rango ya está pedido, así que en las partidas no se vuelve a pedir
+        rank_cache[puuid] = ranked[0] if ranked else None
         if ranked is None:
             log.info("Sin clasificatoria de Solo/Duo esta temporada")
         else:
@@ -387,6 +446,12 @@ with (
                 if followed:
                     me = participant
 
+                primary_style_id, secondary_style_id, rune_ids, shard_ids = runes(
+                    participant
+                )
+                # Se pide con su PUUID, pero solo se guarda el rango, no quién es
+                rank = solo_rank(participant["puuid"], rank_cache) or {}
+
                 cursor.execute(
                     """
                     INSERT INTO participants
@@ -395,13 +460,17 @@ with (
                          minions_killed, neutral_minions_killed,
                          vision_score, wards_placed,
                          item0, item1, item2, item3, item4, item5, item6,
-                         summoner1_id, summoner2_id, participant_id, team_id)
+                         summoner1_id, summoner2_id, participant_id, team_id,
+                         champ_level, primary_style_id, secondary_style_id,
+                         rune_ids, shard_ids, tier, division, league_points)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
                             %s, %s, %s,
                             %s, %s,
                             %s, %s,
                             %s, %s, %s, %s, %s, %s, %s,
-                            %s, %s, %s, %s)
+                            %s, %s, %s, %s,
+                            %s, %s, %s,
+                            %s, %s, %s, %s, %s)
                     ON CONFLICT (match_id, participant_id) DO UPDATE SET
                         puuid                  = EXCLUDED.puuid,
                         champion               = EXCLUDED.champion,
@@ -426,7 +495,15 @@ with (
                         item6 = EXCLUDED.item6,
                         summoner1_id = EXCLUDED.summoner1_id,
                         summoner2_id = EXCLUDED.summoner2_id,
-                        team_id      = EXCLUDED.team_id
+                        team_id      = EXCLUDED.team_id,
+                        champ_level        = EXCLUDED.champ_level,
+                        primary_style_id   = EXCLUDED.primary_style_id,
+                        secondary_style_id = EXCLUDED.secondary_style_id,
+                        rune_ids           = EXCLUDED.rune_ids,
+                        shard_ids          = EXCLUDED.shard_ids,
+                        tier               = EXCLUDED.tier,
+                        division           = EXCLUDED.division,
+                        league_points      = EXCLUDED.league_points
                     """,
                     (
                         match_id,
@@ -455,6 +532,14 @@ with (
                         participant["summoner2Id"],
                         participant["participantId"],
                         participant["teamId"],
+                        participant["champLevel"],
+                        primary_style_id,
+                        secondary_style_id,
+                        rune_ids,
+                        shard_ids,
+                        rank.get("tier"),
+                        rank.get("rank"),
+                        rank.get("leaguePoints"),
                     ),
                 )
 

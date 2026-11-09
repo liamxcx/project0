@@ -199,7 +199,7 @@ Seis tablas y una vista:
 - `matches` — fecha, duración, tipo de cola y parche de cada partida
 - `participants` — los diez jugadores de cada partida: campeón, posición,
   KDA, resultado, oro, daño hecho y recibido, CS, visión, objetos finales,
-  hechizos de invocador y equipo
+  hechizos de invocador, equipo, nivel, runas y su rango de Solo/Duo
 - `item_purchases` — cada compra de cada jugador, con su minuto
 - `skill_levelups` — cada subida de habilidad, con su minuto
 - `ranked_snapshots` — una foto de la clasificatoria solo/duo en cada vuelta
@@ -209,8 +209,15 @@ Seis tablas y una vista:
 - `participant_scores` — la vista con la nota y el sello de cada jugador
   (ver [La nota y los sellos](#la-nota-y-los-sellos))
 
-Todos esos datos vienen en la misma respuesta de MATCH-V5, así que
-guardarlos no cuesta ninguna petición extra a Riot.
+Todos esos datos, salvo el rango, vienen en la misma respuesta de MATCH-V5,
+así que guardarlos no cuesta ninguna petición extra a Riot.
+
+El rango de cada jugador sale de LEAGUE-V4, con una petición por jugador.
+Son nueve más por partida, porque el tuyo ya se pide para
+`ranked_snapshots`. Dentro de una misma vuelta del `collector` se reutiliza
+si el jugador sale en varias partidas. Es el rango del momento en que se
+guarda la partida, porque Riot no da el que tenía al jugarla. Se pide con
+su PUUID, pero solo se guarda el rango.
 
 El CS va en dos columnas, `minions_killed` y `neutral_minions_killed`,
 porque Riot lo da así. Sumarlas es cosa de la consulta:
@@ -427,9 +434,21 @@ docker compose run --rm collector python collector.py --refetch
 Hace falta al añadir una columna nueva (las partidas viejas la tendrían a
 `NULL`) y al corregir un fallo del `collector` que haya guardado algo mal.
 
-Solo alcanza a las partidas que Riot todavía sirve, unas cien hacia atrás.
-Las más antiguas no se pueden volver a pedir, así que una columna añadida
-tarde se queda con `NULL` para siempre en esas.
+Solo vuelve a pedir las partidas de la lista que da Riot, que mide
+`MATCH_COUNT` (20 por defecto). Para llegar más atrás se sube solo para esa
+ejecución, sin tocar el `.env`:
+
+```bash
+docker compose run --rm -e MATCH_COUNT=70 collector python collector.py --refetch
+```
+
+Así también se bajan las partidas que nunca se guardaron. En Compose el
+`collector` solo corre con `up`, y si entre dos vueltas se juegan más de
+`MATCH_COUNT` partidas, las más antiguas de ese tramo se quedan sin bajar.
+
+La lista de Riot da como mucho cien partidas por petición y el `collector`
+no pide más, así que las anteriores no se pueden volver a pedir y una
+columna añadida tarde se queda con `NULL` para siempre en esas.
 
 ### El ciclo completo para añadir un dato
 
