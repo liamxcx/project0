@@ -47,12 +47,20 @@ FULL_MATCH_SQL = """
     INSERT INTO participants
         (match_id, participant_id, puuid, champion, kills, deaths, assists,
          win, team_id, damage_to_champions, vision_score,
-         minions_killed, neutral_minions_killed, item0, summoner1_id)
+         minions_killed, neutral_minions_killed, item0, summoner1_id,
+         champ_level, primary_style_id, secondary_style_id, rune_ids, shard_ids,
+         tier, division, league_points)
     SELECT 'EUW1_4', n, CASE WHEN n = 1 THEN 'yo' END, 'Ahri',
            CASE WHEN n = 1 THEN 10 ELSE 1 END, 5, 1,
            n <= 5, CASE WHEN n <= 5 THEN 100 ELSE 200 END,
            CASE WHEN n = 1 THEN 30000 ELSE 10000 END, 20,
-           150 + n, 10, 3089, 4
+           150 + n, 10, 3089, 4,
+           10 + n, 8000, 8300,
+           ARRAY[8005, 9111, 9104, 8017, 8345, 8304], ARRAY[5005, 5008, 5011],
+           -- El 8 no tiene clasificatoria
+           CASE WHEN n <> 8 THEN 'DIAMOND' END,
+           CASE WHEN n <> 8 THEN 'III' END,
+           CASE WHEN n <> 8 THEN 45 END
     FROM generate_series(1, 10) AS n;
 
     INSERT INTO item_purchases (match_id, participant_id, item_id, timestamp_ms)

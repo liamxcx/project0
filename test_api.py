@@ -165,6 +165,16 @@ def test_match_detail_returns_me_and_players(full_match):
     assert rival["cs"] == 167
     assert rival["items"][0] == 3089
     assert rival["summoner_spells"] == [4, None]
+    # Y el nivel, las runas y el rango, que se guardan desde la V11
+    assert rival["champ_level"] == 17
+    assert rival["primary_style_id"] == 8000
+    assert rival["rune_ids"] == [8005, 9111, 9104, 8017, 8345, 8304]
+    assert rival["shard_ids"] == [5005, 5008, 5011]
+    assert rival["tier"] == "DIAMOND"
+    assert rival["division"] == "III"
+    assert rival["league_points"] == 45
+    # Sin clasificatoria, el rango llega vacío y no como un error
+    assert players[7]["tier"] is None
 
 
 def test_match_detail_returns_404_for_unknown_match(seeded_db):

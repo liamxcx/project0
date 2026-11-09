@@ -278,6 +278,14 @@ def load_match_detail(match_id):
                    ARRAY[p.item0, p.item1, p.item2, p.item3, p.item4, p.item5, p.item6]
                        AS items,
                    ARRAY[p.summoner1_id, p.summoner2_id] AS summoner_spells,
+                   p.champ_level,
+                   p.primary_style_id,
+                   p.secondary_style_id,
+                   p.rune_ids,
+                   p.shard_ids,
+                   p.tier,
+                   p.division,
+                   p.league_points,
                    su.game_name || '#' || su.tag_line AS riot_id,
                    sc.score,
                    sc.badge
