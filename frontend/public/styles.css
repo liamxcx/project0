@@ -1182,10 +1182,13 @@ input:focus-visible {
   position: relative;
 }
 
+/* Si el marcador no cabe a lo ancho, como en el móvil, se desliza de lado
+   como cualquier tabla ancha, en vez de apretar las columnas */
 .detail-content {
   display: flex;
   flex: 1;
   flex-direction: column;
+  overflow-x: auto;
 }
 
 .detail-tabs {
@@ -1233,6 +1236,9 @@ input:focus-visible {
   display: flex;
   flex: 1;
   flex-direction: column;
+  /* Tan ancho como necesiten sus columnas, y como mínimo el del panel */
+  width: max-content;
+  min-width: 100%;
   padding: 0 0 10px;
 }
 
@@ -1258,7 +1264,7 @@ input:focus-visible {
 .sb-row {
   display: grid;
   grid-template-columns:
-    calc(var(--sb-icon) * 2.2) minmax(0, 1.4fr) 76px 100px 76px minmax(110px, 1fr) 110px
+    calc(var(--sb-icon) * 2.2) minmax(150px, 1.4fr) 76px 100px 76px minmax(110px, 1fr) 110px
     calc(var(--sb-item) * 7 + 24px);
   gap: 12px;
   align-items: center;
@@ -1278,6 +1284,7 @@ input:focus-visible {
 
 .sb-team {
   grid-column: 1 / 3;
+  white-space: nowrap;
   font: 500 11px/1 "Archivo", sans-serif;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1379,11 +1386,13 @@ input:focus-visible {
   color: var(--tier, var(--text-muted));
 }
 
+/* Si el nombre y el sello no caben, se cortan aquí en vez de pisar la nota */
 .sb-cell:nth-child(2) {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .sb-name {
@@ -1553,19 +1562,33 @@ input:focus-visible {
   color: var(--text-muted);
 }
 
+/* La columna izquierda tiene un mínimo para que quepa la cuadrícula de 18
+   niveles. Las runas se quedan con lo demás, y si no les basta, los
+   fragmentos bajan debajo de los árboles en vez de salirse del panel */
 .build {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  flex: 1;
+  grid-template-columns: minmax(680px, 1fr) minmax(0, max-content);
   gap: 26px 48px;
-  align-items: start;
   padding: 18px 32px 24px;
 }
 
+/* Llena el alto del panel y reparte lo que sobra por igual entre los bloques
+   y debajo del último. El ::after vacío es ese último hueco */
 .build-main {
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   gap: 22px;
   min-width: 0;
+}
+
+.build-main::after {
+  content: "";
+}
+
+.build-right {
+  align-self: start;
 }
 
 .build-players {
@@ -1654,11 +1677,10 @@ input:focus-visible {
   color: var(--text-muted);
 }
 
+/* Sus bloques, los objetos y las habilidades, se reparten el alto como si
+   estuvieran directamente en .build-main */
 .build-left {
-  display: flex;
-  flex-direction: column;
-  gap: 52px;
-  min-width: 0;
+  display: contents;
 }
 
 .build-head {
@@ -1967,9 +1989,43 @@ input:focus-visible {
     min-height: 0;
   }
 
+  .detail-tabs {
+    padding: 0 16px;
+  }
+
+  .sb-head,
+  .sb-row {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
   /* En una pantalla estrecha, las runas van debajo y no al lado */
   .build {
     grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+  }
+
+  /* Cada equipo en su línea, así que la raya entre ellos va encima y no al lado */
+  .build-players {
+    flex-direction: column;
+  }
+
+  .build-team + .build-team {
+    padding-top: 12px;
+    padding-left: 0;
+    border-top: 2px solid var(--border);
+    border-left: 0;
+  }
+
+  .build-head {
+    flex-wrap: wrap;
+  }
+
+  /* Hasta 18 niveles no caben a lo ancho, así que solo la cuadrícula se
+     desliza de lado y el resto de la pestaña se queda quieto */
+  .skill-grid {
+    grid-template-columns: 40px repeat(var(--levels), 30px);
+    overflow-x: auto;
   }
 
   /* Con los grupos uno debajo de otro, la raya entre ellos sobra */
