@@ -68,3 +68,23 @@ export function championSplashUrl(key) {
   const id = champions.get(String(key).toLowerCase())?.id ?? key;
   return `${BASE_URL}/cdn/img/champion/splash/${encodeURIComponent(id)}_0.jpg`;
 }
+
+// Los iconos pequeños sí llevan versión, así que sin Data Dragon devuelven null
+// y quien los pida deja la casilla vacía
+function iconUrl(folder, file) {
+  if (version === null || file === undefined) return null;
+  return `${BASE_URL}/cdn/${version}/img/${folder}/${encodeURIComponent(file)}.png`;
+}
+
+export function championIconUrl(key) {
+  return iconUrl("champion", champions.get(String(key).toLowerCase())?.id ?? key);
+}
+
+export function itemIconUrl(id) {
+  return iconUrl("item", id);
+}
+
+// La API da el hechizo por número (4) y la imagen va por nombre (SummonerFlash)
+export function spellIconUrl(id) {
+  return iconUrl("spell", spells.get(String(id))?.id);
+}

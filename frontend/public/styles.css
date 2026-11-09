@@ -28,6 +28,10 @@
   --accent-hover: #ff6a4f;
   --win: #2fbd77;
   --bolt: #3fd8ff;
+  /* Alto aproximado de la barra fija de arriba y de cada partida. Con ellos se
+     calcula el panel abierto para que barra y panel llenen la pantalla */
+  --topbar-height: 72px;
+  --match-height: 100px;
   --mvp: #f19000;
   --bastion: #b05cf0;
   --ratio-low: #69788d;
@@ -1052,16 +1056,23 @@ input:focus-visible {
   list-style: none;
 }
 
-.match {
+/* El color del resultado va en la partida entera, porque lo usan la barra y
+   el panel del detalle */
+.match-item {
   --result: var(--accent);
+  /* Al subirla con scrollIntoView, que no quede debajo de la barra fija de arriba */
+  scroll-margin-top: var(--topbar-height);
+}
+
+.match-item.is-win {
+  --result: var(--win);
+}
+
+.match {
   position: relative;
   overflow: hidden;
   border-left: 3px solid var(--result);
   background: var(--panel);
-}
-
-.match.is-win {
-  --result: var(--win);
 }
 
 /* La imagen ocupa la parte izquierda y se funde hacia la derecha. Así el
@@ -1089,13 +1100,15 @@ input:focus-visible {
   transition: opacity 0.2s;
 }
 
-.match:hover .match-splash {
+.match:hover .match-splash,
+.match-item.is-open .match-splash {
   opacity: 0.8;
 }
 
 /* Sin esto el brillo solo se nota a la izquierda, porque la cara queda hacia
    la mitad, donde el degradado ya tapa mucho */
-.match:hover::after {
+.match:hover::after,
+.match-item.is-open .match::after {
   opacity: 0.5;
 }
 
@@ -1107,8 +1120,299 @@ input:focus-visible {
   grid-template-columns: minmax(0, 1.6fr) repeat(5, minmax(0, 1fr));
   align-items: center;
   gap: 16px;
-  min-height: 100px;
-  padding: 14px 24px;
+  min-height: var(--match-height);
+  padding: 14px 48px 14px 24px;
+}
+
+/* Cubre toda la barra, por encima del texto, así que cualquier punto abre */
+.match-toggle {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* El contorno por fuera se cortaría, porque la barra recorta lo que sobresale */
+.match-toggle:focus-visible {
+  outline-offset: -3px;
+}
+
+.match-caret {
+  position: absolute;
+  top: 50%;
+  right: 18px;
+  z-index: 1;
+  transform: translateY(-50%);
+  font: 500 10px/1 "Archivo", sans-serif;
+  color: var(--text-muted);
+}
+
+/* Como mínimo, lo que queda de pantalla debajo de la barra de la partida.
+   dvh es el alto de la ventana, también en móviles con barra de dirección */
+.match-detail {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - var(--topbar-height) - var(--match-height));
+  position: relative;
+  overflow: hidden;
+  border-left: 3px solid var(--result);
+  border-bottom: 2px solid var(--border);
+  background: var(--bg-deep);
+}
+
+/* Solo el tono del campeón: borrosa, con poco color y casi transparente, para
+   no competir con los iconos del marcador */
+.match-detail::before {
+  content: "";
+  position: absolute;
+  inset: -20px;
+  background: var(--splash) center 20% / cover no-repeat;
+  opacity: 0.14;
+  filter: blur(4px) saturate(0.6);
+}
+
+/* Por encima del fondo */
+.detail-tabs,
+.detail-content {
+  position: relative;
+}
+
+.detail-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.detail-tabs {
+  display: flex;
+  padding: 0 32px;
+  border-bottom: 1px solid var(--line);
+}
+
+.detail-tab {
+  margin-bottom: -1px;
+  padding: 13px 18px 11px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  font: 700 11px/1 "Archivo", sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.detail-tab:hover {
+  color: var(--text-soft);
+}
+
+.detail-tab[aria-selected="true"] {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+
+.detail-message {
+  margin: 0;
+  padding: 24px 32px;
+  font: 500 13px/1.4 "Archivo", sans-serif;
+  color: var(--text-muted);
+}
+
+/* Los iconos y el texto crecen con el alto de la ventana, entre un mínimo y
+   un máximo, para que no se vean diminutos en filas altas */
+.scoreboard {
+  --sb-icon: clamp(24px, 3.6vh, 38px);
+  --sb-item: clamp(20px, 2.8vh, 28px);
+  --sb-text: clamp(13px, 1.6vh, 15px);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: 0 0 10px;
+}
+
+/* Cada equipo se reparte la mitad del alto, y sus cinco filas a partes iguales */
+.sb-block {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.sb-block + .sb-block {
+  margin-top: 6px;
+}
+
+.sb-row {
+  flex: 1;
+  min-height: 32px;
+}
+
+/* La cabecera y las filas comparten columnas, así que cada dato queda debajo
+   de su título */
+.sb-head,
+.sb-row {
+  display: grid;
+  grid-template-columns:
+    calc(var(--sb-icon) * 1.6) minmax(0, 1.4fr) 76px 100px 76px minmax(110px, 1fr) 110px
+    calc(var(--sb-item) * 7 + 24px);
+  gap: 12px;
+  align-items: center;
+  padding: 4px 32px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sb-head {
+  padding-top: 10px;
+  padding-bottom: 6px;
+}
+
+.sb-head p,
+.sb-cell p {
+  margin: 0;
+}
+
+.sb-team {
+  grid-column: 1 / 3;
+  font: 500 11px/1 "Archivo", sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.sb-team strong {
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.sb-team.is-win strong {
+  color: var(--win);
+}
+
+.sb-column {
+  font: 600 10px/1 "Archivo", sans-serif;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Tu fila un poco más clara, para encontrarte de un vistazo */
+.sb-row.is-me {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sb-who {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.sb-champion,
+.sb-spell,
+.sb-item {
+  flex: none;
+  overflow: hidden;
+  background: var(--line);
+}
+
+.sb-champion img,
+.sb-spell img,
+.sb-item img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sb-champion {
+  width: var(--sb-icon);
+  height: var(--sb-icon);
+}
+
+.sb-spells {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sb-spell {
+  width: calc(var(--sb-icon) / 2 - 1px);
+  height: calc(var(--sb-icon) / 2 - 1px);
+}
+
+.sb-cell:nth-child(2) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sb-name {
+  overflow: hidden;
+  font: 600 var(--sb-text) / 1.2 "Archivo", sans-serif;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sb-score-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 11px/1 "Archivo", sans-serif;
+  color: var(--text-muted);
+}
+
+.sb-score {
+  min-width: 32px;
+  padding: 4px 0;
+  background: var(--line);
+  font: 800 13px/1 "Archivo", sans-serif;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--text-soft);
+}
+
+.sb-score.is-high {
+  background: var(--mvp);
+  color: var(--bg);
+}
+
+.sb-value {
+  font: 600 var(--sb-text) / 1 "Archivo", sans-serif;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sb-sub {
+  margin-left: 6px;
+  font: 500 11px/1 "Archivo", sans-serif;
+  color: var(--text-muted);
+}
+
+.sb-track {
+  height: 3px;
+  margin-top: 4px;
+  background: var(--line);
+}
+
+.sb-fill {
+  height: 100%;
+  background: var(--accent);
+}
+
+.sb-items {
+  display: flex;
+  gap: 3px;
+}
+
+.sb-item {
+  width: var(--sb-item);
+  height: var(--sb-item);
+}
+
+.sb-item.is-trinket {
+  margin-left: 6px;
 }
 
 .match-body p {
@@ -1283,6 +1587,11 @@ input:focus-visible {
 
   .match::after {
     background: linear-gradient(90deg, rgba(16, 15, 14, 0.45) 0%, rgba(16, 15, 14, 0.85) 100%);
+  }
+
+  /* En el móvil el panel tendrá su propio diseño, sin llenar la pantalla */
+  .match-detail {
+    min-height: 0;
   }
 
   /* Con los grupos uno debajo de otro, la raya entre ellos sobra */
