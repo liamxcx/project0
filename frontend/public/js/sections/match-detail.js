@@ -3,6 +3,7 @@ import { badge } from "../badge.js";
 import {
   championIconUrl,
   championName,
+  championSpells,
   dataDragonReady,
   itemIconUrl,
   itemName,
@@ -18,7 +19,7 @@ import { APEX, rankName } from "./rank.js";
 
 const TABS = [
   { id: "teams", label: "Equipos" },
-  { id: "build", label: "Objetos" },
+  { id: "build", label: "Build" },
 ];
 
 const COLUMNS = ["Nota", "KDA", "Ratio", "Daño", "CS", "Objetos"];
@@ -219,10 +220,176 @@ function teamsTab(detail) {
   return el("div", { className: "scoreboard" }, block("Tu equipo", allies), block("Rivales", enemies));
 }
 
-// Objetos llega en el siguiente subpaso
+// Las compras seguidas en el mismo minuto van juntas: [{ minute: 0, items: [1055, 2003] }, ...]
+function byMinute(purchases) {
+  const groups = [];
+  for (const { item_id, minute } of purchases) {
+    const last = groups.at(-1);
+    if (last && last.minute === minute) last.items.push(item_id);
+    else groups.push({ minute, items: [item_id] });
+  }
+  return groups;
+}
+
+function itemsSection(player) {
+  const groups = byMinute(player.purchases);
+  const timeline =
+    groups.length === 0
+      ? message("Esta partida se guardó sin las compras.")
+      : el(
+          "ol",
+          { className: "build-timeline" },
+          groups.map(({ minute, items }) =>
+            el(
+              "li",
+              { className: "build-step" },
+              el(
+                "div",
+                {},
+                el(
+                  "div",
+                  { className: "build-step-items" },
+                  items.map((id) => icon("build-item", itemIconUrl(id), itemName(id))),
+                ),
+                el("p", { className: "build-minute" }, `${minute} min`),
+              ),
+            ),
+          ),
+        );
+  return el("section", {}, el("h3", { className: "build-title" }, "Objetos"), timeline);
+}
+
+const SKILL_KEYS = ["Q", "W", "E", "R"];
+
+// En qué orden se subieron al máximo Q, W y E. Si la partida acaba antes de
+// subirlas todas, va antes la que tiene más puntos
+function maxOrder(skills) {
+  return [1, 2, 3]
+    .map((slot) => {
+      const levels = skills.flatMap((s, i) => (s === slot ? [i] : []));
+      return {
+        slot,
+        points: levels.length,
+        maxAt: levels[4] ?? Infinity,
+        first: levels[0] ?? Infinity,
+      };
+    })
+    .sort((a, b) => a.maxAt - b.maxAt || b.points - a.points || a.first - b.first)
+    .map(({ slot }) => slot);
+}
+
+// El icono de la habilidad con su tecla en la esquina. Hasta que llega la imagen,
+// o si no llega, se queda el cuadrado de su color con la tecla
+function skillIcon(slot) {
+  return el(
+    "span",
+    { className: `skill-icon skill-${slot}` },
+    el("span", { className: "skill-letter" }, SKILL_KEYS[slot - 1]),
+  );
+}
+
+// Cuando llegan las habilidades del campeón, pone la imagen y el nombre en cada
+// icono. Si mientras tanto se eligió otro jugador, ya no están en la página
+async function fillSkillIcons(champion, icons) {
+  const spells = await championSpells(champion);
+  if (spells === null) return;
+  for (const { slot, element } of icons) {
+    if (!element.isConnected) return;
+    const spell = spells[slot - 1];
+    element.setAttribute("data-tip", spell.name);
+    element.prepend(el("img", { attrs: { src: spell.icon, alt: spell.name } }));
+  }
+}
+
+// Una fila por habilidad y una columna por nivel. En cada nivel se marca la
+// habilidad que se subió, con el número del nivel
+function skillsSection(player) {
+  const { skills } = player;
+  const head = el("div", { className: "build-head" }, el("h3", { className: "build-title" }, "Habilidades"));
+  if (skills.length === 0) {
+    return el("section", {}, head, message("Esta partida se guardó sin las habilidades."));
+  }
+  const icons = [];
+  const tracked = (slot) => {
+    const element = skillIcon(slot);
+    icons.push({ slot, element });
+    return element;
+  };
+  head.append(
+    el(
+      "p",
+      { className: "skill-order" },
+      el("span", { className: "skill-order-label" }, "Orden de prioridad"),
+      maxOrder(skills).flatMap((slot, i) => (i === 0 ? [tracked(slot)] : ["›", tracked(slot)])),
+    ),
+  );
+  const cells = [1, 2, 3, 4].flatMap((slot) => [
+    el("span", { className: "skill-label" }, tracked(slot)),
+    ...skills.map((s, i) =>
+      s === slot
+        ? el("span", { className: `skill-cell is-up skill-${slot}` }, String(i + 1))
+        : el("span", { className: "skill-cell" }),
+    ),
+  ]);
+  const grid = el("div", { className: "skill-grid", style: { "--levels": String(skills.length) } }, cells);
+  fillSkillIcons(player.champion, icons);
+  return el("section", {}, head, grid);
+}
+
+// Arriba los diez jugadores, primero tu equipo, para ver la build de cualquiera.
+// Al abrir la pestaña sale la tuya
+function buildTab(detail) {
+  const { players, me } = detail;
+  if (players.length < 10) {
+    return message("Esta partida se guardó antes de tener a los diez jugadores.");
+  }
+  const myTeam = players.find((p) => p.participant_id === me.participant_id).team_id;
+  const teams = [
+    players.filter((p) => p.team_id === myTeam),
+    players.filter((p) => p.team_id !== myTeam),
+  ];
+  const content = el("div", { className: "build-content" });
+  const buttons = new Map();
+
+  function select(chosen) {
+    for (const [id, button] of buttons) {
+      button.setAttribute("aria-pressed", String(id === chosen.participant_id));
+    }
+    content.replaceChildren(itemsSection(chosen), skillsSection(chosen));
+  }
+
+  const strip = teams.map((team) =>
+    el(
+      "div",
+      { className: "build-team" },
+      team.map((player) => {
+        const score = player.score === null ? "—" : formatNumber(player.score, 1);
+        const button = el(
+          "button",
+          {
+            className: "build-player",
+            attrs: { type: "button", "data-tip": player.riot_id ?? championName(player.champion) },
+            on: { click: () => select(player) },
+          },
+          icon("build-champion", championIconUrl(player.champion), null),
+          el("span", { className: player.score >= HIGH_SCORE ? "build-score is-high" : "build-score" }, score),
+        );
+        buttons.set(player.participant_id, button);
+        return button;
+      }),
+    ),
+  );
+
+  select(players.find((p) => p.participant_id === me.participant_id));
+  // Tu build sale primero, y mientras la miras se piden las habilidades de los
+  // otros nueve, para que al elegir a uno ya estén en la caché
+  for (const player of players) championSpells(player.champion);
+  return el("div", { className: "build" }, el("div", { className: "build-players" }, strip), content);
+}
+
 const PANELS = {
   teams: teamsTab,
-  build: () => message("Los objetos llegan en el siguiente paso."),
+  build: buildTab,
 };
 
 function tabs(detail) {
