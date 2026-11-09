@@ -33,7 +33,8 @@
   --topbar-height: 72px;
   --match-height: 100px;
   --mvp: #f19000;
-  --bastion: #b05cf0;
+  /* Cian y no morado, porque el morado es el color de Master */
+  --bastion: #3fd8ff;
   --ratio-low: #69788d;
   --ratio-ok: #259a7e;
   --ratio-good: #3064d4;
@@ -1552,6 +1553,326 @@ input:focus-visible {
   color: var(--text-muted);
 }
 
+.build {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 26px 48px;
+  align-items: start;
+  padding: 18px 32px 24px;
+}
+
+.build-main {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+
+.build-players {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+}
+
+.build-team {
+  display: flex;
+  gap: 6px;
+}
+
+/* Una raya entre tu equipo y el rival */
+.build-team + .build-team {
+  padding-left: 24px;
+  border-left: 2px solid var(--border);
+}
+
+.build-player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 4px;
+  border: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+}
+
+.build-player:hover {
+  border-color: var(--border-strong);
+}
+
+.build-player[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--line);
+}
+
+.build-champion,
+.build-item {
+  display: block;
+  flex: none;
+  overflow: hidden;
+  background: var(--line);
+}
+
+.build-champion img,
+.build-item img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.build-champion {
+  width: 40px;
+  height: 40px;
+  border: 2px solid transparent;
+}
+
+/* El MVP y el BASTION, con el color de su sello en el icono. El borde del botón
+   sigue siendo el que marca al jugador elegido */
+.build-player.is-mvp .build-champion {
+  border-color: var(--mvp);
+}
+
+.build-player.is-bastion .build-champion {
+  border-color: var(--bastion);
+}
+
+.build-score {
+  font: 700 12px/1 "Archivo", sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-soft);
+}
+
+.build-score.is-high {
+  color: var(--mvp);
+}
+
+.build-title {
+  margin: 0 0 14px;
+  font: 600 11px/1 "Archivo", sans-serif;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.build-left {
+  display: flex;
+  flex-direction: column;
+  gap: 52px;
+  min-width: 0;
+}
+
+.build-head {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
+.build-head .build-title {
+  margin: 0;
+}
+
+/* Un color por habilidad, el mismo en el orden y en la cuadrícula */
+.skill-1 { --skill: #3064d4; }
+.skill-2 { --skill: #259a7e; }
+.skill-3 { --skill: #b05cf0; }
+.skill-4 { --skill: #f19000; }
+
+.skill-order {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font: 500 14px/1 "Archivo", sans-serif;
+  color: var(--text-dim);
+}
+
+.skill-order-label {
+  margin-right: 4px;
+  font: 600 10px/1 "Archivo", sans-serif;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* El icono de la habilidad, con un borde de su color para reconocerla en la
+   cuadrícula, y la tecla en la esquina */
+.skill-icon {
+  position: relative;
+  display: block;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--skill);
+  background: var(--line);
+}
+
+.skill-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.skill-letter {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  padding: 2px 3px;
+  background: var(--skill);
+  font: 800 9px/1 "Archivo", sans-serif;
+  color: var(--bg);
+}
+
+/* --levels lo pone la página: son los niveles que llegó a subir. Las casillas
+   se reparten el ancho, pero sin pasar de 44 px para no verse alargadas */
+.skill-grid {
+  display: grid;
+  grid-template-columns: 40px repeat(var(--levels), minmax(32px, 44px));
+  gap: 3px;
+}
+
+.skill-label,
+.skill-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  font: 700 12px/1 "Archivo", sans-serif;
+}
+
+.skill-label {
+  justify-content: flex-start;
+}
+
+.skill-cell {
+  background: var(--line);
+  font-variant-numeric: tabular-nums;
+}
+
+.skill-cell.is-up {
+  background: var(--skill);
+  color: var(--bg);
+}
+
+.runes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px 36px;
+}
+
+.rune-tree {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.rune-tree-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  font: 700 14px/1 "Archivo", sans-serif;
+  color: var(--text-light);
+}
+
+.rune-row {
+  display: flex;
+  gap: 14px;
+}
+
+.rune-tree-icon,
+.rune-cell,
+.shard-cell {
+  display: block;
+  flex: none;
+  overflow: hidden;
+}
+
+.rune-tree-icon img,
+.rune-cell img,
+.shard-cell img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.rune-tree-icon {
+  width: 26px;
+  height: 26px;
+}
+
+/* Las no elegidas, apagadas y en gris, para que destaquen las elegidas */
+.rune-cell,
+.shard-cell {
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: var(--bg-deep);
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+
+.rune-cell {
+  width: 42px;
+  height: 42px;
+}
+
+.rune-row.is-keystones .rune-cell {
+  width: 56px;
+  height: 56px;
+}
+
+.shard-cell {
+  width: 32px;
+  height: 32px;
+}
+
+.rune-cell.is-chosen,
+.shard-cell.is-chosen {
+  border-color: var(--mvp);
+  opacity: 1;
+  filter: none;
+}
+
+.build-timeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.build-step {
+  display: flex;
+  align-items: flex-start;
+}
+
+/* La flecha entre un minuto y el siguiente, a la altura de los iconos */
+.build-step:not(:last-child)::after {
+  content: "›";
+  margin: 0 12px;
+  font: 500 18px/32px "Archivo", sans-serif;
+  color: var(--text-dim);
+}
+
+.build-step-items {
+  display: flex;
+  gap: 2px;
+}
+
+.build-item {
+  width: 32px;
+  height: 32px;
+}
+
+.build-minute {
+  margin: 6px 0 0;
+  font: 500 11px/1 "Archivo", sans-serif;
+  text-align: center;
+  color: var(--text-muted);
+}
+
 /* El tooltip con el nombre al pasar el ratón. pointer-events: none hace que
    el ratón lo atraviese, así que nunca tapa lo que hay debajo */
 .tip {
@@ -1644,6 +1965,11 @@ input:focus-visible {
   /* En el móvil el panel tendrá su propio diseño, sin llenar la pantalla */
   .match-detail {
     min-height: 0;
+  }
+
+  /* En una pantalla estrecha, las runas van debajo y no al lado */
+  .build {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   /* Con los grupos uno debajo de otro, la raya entre ellos sobra */

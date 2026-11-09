@@ -9,6 +9,10 @@ import {
   itemName,
   runeIconUrl,
   runeName,
+  runeTree,
+  SHARD_ROWS,
+  shardIconUrl,
+  shardName,
   spellIconUrl,
   spellName,
 } from "../ddragon.js";
@@ -336,6 +340,60 @@ function skillsSection(player) {
   return el("section", {}, head, grid);
 }
 
+// Un árbol entero con las runas elegidas resaltadas. Del árbol secundario solo
+// se eligen runas de las filas de abajo, así que su primera fila no se enseña
+function treeColumn(tree, chosen, withKeystones) {
+  if (tree === null) return null;
+  const slots = withKeystones ? tree.slots : tree.slots.slice(1);
+  const rows = slots.map((slot, i) =>
+    el(
+      "div",
+      { className: withKeystones && i === 0 ? "rune-row is-keystones" : "rune-row" },
+      slot.runes.map((rune) =>
+        icon(chosen.includes(rune.id) ? "rune-cell is-chosen" : "rune-cell", runeIconUrl(rune.id), rune.name),
+      ),
+    ),
+  );
+  const name = el(
+    "p",
+    { className: "rune-tree-name" },
+    icon("rune-tree-icon", runeIconUrl(tree.id), null),
+    tree.name,
+  );
+  return el("div", { className: "rune-tree" }, name, rows);
+}
+
+// Las tres filas de fragmentos. Una misma estadística puede salir en dos filas,
+// así que se marca la elegida de cada fila y no todas las que coinciden
+function shardColumn(shardIds) {
+  const rows = SHARD_ROWS.map((row, i) =>
+    el(
+      "div",
+      { className: "rune-row" },
+      row.map((id) =>
+        icon(shardIds[i] === id ? "shard-cell is-chosen" : "shard-cell", shardIconUrl(id), shardName(id)),
+      ),
+    ),
+  );
+  const name = el("p", { className: "rune-tree-name" }, "Fragmentos");
+  return el("div", { className: "rune-tree" }, name, rows);
+}
+
+function runesSection(player) {
+  const head = el("h3", { className: "build-title" }, "Runas");
+  if (player.rune_ids === null) {
+    return el("section", {}, head, message("Esta partida se guardó sin las runas."));
+  }
+  const page = el(
+    "div",
+    { className: "runes" },
+    treeColumn(runeTree(player.primary_style_id), player.rune_ids, true),
+    treeColumn(runeTree(player.secondary_style_id), player.rune_ids, false),
+    player.shard_ids === null ? null : shardColumn(player.shard_ids),
+  );
+  return el("section", {}, head, page);
+}
+
 // Arriba los diez jugadores, primero tu equipo, para ver la build de cualquiera.
 // Al abrir la pestaña sale la tuya
 function buildTab(detail) {
@@ -348,14 +406,16 @@ function buildTab(detail) {
     players.filter((p) => p.team_id === myTeam),
     players.filter((p) => p.team_id !== myTeam),
   ];
-  const content = el("div", { className: "build-content" });
+  const left = el("div", { className: "build-left" });
+  const right = el("div", { className: "build-right" });
   const buttons = new Map();
 
   function select(chosen) {
     for (const [id, button] of buttons) {
       button.setAttribute("aria-pressed", String(id === chosen.participant_id));
     }
-    content.replaceChildren(itemsSection(chosen), skillsSection(chosen));
+    left.replaceChildren(itemsSection(chosen), skillsSection(chosen));
+    right.replaceChildren(runesSection(chosen));
   }
 
   const strip = teams.map((team) =>
@@ -364,10 +424,11 @@ function buildTab(detail) {
       { className: "build-team" },
       team.map((player) => {
         const score = player.score === null ? "—" : formatNumber(player.score, 1);
+        const badgeClass = player.badge ? ` is-${player.badge.toLowerCase()}` : "";
         const button = el(
           "button",
           {
-            className: "build-player",
+            className: `build-player${badgeClass}`,
             attrs: { type: "button", "data-tip": player.riot_id ?? championName(player.champion) },
             on: { click: () => select(player) },
           },
@@ -384,7 +445,14 @@ function buildTab(detail) {
   // Tu build sale primero, y mientras la miras se piden las habilidades de los
   // otros nueve, para que al elegir a uno ya estén en la caché
   for (const player of players) championSpells(player.champion);
-  return el("div", { className: "build" }, el("div", { className: "build-players" }, strip), content);
+  // Dos columnas, para que todo quepa a lo alto: a la izquierda los jugadores,
+  // los objetos y las habilidades, y a la derecha las runas desde arriba
+  return el(
+    "div",
+    { className: "build" },
+    el("div", { className: "build-main" }, el("div", { className: "build-players" }, strip), left),
+    right,
+  );
 }
 
 const PANELS = {
