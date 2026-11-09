@@ -6,7 +6,7 @@ name: project0
 nodes:
   - role: control-plane
   # El controlador de Ingress irá en este nodo, por eso es el único que
-  # publica el 80 y el 443. La etiqueta sirve para mandarlo aquí.
+  # publica el 80 y el 443. El label sirve para mandarlo aquí.
   - role: worker
     labels:
       ingress-ready: "true"

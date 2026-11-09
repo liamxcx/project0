@@ -12,6 +12,7 @@ let version = null;
 let champions = new Map();
 let items = new Map();
 let spells = new Map();
+let runes = new Map();
 
 async function load() {
   try {
@@ -19,10 +20,11 @@ async function load() {
     const latest = versions[0];
     const data = (file) =>
       fetchJson(`${BASE_URL}/cdn/${latest}/data/${LANGUAGE}/${file}.json`, TIMEOUT_MS);
-    const [championData, itemData, spellData] = await Promise.all([
+    const [championData, itemData, spellData, runeData] = await Promise.all([
       data("champion"),
       data("item"),
       data("summoner"),
+      data("runesReforged"),
     ]);
 
     // MATCH-V5 y Data Dragon no siempre escriben igual la clave, por ejemplo
@@ -33,6 +35,12 @@ async function load() {
     items = new Map(Object.entries(itemData.data));
     // Los hechizos vienen por nombre (SummonerFlash) y la API los da por número (4)
     spells = new Map(Object.values(spellData.data).map((spell) => [spell.key, spell]));
+    // Los árboles y sus runas van en el mismo mapa, porque sus números no se repiten
+    const runeList = runeData.flatMap((style) => [
+      style,
+      ...style.slots.flatMap((slot) => slot.runes),
+    ]);
+    runes = new Map(runeList.map((rune) => [rune.id, rune]));
     version = latest;
   } catch (error) {
     console.warn("Data Dragon no está disponible, se usan las claves internas.", error);
@@ -87,4 +95,15 @@ export function itemIconUrl(id) {
 // La API da el hechizo por número (4) y la imagen va por nombre (SummonerFlash)
 export function spellIconUrl(id) {
   return iconUrl("spell", spells.get(String(id))?.id);
+}
+
+export function runeName(id) {
+  return runes.get(id)?.name ?? String(id);
+}
+
+// Las imágenes de runas y árboles no llevan versión, pero la ruta de cada una
+// solo viene en runesReforged.json, así que sin Data Dragon no hay imagen
+export function runeIconUrl(id) {
+  const icon = runes.get(id)?.icon;
+  return icon === undefined ? null : `${BASE_URL}/cdn/img/${icon}`;
 }

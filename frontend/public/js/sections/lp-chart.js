@@ -162,8 +162,8 @@ export async function renderLpChart(card, history) {
       }),
     );
 
-    // Al pasar el ratón, o el dedo, una línea marca la foto más cercana y una
-    // caja enseña su día, su rango y sus LP
+    // Al pasar el ratón, o el dedo, una línea marca la foto más cercana y un
+    // tooltip enseña su día, su rango y sus LP
     const cursor = el("div", { className: "lp-cursor", attrs: { hidden: "" } });
     const tipDate = el("span", { className: "lp-tip-date" });
     const tipRank = el("span", { className: "lp-tip-rank" });
@@ -177,7 +177,7 @@ export async function renderLpChart(card, history) {
       tip.hidden = false;
       cursor.style.setProperty("left", `${left}%`);
       tip.style.setProperty("left", `${left}%`);
-      // Cerca de los bordes la caja se apoya hacia dentro para no salirse
+      // Cerca de los bordes el tooltip se apoya hacia dentro para no salirse
       tip.classList.toggle("is-left", left < 25);
       tip.classList.toggle("is-right", left > 75);
       tipDate.textContent = pointDate(point);

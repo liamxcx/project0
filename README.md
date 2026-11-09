@@ -1002,7 +1002,7 @@ Revisa el chart de Helm de la aplicación:
 helm lint --strict charts/project0
 ```
 
-Comprueba que `Chart.yaml` está completo, que las plantillas se rellenan
+Comprueba que `Chart.yaml` está completo, que los templates se rellenan
 con los values sin errores y que el resultado es YAML válido. Con `--strict`
 fallan también los avisos, no solo los errores. No comprueba que el chart
 funcione en un clúster, solo que está bien escrito.
@@ -1029,7 +1029,7 @@ Hace falta porque los tests ejecutan el código directamente y nunca usan el
 sitio.
 
 En `main` las construye para amd64 y arm64 y las sube a GitHub Container
-Registry, etiquetadas con el SHA corto del commit. Las tres llevan el mismo
+Registry, con el SHA corto del commit como tag. Las tres llevan el mismo
 tag, así que se sabe qué migraciones y qué página van con qué código. En el resto de
 ramas solo las construye para amd64 y no las sube, así que el aviso
 `No output specified with docker-container driver` del log es esperado.
@@ -1106,7 +1106,7 @@ El token de GHCR es un token classic de GitHub con solo el permiso
 
 El namespace y los Secrets van fuera del chart. Helm guarda la release
 dentro del namespace, y `helm uninstall` lo borraría con todo lo que tiene
-dentro. Y si los Secrets fueran plantillas del chart, sus valores
+dentro. Y si los Secrets fueran templates del chart, sus valores
 acabarían en el historial de cada revisión.
 
 En un clúster nuevo PostgreSQL arranca vacío. Al instalar, las migraciones
@@ -1127,18 +1127,18 @@ curl localhost:8001/ready
 `charts/project0` tiene cuatro partes:
 
 - `Chart.yaml` — el nombre y dos versiones. `version` es la del chart y se
-  sube a mano cuando cambian las plantillas o lo que se puede configurar.
+  sube a mano cuando cambian los templates o lo que se puede configurar.
   `appVersion` es el tag de las imágenes que despliega.
 - `values.yaml` — lo que puede cambiar de un clúster a otro o con el
   tiempo, como el tag, las réplicas, los recursos, el horario del
   `collector`, la configuración de la API, el disco de PostgreSQL y el
   Gateway del que cuelga la ruta.
-- `templates/` — una plantilla por objeto de la aplicación.
-- `templates/_helpers.tpl` — las etiquetas comunes y la regla del tag, que
-  usan varias plantillas.
+- `templates/` — un template por objeto de la aplicación.
+- `templates/_helpers.tpl` — los labels comunes y la regla del tag, que
+  usan varios templates.
 
 En el clúster, la configuración que no es secreta no sale del `.env`, sino
-de los ConfigMaps del chart, que se rellenan con `values.yaml`. La plantilla
+de los ConfigMaps del chart, que se rellenan con `values.yaml`. El template
 de los pods de la API lleva una suma de cada ConfigMap que lee, así que si
 un `helm upgrade` cambia uno de esos valores, cambia la suma y Kubernetes
 recrea los pods con el valor nuevo. El `collector` no lo necesita, porque
@@ -1187,8 +1187,8 @@ listos.
 
 El CronJob usa la imagen nueva desde su siguiente ejecución.
 
-Un cambio en `values.yaml` o en una plantilla se despliega igual. Si
-cambian las plantillas o lo que se puede configurar, se sube también
+Un cambio en `values.yaml` o en un template se despliega igual. Si
+cambian los templates o lo que se puede configurar, se sube también
 `version` en `Chart.yaml`.
 
 El commit se hace después de comprobar que funciona, para que lo que hay en
@@ -1231,7 +1231,7 @@ configuración nueva, por ejemplo con
 
 Antes del chart, la aplicación se desplegaba con manifiestos sueltos y
 `kubectl apply`. Se pasó a Helm sin caída, adoptando los objetos que ya
-corrían en vez de recrearlos. Para eso se les puso la etiqueta
+corrían en vez de recrearlos. Para eso se les puso el label
 `app.kubernetes.io/managed-by: Helm` y las dos anotaciones
 `meta.helm.sh/…` con las que Helm reconoce lo suyo.
 
@@ -1324,7 +1324,7 @@ Para cambiar un value de Traefik, se edita `traefik-values.yaml` y se
 ejecuta el comando de la instalación con `upgrade` en vez de `install`,
 siempre con `--values`.
 
-Las reglas de project0 van en la HTTPRoute `project0`, una plantilla más del
+Las reglas de project0 van en la HTTPRoute `project0`, un template más del
 chart, colgada del Gateway `public` (`gateway` en `values.yaml`):
 
 ```

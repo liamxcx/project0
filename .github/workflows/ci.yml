@@ -73,7 +73,7 @@ jobs:
             image: project0-frontend
     name: build (${{ matrix.name }})
     runs-on: ubuntu-latest
-    # El token que GitHub da al job necesita permiso para subir al registro
+    # El token que GitHub da al job necesita permiso para subir al registry
     permissions:
       contents: read
       packages: write
@@ -95,7 +95,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Etiqueta la imagen con el SHA corto del commit, para saber qué código
+      # Pone como tag de la imagen el SHA corto del commit, para saber qué código
       # lleva cada una
       - id: meta
         uses: docker/metadata-action@v6

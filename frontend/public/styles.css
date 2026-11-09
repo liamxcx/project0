@@ -995,7 +995,7 @@ input:focus-visible {
   position: relative;
 }
 
-/* La caja de búsqueda se queda fija arriba y solo se desplaza la lista. Con
+/* El buscador se queda fijo arriba y solo se desplaza la lista. Con
    tres clases, para ganar a la altura de .filter-dropdown .patch-menu */
 .filter-dropdown .patch-menu.champion-menu {
   display: flex;
@@ -1225,8 +1225,9 @@ input:focus-visible {
 /* Los iconos y el texto crecen con el alto de la ventana, entre un mínimo y
    un máximo, para que no se vean diminutos en filas altas */
 .scoreboard {
-  --sb-icon: clamp(24px, 3.6vh, 38px);
-  --sb-item: clamp(20px, 2.8vh, 28px);
+  --sb-icon: clamp(30px, 4.6vh, 48px);
+  /* Los objetos van en proporción al campeón, para que no desentonen */
+  --sb-item: calc(var(--sb-icon) * 0.7);
   --sb-text: clamp(13px, 1.6vh, 15px);
   display: flex;
   flex: 1;
@@ -1256,7 +1257,7 @@ input:focus-visible {
 .sb-row {
   display: grid;
   grid-template-columns:
-    calc(var(--sb-icon) * 1.6) minmax(0, 1.4fr) 76px 100px 76px minmax(110px, 1fr) 110px
+    calc(var(--sb-icon) * 2.2) minmax(0, 1.4fr) 76px 100px 76px minmax(110px, 1fr) 110px
     calc(var(--sb-item) * 7 + 24px);
   gap: 12px;
   align-items: center;
@@ -1311,6 +1312,7 @@ input:focus-visible {
 
 .sb-champion,
 .sb-spell,
+.sb-rune,
 .sb-item {
   flex: none;
   overflow: hidden;
@@ -1319,6 +1321,7 @@ input:focus-visible {
 
 .sb-champion img,
 .sb-spell img,
+.sb-rune img,
 .sb-item img {
   display: block;
   width: 100%;
@@ -1326,8 +1329,20 @@ input:focus-visible {
 }
 
 .sb-champion {
+  position: relative;
   width: var(--sb-icon);
   height: var(--sb-icon);
+}
+
+.sb-level {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  padding: 1px 3px;
+  background: rgba(11, 10, 10, 0.85);
+  /* Crece con el icono: un cuarto de su lado */
+  font: 700 calc(var(--sb-icon) / 4) / 1 "Archivo", sans-serif;
+  color: var(--text);
 }
 
 .sb-spells {
@@ -1336,9 +1351,31 @@ input:focus-visible {
   gap: 2px;
 }
 
-.sb-spell {
+.sb-spell,
+.sb-rune {
   width: calc(var(--sb-icon) / 2 - 1px);
   height: calc(var(--sb-icon) / 2 - 1px);
+}
+
+/* Las runas son redondas y sin fondo propio */
+.sb-rune {
+  border-radius: 50%;
+  background: var(--bg-deep);
+}
+
+/* El árbol secundario se ve algo más pequeño, como en el cliente */
+.sb-rune.is-style {
+  padding: 2px;
+}
+
+.sb-rank {
+  flex: none;
+  min-width: 28px;
+  padding: 3px 4px;
+  border: 1px solid var(--tier, var(--border-strong));
+  font: 700 10px/1 "Archivo", sans-serif;
+  text-align: center;
+  color: var(--tier, var(--text-muted));
 }
 
 .sb-cell:nth-child(2) {
@@ -1513,6 +1550,21 @@ input:focus-visible {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-muted);
+}
+
+/* El tooltip con el nombre al pasar el ratón. pointer-events: none hace que
+   el ratón lo atraviese, así que nunca tapa lo que hay debajo */
+.tip {
+  position: fixed;
+  z-index: 50;
+  max-width: 260px;
+  padding: 6px 9px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  font: 600 12px/1.3 "Archivo", sans-serif;
+  color: var(--text);
+  pointer-events: none;
 }
 
 .ratio-low { color: var(--ratio-low); }

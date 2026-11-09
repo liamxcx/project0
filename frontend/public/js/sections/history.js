@@ -204,7 +204,7 @@ function option(label, meta, onClick) {
 }
 
 // Con una temporada entera saldrían unos 24 botones, así que se ven los más
-// recientes y el resto va en el desplegable de "Más"
+// recientes y el resto va en el dropdown de "Más"
 const VISIBLE_PATCHES = 3;
 
 function patchFilter(patches, onChange) {
@@ -235,7 +235,7 @@ function patchFilter(patches, onChange) {
   const menu = el("div", { className: "patch-menu" }, items);
   const moreSelect = dropdown("filter-dropdown", more, caret, menu);
 
-  // Si el elegido está en el desplegable, "Más" pasa a llamarse como él
+  // Si el elegido está en el dropdown, "Más" pasa a llamarse como él
   function show() {
     // aria-pressed le dice a un lector de pantalla cuál está elegido
     visible.forEach(({ patch }, i) => {

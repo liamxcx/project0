@@ -6,12 +6,15 @@ import {
   dataDragonReady,
   itemIconUrl,
   itemName,
+  runeIconUrl,
+  runeName,
   spellIconUrl,
   spellName,
 } from "../ddragon.js";
 import { el } from "../dom.js";
 import { formatNumber } from "../format.js";
 import { ratio, ratioClass } from "../kda.js";
+import { APEX, rankName } from "./rank.js";
 
 const TABS = [
   { id: "teams", label: "Equipos" },
@@ -24,6 +27,21 @@ const COLUMNS = ["Nota", "KDA", "Ratio", "Daño", "CS", "Objetos"];
 // Riot no quiere que las webs señalen a los jugadores para mal
 const HIGH_SCORE = 7;
 
+// Las iniciales con las que se suele escribir cada liga: D3, P1, M
+const TIER_SHORT = {
+  IRON: "I",
+  BRONZE: "B",
+  SILVER: "S",
+  GOLD: "G",
+  PLATINUM: "P",
+  EMERALD: "E",
+  DIAMOND: "D",
+  MASTER: "M",
+  GRANDMASTER: "GM",
+  CHALLENGER: "C",
+};
+const DIVISION_NUMBER = { I: 1, II: 2, III: 3, IV: 4 };
+
 // Solo hay una partida abierta a la vez. Si se abre otra antes de que llegue
 // la respuesta de la anterior, esa respuesta ya no vale
 let latest = 0;
@@ -34,7 +52,7 @@ function message(text) {
 
 // Una casilla con su imagen. Si la imagen no existe o falla, queda la casilla vacía
 function icon(className, url, name) {
-  const box = el("span", { className, attrs: name ? { title: name } : {} });
+  const box = el("span", { className, attrs: name ? { "data-tip": name } : {} });
   if (url === null) return box;
   const image = el("img", { attrs: { src: url, alt: name ?? "", loading: "lazy" } });
   image.addEventListener("error", () => image.remove(), { once: true });
@@ -50,6 +68,19 @@ function itemSlot(id, extraClass = "") {
     empty ? null : itemIconUrl(id),
     empty ? null : itemName(id),
   );
+}
+
+// La etiqueta de rango, con el color de su liga y el nombre completo en el
+// tooltip. Es el rango de cuando se guardó la partida
+function rankTag(player) {
+  if (!player.tier) {
+    return el("span", { className: "sb-rank", attrs: { "data-tip": "Sin clasificar" } }, "—");
+  }
+  const short = TIER_SHORT[player.tier] ?? player.tier;
+  const text = APEX.includes(player.tier) ? short : `${short}${DIVISION_NUMBER[player.division] ?? ""}`;
+  const tip = `${rankName(player.tier, player.division)} · ${formatNumber(player.league_points, 0)} LP`;
+  const className = `sb-rank tier-${player.tier.toLowerCase()}`;
+  return el("span", { className, attrs: { "data-tip": tip } }, text);
 }
 
 function cells(...children) {
@@ -74,10 +105,28 @@ function playerRow(player, context) {
   const { meId, minutes, maxDamage, teamDamage, place } = context;
   const name = player.riot_id ?? championName(player.champion);
   const champion = icon("sb-champion", championIconUrl(player.champion), championName(player.champion));
+  // El nivel en la esquina del icono, si la partida lo tiene guardado
+  if (player.champ_level !== null) {
+    champion.append(el("span", { className: "sb-level" }, String(player.champ_level)));
+  }
   const spells = el(
     "div",
     { className: "sb-spells" },
     player.summoner_spells.map((id) => icon("sb-spell", spellIconUrl(id), spellName(id))),
+  );
+  // La runa principal y, debajo, el árbol secundario
+  const keystone = player.rune_ids?.[0];
+  const runes = el(
+    "div",
+    { className: "sb-spells" },
+    keystone === undefined ? null : icon("sb-rune", runeIconUrl(keystone), runeName(keystone)),
+    player.secondary_style_id === null
+      ? null
+      : icon(
+          "sb-rune is-style",
+          runeIconUrl(player.secondary_style_id),
+          runeName(player.secondary_style_id),
+        ),
   );
 
   const scoreText = player.score === null ? "—" : formatNumber(player.score, 1);
@@ -96,7 +145,7 @@ function playerRow(player, context) {
   });
   const damageCell = el(
     "div",
-    { attrs: { title: `${formatNumber(share, 0)}% del daño de su equipo` } },
+    { attrs: { "data-tip": `${formatNumber(share, 0)}% del daño de su equipo` } },
     el("p", { className: "sb-value" }, formatNumber(damage, 0)),
     el("div", { className: "sb-track" }, fill),
   );
@@ -115,8 +164,8 @@ function playerRow(player, context) {
     "div",
     { className: rowClass },
     ...cells(
-      el("div", { className: "sb-who" }, champion, spells),
-      [el("p", { className: "sb-name" }, name), badge(player.badge)],
+      el("div", { className: "sb-who" }, champion, spells, runes),
+      [rankTag(player), el("p", { className: "sb-name" }, name), badge(player.badge)],
       el("div", { className: "sb-score-cell" }, el("span", { className: scoreClass }, scoreText), placeText),
       el("p", { className: "sb-value" }, kda),
       // En su propia columna, para que los diez ratios queden uno debajo de otro

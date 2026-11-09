@@ -31,5 +31,5 @@ export function badge(name) {
     icon.append(path);
   }
   const className = `badge badge-${name.toLowerCase()}`;
-  return el("span", { className, attrs: { title: info.title } }, icon, name);
+  return el("span", { className, attrs: { "data-tip": info.title } }, icon, name);
 }
