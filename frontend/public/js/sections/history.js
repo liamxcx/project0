@@ -257,12 +257,18 @@ function patchFilter(patches, onChange) {
   }
 
   show();
-  return el(
+  const element = el(
     "div",
     { className: "filter-group" },
     el("span", { className: "filter-label" }, "Filtrar por parche"),
     el("div", { className: "filter-buttons" }, buttons, older.length > 0 ? moreSelect.element : null),
   );
+  // set cambia el elegido desde fuera, sin avisar con onChange
+  const set = (patch) => {
+    selected = patch;
+    show();
+  };
+  return { element, set };
 }
 
 // "Kai'Sa" → "kaisa", "Nunu y Willump" → "nunuywillump". Así la búsqueda no
@@ -377,10 +383,17 @@ function championFilter(onChange) {
     el("span", { className: "filter-label" }, "Campeón"),
     select.element,
   );
-  return { element, load };
+  // set cambia el elegido desde fuera, sin avisar con onChange
+  const set = (champion) => {
+    selected = champion;
+    show();
+  };
+  return { element, load, set };
 }
 
-export async function renderHistory(section, patches) {
+// Devuelve showChampion, para que otra sección pueda enseñar las partidas de un
+// campeón. El resto del historial se pinta por su cuenta
+export function renderHistory(section, patches) {
   const head = el("div", { className: "section-head" }, el("h2", {}, "Últimas partidas"));
   const filters = el("div", { className: "history-filters" });
   const results = el("div");
@@ -395,19 +408,35 @@ export async function renderHistory(section, patches) {
   champions.load(null);
   filters.replaceChildren(champions.element);
 
+  let patchGroup = null;
   // Si los parches fallan, profile.js ya los da como lista vacía, y entonces
   // el historial sale igual pero sin filtro de parche
-  const list = await patches;
-  if (list.length === 0) return;
-  // Al cambiar de parche, primero se cambia la lista de campeones, porque el
-  // elegido puede no estar en el parche nuevo y entonces hay que quitarlo
-  const patchGroup = patchFilter(list, async (patch) => {
-    filter.patch = patch;
-    const champion = await champions.load(patch);
-    if (champion === undefined || filter.patch !== patch) return;
+  patches.then((list) => {
+    if (list.length === 0) return;
+    // Al cambiar de parche, primero se cambia la lista de campeones, porque el
+    // elegido puede no estar en el parche nuevo y entonces hay que quitarlo
+    patchGroup = patchFilter(list, async (patch) => {
+      filter.patch = patch;
+      const champion = await champions.load(patch);
+      if (champion === undefined || filter.patch !== patch) return;
+      filter.champion = champion;
+      loadMatches(results, filter);
+    });
+    const divider = el("span", { className: "filter-divider", attrs: { "aria-hidden": "true" } });
+    filters.replaceChildren(patchGroup.element, divider, champions.element);
+  });
+
+  // Todas las partidas del campeón, de cualquier parche, y la página baja
+  // hasta el historial para verlas
+  async function showChampion(champion) {
+    filter.patch = null;
+    patchGroup?.set(null);
+    await champions.load(null);
+    champions.set(champion);
     filter.champion = champion;
     loadMatches(results, filter);
-  });
-  const divider = el("span", { className: "filter-divider", attrs: { "aria-hidden": "true" } });
-  filters.replaceChildren(patchGroup, divider, champions.element);
+    section.scrollIntoView({ block: "start", behavior: reduceMotion.matches ? "auto" : "smooth" });
+  }
+
+  return { showChampion };
 }

@@ -7,6 +7,7 @@ import { renderLpChart } from "./lp-chart.js";
 import { renderPatchSelect } from "./patch-select.js";
 import { renderRank } from "./rank.js";
 import { renderSummary } from "./summary.js";
+import { renderTopChampions } from "./top-champions.js";
 
 // Riot no distingue mayúsculas en el Riot ID, así que aquí tampoco
 function sameRiotId(summoner, { gameName, tagLine }) {
@@ -37,8 +38,9 @@ export async function renderProfile(content, riotId) {
     const summary = el("section", { className: "card" });
     const lp = el("section", { className: "card card-grow" });
     const side = el("div", { className: "side" }, rank, summary, lp);
+    const top = el("section", { className: "top-champions" });
     const history = el("section", { className: "history" });
-    content.replaceChildren(el("div", { className: "overview" }, hero, side), history);
+    content.replaceChildren(el("div", { className: "overview" }, hero, side), top, history);
     // Varias secciones usan los mismos datos, así que se piden una sola vez
     const rankData = getJson("/rank");
     // Los parches solo dan el año de la temporada, así que si fallan, las
@@ -50,16 +52,19 @@ export async function renderProfile(content, riotId) {
     renderHero(hero, summoner, patches);
     renderRank(rank, rankData);
     renderLpChart(lp, getJson("/rank/history"));
-    renderHistory(history, patches);
+    const matchHistory = renderHistory(history, patches);
+    const showChampion = (champion) => matchHistory.showChampion(champion);
     patches.then((list) => {
       const patch = selectedPatch(list);
       renderSummary(summary, rankData, list, patch);
+      renderTopChampions(top, list, patch, showChampion);
       // Sin parches no hay nada que elegir
       if (list.length === 0) return;
       const container = document.getElementById("patch-select");
       renderPatchSelect(container, list, rankData, patch, (chosen) => {
         saveSelectedPatch(chosen);
         renderSummary(summary, rankData, list, chosen);
+        renderTopChampions(top, list, chosen, showChampion);
       });
     });
   } catch (error) {
