@@ -493,7 +493,7 @@ Endpoints:
 | `GET /summary` | Partidas, victorias, derrotas y winrate de la temporada o de un parche | `patch` |
 | `GET /rank` | El último snapshot de la clasificatoria solo/duo: liga, división, LP, balance de la temporada y corte del siguiente escalón. `null` si no hay ninguna | |
 | `GET /rank/history` | El último snapshot de cada día de los últimos 30, para la gráfica de LP. `ladder_lp` son los LP contados desde Hierro IV, para que subir de división no parezca una bajada | |
-| `GET /champions` | Estadísticas por campeón de la temporada o de un parche, del más jugado al menos | `patch` |
+| `GET /champions` | Estadísticas por campeón de la temporada o de un parche, del más jugado al menos. `kda_ratio` sale de las sumas y no de las medias redondeadas, y es `null` si no hay ninguna muerte | `patch` |
 
 Los parámetros son opcionales y se pueden combinar, por ejemplo
 `/matches?patch=26.17&champion=Ahri&offset=10`:
@@ -731,6 +731,45 @@ nginx busca la IP de `api` al arrancar y se queda con ella. Cuando Compose
 recrea la API, por ejemplo con `up --build`, la API cambia de IP y nginx
 respondería 502. Por eso el `frontend` depende de `api` con `restart: true`,
 y Compose lo reinicia detrás de ella.
+
+### Rutas del perfil
+
+Cada perfil tiene su dirección, `/invocador/Nombre-Tag`, igual que en op.gg.
+No es un fichero, así que `nginx-compose.conf` devuelve `index.html` para
+todo lo que empieza por `/invocador/`, y el JavaScript lee la dirección para
+saber qué perfil enseñar. Sin esa regla, abrir un perfil desde un enlace o
+recargarlo daría 404.
+
+El Riot ID se separa por el último guion, porque el tag no lleva guiones. Si
+no es de un invocador seguido, la página lo dice y no enseña nada, porque la
+API solo tiene datos de los seguidos.
+
+El parche elegido arriba va en la dirección, como `?parche=26.21`, así que se
+mantiene al recargar y se puede compartir. Se cambia con
+`history.replaceState`, que actualiza la dirección sin recargar ni añadir una
+entrada al historial, así que el botón de atrás sigue sacando del perfil.
+
+### Caché de la página
+
+nginx manda un `Cache-Control` distinto según lo que sirve:
+
+| Qué | `Cache-Control` | Por qué |
+|---|---|---|
+| La página, el JavaScript y el CSS | `no-cache` | Cambian con cada versión. El navegador los guarda, pero pregunta antes de usarlos |
+| La fuente y los emblemas | `max-age=86400` | Casi nunca cambian, así que valen un día sin preguntar |
+| `/api/matches/{match_id}` | `max-age=3600` | La pone la API, no nginx (ver [API](#api)) |
+
+Para preguntar, el navegador manda la ETag que le dio nginx en la cabecera
+`If-None-Match`. Si el fichero no ha cambiado, nginx responde 304 sin
+cuerpo y el navegador usa el que tiene. `no-cache` no impide guardar el
+fichero, solo obliga a preguntar antes de usarlo. Para no guardarlo está
+`no-store`.
+
+### La fuente
+
+La fuente, Archivo, va en `frontend/public/fonts/` con su licencia
+(`OFL.txt`), y la sirve el mismo nginx. Así la página no le pide nada a
+Google Fonts, que vería la IP de cada visita.
 
 ### Data Dragon
 
