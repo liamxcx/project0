@@ -894,8 +894,114 @@ input:focus-visible {
   color: #f19000;
 }
 
+/* Los 28 px de arriba son los mismos que hay entre la raya de "Más jugados" y
+   sus tarjetas, así que las tarjetas quedan centradas entre las dos secciones */
 .history {
-  padding: 34px 0 10px;
+  padding: 28px 0 10px;
+  /* Al bajar hasta aquí desde "Más jugados", que no quede debajo de la barra fija */
+  scroll-margin-top: var(--topbar-height);
+}
+
+.top-champions {
+  padding: 34px 0 0;
+}
+
+.section-period {
+  color: var(--text-muted);
+}
+
+/* Seis columnas iguales, de un margen al otro. En pantallas más estrechas,
+   dos filas de tres */
+.top-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+  margin: 28px 32px 0;
+}
+
+@media (max-width: 1300px) {
+  .top-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* El contenido va centrado en la tarjeta, entre su raya y la de la siguiente */
+.top-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 0;
+  border-left: 3px solid var(--border-strong);
+  background: var(--panel);
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.top-card:hover {
+  border-left-color: var(--accent);
+  background: var(--line);
+}
+
+.top-icon {
+  display: block;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  overflow: hidden;
+  background: var(--line);
+}
+
+.top-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.top-text,
+.top-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.top-text {
+  min-width: 0;
+}
+
+.top-stats {
+  align-items: flex-end;
+}
+
+.top-name {
+  overflow: hidden;
+  font: 700 15px/1.1 "Archivo", sans-serif;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.top-games {
+  font: 500 11px/1 "Archivo", sans-serif;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.top-winrate {
+  font: 800 18px/1 "Archivo", sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-soft);
+}
+
+.top-winrate.is-good {
+  color: var(--win);
+}
+
+.top-ratio {
+  font: 600 11px/1 "Archivo", sans-serif;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .section-head {
@@ -1949,9 +2055,15 @@ input:focus-visible {
     padding: 28px 24px 24px;
   }
 
+  /* En el móvil, una tarjeta por línea */
+  .top-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .section-head,
   .section-message,
   .history-filters,
+  .top-grid,
   .matches,
   .matches-footer {
     margin-right: 24px;
