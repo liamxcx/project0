@@ -35,8 +35,8 @@ CronJob collector  ──cada hora──▶  pod collector  ──▶  API de Ri
                                         └──▶  PostgreSQL
 ```
 
-Cuando alguien abre la página, todo entra por una sola puerta: Traefik en el
-clúster. La puerta manda `/api/matches` a la API, quitándole el prefijo, y
+Cuando alguien abre la página, todo entra por un solo reverse proxy, que en el
+clúster es Traefik. Manda `/api/matches` a la API, quitándole el prefijo, y
 todo lo demás al frontend:
 
 ```
@@ -47,7 +47,7 @@ navegador ──▶ Traefik :80 ──┬── /             ──▶ frontend
                                                    └──▶ PostgreSQL   solo si no lo está
 ```
 
-En Compose, la puerta es el propio nginx del `frontend`, en
+En Compose, el reverse proxy es el propio nginx del `frontend`, en
 `http://localhost:8080`, con las mismas dos reglas (ver [Frontend](#frontend)).
 
 La página pide los datos con una ruta relativa, `/api/matches`, así que la
@@ -66,13 +66,13 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
 ### Qué hay hecho
 
 - **`collector`** — dado un Riot ID: PUUID (ACCOUNT-V1), icono y nivel
-  (SUMMONER-V4), una foto de la clasificatoria (LEAGUE-V4), identificadores
-  de las últimas partidas de ranked solo (MATCH-V5), y de cada una su detalle y su
-  timeline. Guarda la partida, los diez participantes y los eventos de
-  compra y de habilidades, sin duplicar. Antes de descargar consulta
-  cuáles ya están en la base y se las salta, así que solo pide a Riot lo
-  que le falta. Con reintentos ante fallos de red y control del límite de
-  peticiones.
+  (SUMMONER-V4), un snapshot de la clasificatoria (LEAGUE-V4), identificadores
+  de las últimas partidas de ranked solo (MATCH-V5), y de cada una su detalle,
+  su timeline y el rango de los otros nueve jugadores (LEAGUE-V4). Guarda la
+  partida, los diez participantes y los eventos de compra y de habilidades,
+  sin duplicar. Antes de descargar consulta cuáles ya están en la base y se
+  las salta, así que solo pide a Riot lo que le falta. Con reintentos ante
+  fallos de red y control del rate limit.
 - **`db`** — las tablas en PostgreSQL, volumen con nombre para
   que los datos sobrevivan a los reinicios y arranque ordenado con
   healthcheck.
@@ -80,11 +80,12 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
   Los servicios que usan la base esperan a que acabe.
 - **`api`** — los endpoints con FastAPI, agregados calculados en SQL y
   documentación interactiva automática en `/docs`.
-- **`redis`** — caché de respuestas de la API, con caducidad automática y
-  opcional: si Redis no responde, la API consulta PostgreSQL y sigue
-  funcionando.
+- **`redis`** — caché de respuestas de la API, con TTL y opcional: si Redis
+  no responde, la API consulta PostgreSQL y sigue funcionando.
 - **`frontend`** — una página estática que pide los datos a la API desde el
-  navegador, por la misma puerta por la que llega la página.
+  navegador, por el mismo reverse proxy por el que llega la página. Los
+  nombres y las imágenes del juego los pide directamente a Data Dragon, el CDN
+  de Riot.
 - **Tests** — pytest sobre todos los endpoints y la caché, contra un
   PostgreSQL y un Redis propios, con datos inventados.
 - **CI** — GitHub Actions pasa Ruff, ejecuta los tests, revisa el chart de
@@ -99,7 +100,8 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
 
 ### Qué falta
 
-- La página definitiva con todos los datos de la API (en marcha)
+- Llevar la página nueva al clúster. Usa casi todos los endpoints de la API
+  y la HTTPRoute solo publica `/api/matches` (en marcha)
 
 El resto, y la deuda técnica, están en [MEJORAS.md](MEJORAS.md).
 
@@ -186,6 +188,9 @@ pero Compose construye una imagen por servicio:
 código anterior, sin dar ningún error. Nombrar un servicio vale para
 levantarlo suelto, no para reconstruir.
 
+Al recrear la API, Compose reinicia también el `frontend`, porque su nginx
+necesita la IP nueva de la API (ver [Frontend](#frontend)).
+
 Los cambios de esquema no necesitan `down -v`: se escriben como una
 migración nueva y `flyway` la aplica al arrancar, sin tocar los datos.
 Ver [Migraciones](#migraciones).
@@ -202,10 +207,10 @@ Seis tablas y una vista:
   hechizos de invocador, equipo, nivel, runas y su rango de Solo/Duo
 - `item_purchases` — cada compra de cada jugador, con su minuto
 - `skill_levelups` — cada subida de habilidad, con su minuto
-- `ranked_snapshots` — una foto de la clasificatoria solo/duo en cada vuelta
+- `ranked_snapshots` — un snapshot de la clasificatoria solo/duo en cada vuelta
   del `collector`: liga, división, LP, victorias, derrotas y el corte del
-  siguiente escalón. Se guardan todas para poder dibujar más adelante la
-  evolución de los LP
+  siguiente escalón. Se guardan todas, y de ellas sale la gráfica de LP de
+  los últimos 30 días
 - `participant_scores` — la vista con la nota y el sello de cada jugador
   (ver [La nota y los sellos](#la-nota-y-los-sellos))
 
@@ -397,8 +402,8 @@ Tres cosas que hace el `collector` al procesarlo:
 
 Los jugadores se identifican por su número dentro de la partida (1-10), no
 por PUUID: para analizar builds basta, y así no se guarda la identidad de
-nadie más. `participants.participant_id` guarda ese número para el propio
-invocador, que es lo que permite filtrar sus compras:
+nadie más. `participants.participant_id` es ese mismo número, así que las
+compras de cualquiera de los diez salen cruzando las dos tablas:
 
 ```sql
 SELECT ip.timestamp_ms / 60000 AS minuto, ip.item_id
@@ -486,8 +491,8 @@ Endpoints:
 | `GET /matches/{match_id}` | El detalle de una partida: tus estadísticas y los diez jugadores con su nota, su marcador, su nivel, sus runas, su rango, sus compras con su minuto y su orden de habilidades. 404 si no existe | |
 | `GET /patches` | Los parches que tienen partidas y cuántas hay en cada uno, del más reciente al más antiguo | |
 | `GET /summary` | Partidas, victorias, derrotas y winrate de la temporada o de un parche | `patch` |
-| `GET /rank` | La última foto de la clasificatoria solo/duo: liga, división, LP, balance de la temporada y corte del siguiente escalón. `null` si no hay ninguna | |
-| `GET /rank/history` | La última foto de cada día de los últimos 30, para la gráfica de LP. `ladder_lp` son los LP contados desde Hierro IV, para que subir de división no parezca una bajada | |
+| `GET /rank` | El último snapshot de la clasificatoria solo/duo: liga, división, LP, balance de la temporada y corte del siguiente escalón. `null` si no hay ninguna | |
+| `GET /rank/history` | El último snapshot de cada día de los últimos 30, para la gráfica de LP. `ladder_lp` son los LP contados desde Hierro IV, para que subir de división no parezca una bajada | |
 | `GET /champions` | Estadísticas por campeón de la temporada o de un parche, del más jugado al menos | `patch` |
 
 Los parámetros son opcionales y se pueden combinar, por ejemplo
@@ -539,6 +544,11 @@ Además de Redis, `/matches/{match_id}` lleva `Cache-Control: max-age=3600`,
 así que el navegador reutiliza el detalle de una partida durante una hora.
 El 404 no lo lleva, porque la partida puede llegar en la siguiente vuelta
 del `collector`.
+
+Durante esa hora el navegador no vuelve a preguntar. Si en ese tiempo cambia
+el formato del detalle, sigue usando el que guardó y la página puede fallar al
+leerlo. Mientras se desarrolla, se evita marcando *Disable cache* en la
+pestaña Network de las herramientas del navegador.
 
 FastAPI genera la documentación sola a partir de las rutas registradas:
 
@@ -636,7 +646,7 @@ tabla de control y apunta la V1 como aplicada sin ejecutarla. Desde ahí,
 Se usó al introducir Flyway en el proyecto, sobre la base que ya tenía
 partidas.
 
-## Copia de seguridad
+## Backups
 
 Desde Compose:
 
@@ -655,20 +665,20 @@ kubectl exec -n project0 postgres-0 -- sh -c 'pg_dump -U "$POSTGRES_USER" -d "$P
 Va sin `-t` en `kubectl exec`, como con el `-T` de Compose, porque una
 terminal estropearía la salida binaria de `pg_dump`.
 
-Para ver qué tablas trae una copia sin restaurarla:
+Para ver qué tablas trae un backup sin restaurarlo:
 
 ```bash
 kubectl exec -i -n project0 postgres-0 -- pg_restore --list < backups/<fichero>.dump | grep 'TABLE DATA'
 ```
 
-Para restaurarla en una base vacía de Compose:
+Para restaurarlo en una base vacía de Compose:
 
 ```bash
 docker compose exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d <base>' < backups/<fichero>.dump
 ```
 
-Para restaurarla en el clúster, sustituyendo lo que haya en `postgres-0`, y
-aplicar después las migraciones escritas desde la copia:
+Para restaurarlo en el clúster, sustituyendo lo que haya en `postgres-0`, y
+aplicar después las migraciones escritas desde el backup:
 
 ```bash
 kubectl exec -i -n project0 postgres-0 -- sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --single-transaction' < backups/<fichero>.dump
@@ -678,12 +688,12 @@ helm upgrade project0 charts/project0 -n project0 --wait --timeout 5m
 El `helm upgrade` no cambia nada de la aplicación, pero lanza el hook de
 las migraciones.
 
-`--clean --if-exists` borra cada objeto de la copia antes de crearlo, y
+`--clean --if-exists` borra cada objeto del backup antes de crearlo, y
 `--single-transaction` hace que, si algo falla, la base se quede como
 estaba.
 
-La copia va en formato custom de `pg_dump` y la carpeta `backups/` está
-fuera de Git. Se hace a mano, y la copia automática está en
+El backup va en formato custom de `pg_dump` y la carpeta `backups/` está
+fuera de Git. Se hace a mano, y el backup automático está en
 [MEJORAS.md](MEJORAS.md).
 
 ## Frontend
@@ -693,7 +703,7 @@ a la API y los pinta. Todo lo que hay en esa carpeta es público, y lo que no
 está en ella no se sirve. En Compose se abre en `http://localhost:8080`, y en el
 clúster en `http://localhost` (ver [Kubernetes](#kubernetes)).
 
-En Compose, nginx hace también de puerta de entrada, como Traefik en el
+En Compose, nginx hace también de reverse proxy, como Traefik en el
 clúster. Su configuración está en `frontend/nginx-compose.conf`: pasa todo
 lo que empieza por `/api/` a la API quitándole el prefijo (`/api/rank` llega
 como `/rank`) y sirve lo demás desde el disco. Por eso levantar el
@@ -701,13 +711,72 @@ como `/rank`) y sirve lo demás desde el disco. Por eso levantar el
 `Server: nginx`.
 
 Las rutas internas de la API (`/health`, `/ready`, `/docs`, `/redoc` y
-`/openapi.json`) no se publican, y por la puerta de entrada devuelven 404.
+`/openapi.json`) no se publican, y por el reverse proxy devuelven 404.
 Desde el propio ordenador siguen en `http://localhost:8000`.
 
-Solo se monta `frontend/public/`, como bind mount de solo lectura, así que
-editar la página y recargar el navegador basta: no hay que reconstruir ni
-reiniciar nada. Si el cambio no se ve, suele ser la caché
-del navegador (`Cmd + Shift + R`).
+En Compose se montan `frontend/public/` y `frontend/nginx-compose.conf`,
+como bind mounts de solo lectura. Editar la página y recargar el navegador
+basta, sin reconstruir ni reiniciar nada. Si el cambio no se ve, suele ser la
+caché del navegador (`Ctrl + Shift + R`, o `Cmd + Shift + R` en Mac).
+
+La configuración de nginx, en cambio, solo se lee al arrancar. Después de
+cambiarla se comprueba y se recarga, sin cortar las conexiones abiertas:
+
+```bash
+docker compose exec frontend nginx -t          # comprueba la configuración
+docker compose exec frontend nginx -s reload   # la vuelve a leer
+```
+
+nginx busca la IP de `api` al arrancar y se queda con ella. Cuando Compose
+recrea la API, por ejemplo con `up --build`, la API cambia de IP y nginx
+respondería 502. Por eso el `frontend` depende de `api` con `restart: true`,
+y Compose lo reinicia detrás de ella.
+
+### Data Dragon
+
+La API solo da números y claves internas, como el campeón `MonkeyKing`, el
+objeto `3089` o el hechizo `4`. Los nombres en español y las imágenes los pide
+el navegador a Data Dragon, el CDN público de Riot. No pasa por la API ni gasta
+peticiones de la clave de Riot.
+
+Al cargar la página se pide `api/versions.json`, cuya primera versión es la
+más reciente, y con ella cuatro ficheros a la vez:
+
+| Fichero | Para qué |
+|---|---|
+| `champion.json` | El nombre de cada campeón, "Wukong" para `MonkeyKing` |
+| `item.json` | El nombre de cada objeto |
+| `summoner.json` | Los hechizos de invocador. Vienen por nombre (`SummonerFlash`) y la API los da por número |
+| `runesReforged.json` | Los árboles de runas, sus runas y la ruta de cada imagen |
+
+Las habilidades no están en `champion.json`, sino en un fichero por campeón
+(`champion/Ahri.json`). Se piden al abrir la pestaña Build, las de los diez
+jugadores de la partida, y cada fichero una sola vez mientras la página siga
+abierta. Sus imágenes se descargan en ese momento, así que al elegir a otro
+jugador el navegador ya las tiene.
+
+Los fragmentos de runas tienen imagen en Data Dragon, pero su nombre no sale
+en ningún JSON. Por eso los nombres van escritos a mano en `ddragon.js`, y si
+Riot cambia los fragmentos hay que actualizar esa lista.
+
+Si Data Dragon no responde en 5 segundos, la página sigue sin él. Salen las
+claves internas en vez de los nombres, y las casillas de las imágenes se
+quedan vacías.
+
+### Qué pide la página
+
+Al abrir un perfil, la página pide a la API:
+
+```
+/summoners           comprobar que el Riot ID es de un invocador seguido
+/rank                el rango y el balance de la temporada
+/rank/history        la gráfica de LP
+/patches             el selector de parche y el filtro del historial
+/summary             el resumen, al elegir un parche
+/champions           el héroe, "Más jugados" y el filtro de campeón
+/matches             el historial, de 10 en 10
+/matches/{match_id}  el detalle, al abrir una partida
+```
 
 ### Emblemas de rango
 
@@ -741,9 +810,23 @@ respuestas sin pedir permiso.
 
 Antes, en Compose, la página estaba en el 8080 y la API en el 8000, que son
 orígenes distintos, y la API autorizaba a la página con `CORSMiddleware` y
-la variable `CORS_ORIGINS`. Al pasar las dos por la misma puerta se
+la variable `CORS_ORIGINS`. Al pasar las dos por el mismo reverse proxy se
 quitaron. Si algún día una página de otro origen necesita leer la API, habrá
 que volver a añadirlos.
+
+Data Dragon sí es otro origen. Sus JSON se leen con `fetch`, y el navegador
+solo los deja leer porque Data Dragon responde con
+`Access-Control-Allow-Origin: *`. Las imágenes no necesitan ese permiso,
+porque un `<img>` puede enseñar una imagen de cualquier origen.
+
+### La codificación
+
+Si no se le pide, nginx manda el CSS sin decir en qué codificación está, y el
+navegador la adivina. Adivinaba mal, y la flecha `›` que separa los minutos
+de la build salía como `â€º`, que son sus tres bytes de UTF-8 leídos uno a uno
+como si fueran Windows-1252. `charset` y `charset_types`, en
+`nginx-compose.conf`, añaden `; charset=utf-8` al `Content-Type` del CSS y
+del JavaScript.
 
 ## Logs
 
@@ -872,13 +955,13 @@ va siempre a la base. Si no, un test podría recibir la respuesta que dejó
 cacheada el anterior.
 
 Los tests que sí quieren la caché llevan encima `@pytest.mark.with_cache`.
-Con esa marca, `disable_cache` no toca nada y la API usa `redis-test` de
+Con ese marker, `disable_cache` no toca nada y la API usa `redis-test` de
 verdad. Además vacía Redis antes y después del test, por lo mismo que
-`seeded_db` vacía la base. La marca se registra en `pytest_configure`, porque
-si no pytest avisa de que no la conoce.
+`seeded_db` vacía la base. El marker se registra en `pytest_configure`, porque
+si no pytest avisa de que no lo conoce.
 
-Está hecho así, y no al revés, para que olvidar la marca no tenga
-consecuencias. Un test sin ella lee de la base como los demás. Si la
+Está hecho así, y no al revés, para que olvidar el marker no tenga
+consecuencias. Un test sin él lee de la base como los demás. Si la
 caché estuviera encendida por defecto, un test que se olvidara de
 apagarla dependería de lo que hubiera dejado en Redis el anterior.
 
@@ -1110,8 +1193,8 @@ dentro. Y si los Secrets fueran templates del chart, sus valores
 acabarían en el historial de cada revisión.
 
 En un clúster nuevo PostgreSQL arranca vacío. Al instalar, las migraciones
-crean el esquema, y los datos se traen restaurando una copia (ver
-[Copia de seguridad](#copia-de-seguridad)).
+crean el esquema, y los datos se traen restaurando un backup (ver
+[Backups](#backups)).
 
 Para llamar a las rutas de la API que no se publican, como `/ready` (el 8000
 lo ocupa Compose):
@@ -1254,7 +1337,7 @@ El disco usa la StorageClass `standard-retain`, definida en
 `reclaimPolicy: Retain`. Con la de kind, borrar el PVC borraría también los
 datos. Con esta, el PV queda en `Released` y los datos siguen en el nodo
 hasta que alguien los borre a mano. Ninguna de las dos sobrevive a
-`kind delete cluster`, y para eso está la copia.
+`kind delete cluster`, y para eso está el backup.
 
 El Service `postgres` es headless (`clusterIP: None`). El DNS devuelve la
 IP del pod en vez de una IP virtual, y cada pod tiene su propio nombre,
@@ -1303,10 +1386,11 @@ parado, las más antiguas se recuperan lanzándolo a mano con un
 ### Frontend
 
 En el clúster la página va dentro de su propia imagen, construida con
-`frontend/Dockerfile`: nginx sin root, que escucha en el 8080, con el
-`index.html` copiado. Así que un cambio en la página necesita una imagen
-nueva, como el resto del código. La sirven dos réplicas detrás del Service
-`frontend`, y desde fuera se llega por Traefik (ver
+`frontend/Dockerfile`: nginx sin root, que escucha en el 8080, con
+`frontend/public/` copiada. Así que un cambio en la página necesita una imagen
+nueva, como el resto del código. Usa la configuración de nginx que trae la
+imagen, sin las reglas de `nginx-compose.conf`. La sirven dos réplicas detrás
+del Service `frontend`, y desde fuera se llega por Traefik (ver
 [Entrada al clúster](#entrada-al-clúster)).
 
 ### Entrada al clúster
@@ -1333,8 +1417,9 @@ chart, colgada del Gateway `public` (`gateway` en `values.yaml`):
 ```
 
 La API tiene sus rutas sin prefijo, así que la HTTPRoute lo quita con un
-filtro `URLRewrite`. Solo se publica la ruta que usa la página. `/health`,
-`/ready`, `/docs` y el resto de la API se quedan dentro del clúster.
+filtro `URLRewrite`. Solo se publica `/api/matches`, que era lo único que
+usaba la primera página. `/health`, `/ready`, `/docs` y el resto de la API se
+quedan dentro del clúster.
 
 ```bash
 helm list -n traefik                              # la release y su revisión
@@ -1355,8 +1440,7 @@ migrations/             el esquema, versionado paso a paso    → servicio flywa
 migrations/Dockerfile   la imagen de migraciones para el clúster
 frontend/public/        la página, sus emblemas y su fuente   → servicio frontend
 frontend/Dockerfile     la imagen del frontend para el clúster
-frontend/nginx-compose.conf la puerta de entrada en Compose   → servicio frontend
-frontend/borrador/      notas para trabajar el diseño aparte
+frontend/nginx-compose.conf el reverse proxy de Compose      → servicio frontend
 Dockerfile              la imagen de collector y api
 docker-compose.yml      los seis servicios, el volumen y los healthchecks
 docker-compose.test.yml la base y el Redis de test, aparte
@@ -1368,7 +1452,7 @@ requirements.txt        dependencias de Python, con versiones fijadas
 requirements-dev.txt    pytest, Ruff y compañía, fuera de la imagen
 .github/workflows/      el pipeline de GitHub Actions         → se ejecuta en cada push
 MEJORAS.md              lo que falta por hacer y la deuda técnica
-backups/                copias de la base con pg_dump (fuera del repo)
+backups/                backups de la base con pg_dump (fuera del repo)
 .env                    los valores reales (fuera del repo y de la imagen)
 .env.example            las mismas claves, sin valores
 ```
@@ -1430,7 +1514,7 @@ valor original.
 
 Los valores que llegan por la URL se pasan a la consulta como parámetros
 (`%s` y una tupla), nunca interpolados en el texto SQL. Interpolarlos
-abriría la puerta a la inyección SQL.
+permitiría la inyección SQL.
 
 El código, las tablas, las columnas y las rutas están en inglés; los
 mensajes de la consola, los comentarios y esta documentación, en español.
@@ -1439,6 +1523,6 @@ Códigos de error habituales de la API:
 
 - `401` / `403` — clave inválida o caducada, hay que regenerarla
 - `404` — Riot ID incorrecto
-- `429` — límite de peticiones superado (el script espera y reintenta)
+- `429` — rate limit superado (el script espera y reintenta)
 
 Tras regenerar la clave puede tardar unos segundos en ser válida.

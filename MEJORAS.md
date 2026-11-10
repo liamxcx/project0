@@ -29,8 +29,6 @@ hace, se borra de aquí y pasa al README.
   cuidar las partidas guardadas a medias, la base vacía y `--refetch`.
 - Bajar las partidas de toda la temporada y no solo las de los últimos meses,
   para que el resumen de la temporada salga de las partidas guardadas.
-- Gráfica de la evolución de los LP en los últimos 30 días, con una foto de
-  `ranked_snapshots` por día.
 - El "+LP" de cada partida. Riot no lo da, así que haría falta una foto de la
   clasificatoria antes y después de cada partida, con el `collector` lanzado
   cada pocos minutos.
@@ -67,8 +65,8 @@ hace, se borra de aquí y pasa al README.
 
 ## Infraestructura y seguridad
 
-- Copia de seguridad automática de la base de datos, con un CronJob diario y
-  unos siete días de copias. Hoy se hace a mano.
+- Backup automático de la base de datos, con un CronJob diario y unos siete
+  días de backups. Hoy se hace a mano.
 - Un CronJob que borre las partidas de hace muchos parches, que ya no sirven
   para analizar nada.
 - HTTPS, con un listener HTTPS en el Gateway. En local, el certificado con
