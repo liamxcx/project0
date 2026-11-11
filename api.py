@@ -9,7 +9,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.gzip import GZipMiddleware
 from psycopg.rows import dict_row
 
-from config import CACHE_TTL_SECONDS, DB_URL, REDIS_URL
+from config import APP_VERSION, CACHE_TTL_SECONDS, DB_URL, REDIS_URL
 
 # El formato lo configura config.py, que se importa antes
 log = logging.getLogger("api")
@@ -25,7 +25,7 @@ cache = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=1)
 def cache_get(key):
     """Devuelve lo cacheado, o None si no está o si Redis falla."""
     try:
-        return cache.get(key)
+        return cache.get(f"{APP_VERSION}:{key}")
     except redis.RedisError as error:
         log.warning("No se ha podido leer %s de Redis: %s", key, error)
         return None
@@ -34,7 +34,7 @@ def cache_get(key):
 def cache_set(key, value):
     """Guarda en caché. Si Redis falla, sigue adelante sin guardar."""
     try:
-        cache.set(key, value, ex=CACHE_TTL_SECONDS)
+        cache.set(f"{APP_VERSION}:{key}", value, ex=CACHE_TTL_SECONDS)
     except redis.RedisError as error:
         log.warning("No se ha podido guardar %s en Redis: %s", key, error)
 

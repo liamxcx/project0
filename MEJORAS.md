@@ -94,6 +94,10 @@ hace, se borra de aquí y pasa al README.
 - Guardar en Redis la ETag del detalle de partida junto a su JSON. Hoy se
   calcula en cada petición, y un 304 obliga a sacar la respuesta entera de
   Redis o PostgreSQL solo para compararla. Con mucho tráfico se notaría.
+- Que cada cambio de formato de la API sea compatible con la página anterior,
+  añadiendo campos sin quitar los viejos hasta el despliegue siguiente. Durante
+  un rolling update conviven páginas y APIs de las dos versiones, y una página
+  nueva puede recibir el formato viejo y fallar hasta que se recarga.
 - Quitar el `DeprecationWarning` que sale en cada `pytest`. Viene del
   `TestClient` de Starlette, que usa un nombre antiguo de `anyio`, así que se
   arregla actualizando Starlette cuando publique una versión que lo corrija.
