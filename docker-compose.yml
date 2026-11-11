@@ -75,6 +75,9 @@ services:
       # Solo public/, para no servir también el Dockerfile y la configuración
       - ./frontend/public:/usr/share/nginx/html:ro
       - ./frontend/nginx-compose.conf:/etc/nginx/conf.d/default.conf:ro
+      # Fuera de conf.d, porque nginx carga solo todo lo que hay ahí y este
+      # fichero solo vale dentro de un server
+      - ./frontend/nginx-common.conf:/etc/nginx/snippets/common.conf:ro
     # nginx busca la IP de api al arrancar y se queda con ella. Si Compose
     # recrea la API, cambia de IP, así que nginx se reinicia con ella
     depends_on:
