@@ -200,6 +200,13 @@ def test_missing_match_is_not_cached_by_the_browser(seeded_db):
     assert "cache-control" not in response.headers
 
 
+def test_match_detail_is_compressed(full_match):
+    response = client.get("/matches/EUW1_4", headers={"Accept-Encoding": "gzip"})
+
+    assert response.headers["content-encoding"] == "gzip"
+    assert response.headers["vary"] == "Accept-Encoding"
+
+
 def test_patches_counts_own_matches_newest_first(seeded_db):
     response = client.get("/patches")
 

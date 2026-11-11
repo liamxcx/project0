@@ -76,6 +76,11 @@ hace, se borra de aquí y pasa al README.
 - Medir cuánto gasta Traefik y ponerle `resources` en sus values, como al
   resto de pods.
 - Probar un HorizontalPodAutoscaler en la API, con metrics-server.
+- Comprimir en la entrada y no en la API, como se suele hacer en una empresa.
+  En el clúster sería un Middleware `compress` de Traefik enganchado a la
+  HTTPRoute, y eso pide activar el proveedor `kubernetesCRD`, que hoy está
+  apagado porque Traefik solo lee Gateway API. Hoy lo hace el `GZipMiddleware`
+  de la API, que vale igual en Compose y en el clúster.
 
 ## Deuda técnica
 

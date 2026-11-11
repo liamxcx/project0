@@ -5,6 +5,7 @@ import psycopg
 import redis
 from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.encoders import jsonable_encoder
+from fastapi.middleware.gzip import GZipMiddleware
 from psycopg.rows import dict_row
 
 from config import CACHE_TTL_SECONDS, DB_URL, REDIS_URL
@@ -13,6 +14,9 @@ from config import CACHE_TTL_SECONDS, DB_URL, REDIS_URL
 log = logging.getLogger("api")
 
 app = FastAPI(title="Estadísticas de LoL")
+# Comprime las respuestas de más de 500 bytes cuando el cliente lo pide. Va aquí y
+# no en nginx ni en Traefik para que valga igual en Compose y en el clúster
+app.add_middleware(GZipMiddleware)
 
 cache = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=1)
 
