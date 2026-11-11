@@ -295,6 +295,7 @@ function championFilter(onChange) {
     className: "filter-search",
     attrs: {
       type: "search",
+      name: "champion-search",
       placeholder: "Buscar campeón…",
       "aria-label": "Buscar campeón",
       autocomplete: "off",
