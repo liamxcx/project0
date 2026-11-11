@@ -1,9 +1,10 @@
+import hashlib
 import json
 import logging
 
 import psycopg
 import redis
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.gzip import GZipMiddleware
 from psycopg.rows import dict_row
@@ -337,28 +338,38 @@ def load_match_detail(match_id):
     return jsonable_encoder(detail)
 
 
-# Una partida jugada no cambia, así que el navegador puede reutilizarla. Una
-# hora y no más, por si la respuesta cambia de forma al desplegar.
-MATCH_DETAIL_MAX_AGE_SECONDS = 3600
+def etag_of(body):
+    """La huella de una respuesta. Cambia en cuanto cambia un solo carácter."""
+    # Débil (W/), porque el gzip cambia los bytes que viajan pero no el contenido
+    return f'W/"{hashlib.sha256(body.encode()).hexdigest()}"'
 
 
 @app.get("/matches/{match_id}")
-def match_detail(match_id: str, response: Response):
+def match_detail(match_id: str, request: Request, response: Response):
     key = f"match:{match_id}"
 
-    cached = cache_get(key)
-    if cached is not None:
-        detail = json.loads(cached)
-    else:
-        detail = load_match_detail(match_id)
-        cache_set(key, json.dumps(detail))
+    body = cache_get(key)
+    if body is None:
+        body = json.dumps(load_match_detail(match_id))
+        cache_set(key, body)
+    detail = json.loads(body)
 
-    # El 404 crea su propia respuesta, sin el Cache-Control de abajo. Así el
+    # El 404 crea su propia respuesta, sin las cabeceras de abajo. Así el
     # navegador no guarda una partida que puede llegar en la siguiente vuelta.
     if detail is None:
         raise HTTPException(status_code=404, detail=f"Sin la partida {match_id}")
 
-    response.headers["Cache-Control"] = f"max-age={MATCH_DETAIL_MAX_AGE_SECONDS}"
+    # El navegador guarda el detalle pero pregunta antes de usarlo. Así nunca usa
+    # una copia vieja sin saberlo, aunque un despliegue cambie la respuesta
+    etag = etag_of(body)
+    headers = {"ETag": etag, "Cache-Control": "no-cache"}
+    asked_for = [
+        tag.strip() for tag in request.headers.get("if-none-match", "").split(",")
+    ]
+    if etag in asked_for:
+        return Response(status_code=304, headers=headers)
+
+    response.headers.update(headers)
     return detail
 
 

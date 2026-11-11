@@ -91,6 +91,12 @@ hace, se borra de aquí y pasa al README.
   respuestas no cambian.
 - Invalidar la caché desde el `collector` cuando guarde partidas nuevas, en
   vez de esperar a que caduque el TTL.
+- Guardar en Redis la ETag del detalle de partida junto a su JSON. Hoy se
+  calcula en cada petición, y un 304 obliga a sacar la respuesta entera de
+  Redis o PostgreSQL solo para compararla. Con mucho tráfico se notaría.
+- Quitar el `DeprecationWarning` que sale en cada `pytest`. Viene del
+  `TestClient` de Starlette, que usa un nombre antiguo de `anyio`, así que se
+  arregla actualizando Starlette cuando publique una versión que lo corrija.
 - Decidir si `/docs` y `/redoc` se desactivan al desplegar fuera de local.
   Se hace con `docs_url=None` al crear la aplicación.
 - Los contenedores del Dockerfile corren como root. La imagen base de Python
