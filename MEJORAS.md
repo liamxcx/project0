@@ -76,6 +76,11 @@ hace, se borra de aquí y pasa al README.
 - Medir cuánto gasta Traefik y ponerle `resources` en sus values, como al
   resto de pods.
 - Probar un HorizontalPodAutoscaler en la API, con metrics-server.
+- Comprimir en la entrada y no en la API, como se suele hacer en una empresa.
+  En el clúster sería un Middleware `compress` de Traefik enganchado a la
+  HTTPRoute, y eso pide activar el proveedor `kubernetesCRD`, que hoy está
+  apagado porque Traefik solo lee Gateway API. Hoy lo hace el `GZipMiddleware`
+  de la API, que vale igual en Compose y en el clúster.
 
 ## Deuda técnica
 
@@ -86,6 +91,16 @@ hace, se borra de aquí y pasa al README.
   respuestas no cambian.
 - Invalidar la caché desde el `collector` cuando guarde partidas nuevas, en
   vez de esperar a que caduque el TTL.
+- Guardar en Redis la ETag del detalle de partida junto a su JSON. Hoy se
+  calcula en cada petición, y un 304 obliga a sacar la respuesta entera de
+  Redis o PostgreSQL solo para compararla. Con mucho tráfico se notaría.
+- Que cada cambio de formato de la API sea compatible con la página anterior,
+  añadiendo campos sin quitar los viejos hasta el despliegue siguiente. Durante
+  un rolling update conviven páginas y APIs de las dos versiones, y una página
+  nueva puede recibir el formato viejo y fallar hasta que se recarga.
+- Quitar el `DeprecationWarning` que sale en cada `pytest`. Viene del
+  `TestClient` de Starlette, que usa un nombre antiguo de `anyio`, así que se
+  arregla actualizando Starlette cuando publique una versión que lo corrija.
 - Decidir si `/docs` y `/redoc` se desactivan al desplegar fuera de local.
   Se hace con `docs_url=None` al crear la aplicación.
 - Los contenedores del Dockerfile corren como root. La imagen base de Python

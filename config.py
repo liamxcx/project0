@@ -61,3 +61,7 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 
 # Segundos que vive cada respuesta cacheada
 CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "60"))
+
+# El tag de la imagen, que pone el chart. Va delante de cada clave de Redis para
+# que dos versiones de la API no lean lo que guardó la otra en un despliegue
+APP_VERSION = os.getenv("APP_VERSION", "dev")

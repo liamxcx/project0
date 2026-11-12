@@ -1,18 +1,23 @@
+import hashlib
 import json
 import logging
 
 import psycopg
 import redis
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.encoders import jsonable_encoder
+from fastapi.middleware.gzip import GZipMiddleware
 from psycopg.rows import dict_row
 
-from config import CACHE_TTL_SECONDS, DB_URL, REDIS_URL
+from config import APP_VERSION, CACHE_TTL_SECONDS, DB_URL, REDIS_URL
 
 # El formato lo configura config.py, que se importa antes
 log = logging.getLogger("api")
 
 app = FastAPI(title="Estadísticas de LoL")
+# Comprime las respuestas de más de 500 bytes cuando el cliente lo pide. Va aquí y
+# no en nginx ni en Traefik para que valga igual en Compose y en el clúster
+app.add_middleware(GZipMiddleware)
 
 cache = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=1)
 
@@ -20,7 +25,7 @@ cache = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=1)
 def cache_get(key):
     """Devuelve lo cacheado, o None si no está o si Redis falla."""
     try:
-        return cache.get(key)
+        return cache.get(f"{APP_VERSION}:{key}")
     except redis.RedisError as error:
         log.warning("No se ha podido leer %s de Redis: %s", key, error)
         return None
@@ -29,7 +34,7 @@ def cache_get(key):
 def cache_set(key, value):
     """Guarda en caché. Si Redis falla, sigue adelante sin guardar."""
     try:
-        cache.set(key, value, ex=CACHE_TTL_SECONDS)
+        cache.set(f"{APP_VERSION}:{key}", value, ex=CACHE_TTL_SECONDS)
     except redis.RedisError as error:
         log.warning("No se ha podido guardar %s en Redis: %s", key, error)
 
@@ -333,28 +338,38 @@ def load_match_detail(match_id):
     return jsonable_encoder(detail)
 
 
-# Una partida jugada no cambia, así que el navegador puede reutilizarla. Una
-# hora y no más, por si la respuesta cambia de forma al desplegar.
-MATCH_DETAIL_MAX_AGE_SECONDS = 3600
+def etag_of(body):
+    """La huella de una respuesta. Cambia en cuanto cambia un solo carácter."""
+    # Débil (W/), porque el gzip cambia los bytes que viajan pero no el contenido
+    return f'W/"{hashlib.sha256(body.encode()).hexdigest()}"'
 
 
 @app.get("/matches/{match_id}")
-def match_detail(match_id: str, response: Response):
+def match_detail(match_id: str, request: Request, response: Response):
     key = f"match:{match_id}"
 
-    cached = cache_get(key)
-    if cached is not None:
-        detail = json.loads(cached)
-    else:
-        detail = load_match_detail(match_id)
-        cache_set(key, json.dumps(detail))
+    body = cache_get(key)
+    if body is None:
+        body = json.dumps(load_match_detail(match_id))
+        cache_set(key, body)
+    detail = json.loads(body)
 
-    # El 404 crea su propia respuesta, sin el Cache-Control de abajo. Así el
+    # El 404 crea su propia respuesta, sin las cabeceras de abajo. Así el
     # navegador no guarda una partida que puede llegar en la siguiente vuelta.
     if detail is None:
         raise HTTPException(status_code=404, detail=f"Sin la partida {match_id}")
 
-    response.headers["Cache-Control"] = f"max-age={MATCH_DETAIL_MAX_AGE_SECONDS}"
+    # El navegador guarda el detalle pero pregunta antes de usarlo. Así nunca usa
+    # una copia vieja sin saberlo, aunque un despliegue cambie la respuesta
+    etag = etag_of(body)
+    headers = {"ETag": etag, "Cache-Control": "no-cache"}
+    asked_for = [
+        tag.strip() for tag in request.headers.get("if-none-match", "").split(",")
+    ]
+    if etag in asked_for:
+        return Response(status_code=304, headers=headers)
+
+    response.headers.update(headers)
     return detail
 
 

@@ -14,19 +14,29 @@ spec:
       namespace: {{ .Values.gateway.namespace }}
       sectionName: {{ .Values.gateway.sectionName }}
   rules:
-    # Solo se publica lo que usa la página. /health, /ready y /docs se quedan
-    # dentro del clúster.
+    # Las rutas internas de la API no se publican. Gateway API no tiene una
+    # acción de responder 404, así que van al frontend, que no las tiene
+    - matches:
+        - path: { type: PathPrefix, value: /api/health }
+        - path: { type: PathPrefix, value: /api/ready }
+        - path: { type: PathPrefix, value: /api/docs }
+        - path: { type: PathPrefix, value: /api/redoc }
+        - path: { type: PathPrefix, value: /api/openapi.json }
+      backendRefs:
+        - name: frontend
+          port: 80
+    # El resto de /api/ va a la API sin el prefijo, así que /api/rank llega como
+    # /rank. Gana el prefijo más largo, así que las de arriba no llegan aquí
     - matches:
         - path:
-            type: Exact
-            value: /api/matches
+            type: PathPrefix
+            value: /api
       filters:
-        # La API tiene la ruta sin el prefijo, así que se cambia al reenviar.
         - type: URLRewrite
           urlRewrite:
             path:
-              type: ReplaceFullPath
-              replaceFullPath: /matches
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
       backendRefs:
         - name: api
           port: 80
