@@ -1,7 +1,7 @@
 # Mejoras
 
 Lo que falta por hacer en project0, ordenado por tema. Cuando una mejora se
-hace, se borra de aquí y pasa al README.
+hace, se borra de aquí y pasa a la documentación.
 
 ## Con fecha
 
@@ -44,7 +44,7 @@ hace, se borra de aquí y pasa al README.
   a un gestor externo con External Secrets. Hoy se crean a mano, y eso choca
   con tener todo en Git para GitOps.
 - `paths-ignore` en el workflow, para no construir una imagen igual cuando un
-  commit solo toca el README. Con GitOps, el commit del CI que cambia el
+  commit solo toca la documentación. Con GitOps, el commit del CI que cambia el
   tag tampoco debe lanzar otro build.
 - Borrar las imágenes viejas de GHCR. Cada push a `main` sube tres imágenes
   nuevas y no se borra ninguna. Hay que conservar más versiones que las que
@@ -55,7 +55,8 @@ hace, se borra de aquí y pasa al README.
 - Desplegarlo en público, en un servidor en la nube con su dominio. Hoy solo
   funciona en local, así que nadie puede abrirlo desde fuera de casa. Haría
   falta HTTPS con un certificado de verdad, que el CI despliegue solo y
-  revisar qué queda expuesto, como `/docs`.
+  revisar qué queda expuesto, como `/docs`. Riot pide además una clave de
+  producción y su aviso legal en un sitio visible de la propia página.
 
 ## Observabilidad
 
