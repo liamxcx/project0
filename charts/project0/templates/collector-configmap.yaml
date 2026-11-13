@@ -7,6 +7,4 @@ metadata:
     app.kubernetes.io/name: collector
     {{- include "project0.labels" . | nindent 4 }}
 data:
-  RIOT_GAME_NAME: {{ .Values.collector.riotGameName | quote }}
-  RIOT_TAG_LINE: {{ .Values.collector.riotTagLine | quote }}
   MATCH_COUNT: {{ .Values.collector.matchCount | quote }}

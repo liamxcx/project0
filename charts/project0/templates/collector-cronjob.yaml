@@ -45,5 +45,16 @@ spec:
                     secretKeyRef:
                       name: riot-credentials
                       key: RIOT_API_KEY
+                # El Riot ID no es secreto, pero va en el Secret para que no esté en el repo
+                - name: RIOT_GAME_NAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: riot-credentials
+                      key: RIOT_GAME_NAME
+                - name: RIOT_TAG_LINE
+                  valueFrom:
+                    secretKeyRef:
+                      name: riot-credentials
+                      key: RIOT_TAG_LINE
               resources:
                 {{- toYaml .Values.collector.resources | nindent 16 }}

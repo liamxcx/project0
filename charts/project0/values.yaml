@@ -71,8 +71,6 @@ frontend:
 collector:
   # Cada hora en punto, en la zona de timezone
   schedule: "0 * * * *"
-  riotGameName: "Charli xcx"
-  riotTagLine: Wink
   matchCount: 20
   # Con --refetch de 20 partidas el pico fue de 42 MiB y la media
   # de CPU de unos 90m. Sin límite de CPU, como la API.
