@@ -1,9 +1,9 @@
 # project0
 
-Herramienta personal de estadísticas de League of Legends, al estilo de
-op.gg. Guarda las partidas de ranked solo/duo de los invocadores seguidos con
-la API de Riot y las enseña en una página con el rango, la evolución de LP,
-los campeones más jugados y el detalle de cada partida.
+Herramienta personal de estadísticas de League of Legends. Guarda las
+partidas de ranked solo/duo de los invocadores seguidos con la API de Riot y
+las enseña en una página con el rango, la evolución de LP, los campeones más
+jugados y el detalle de cada partida.
 
 Es un proyecto para aprender DevOps con una aplicación real, de punta a
 punta: contenedores con Docker y Compose, CI con GitHub Actions y despliegue

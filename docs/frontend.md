@@ -41,11 +41,10 @@ y Compose lo reinicia detrás de ella.
 
 ## Rutas del perfil
 
-Cada perfil tiene su URL, `/invocador/Nombre-Tag`, igual que en op.gg.
-No es un fichero, así que `nginx-common.conf` devuelve `index.html` para
-todo lo que empieza por `/invocador/`, y el JavaScript lee la URL para
-saber qué perfil enseñar. Sin esa regla, abrir un perfil desde un enlace o
-recargarlo daría 404.
+Cada perfil tiene su URL, `/invocador/Nombre-Tag`. No es un fichero, así
+que `nginx-common.conf` devuelve `index.html` para todo lo que empieza por
+`/invocador/`, y el JavaScript lee la URL para saber qué perfil enseñar.
+Sin esa regla, abrir un perfil desde un enlace o recargarlo daría 404.
 
 El Riot ID se separa por el último guion, porque el tag no lleva guiones. Si
 no es de un invocador seguido, la página lo dice y no enseña nada, porque la

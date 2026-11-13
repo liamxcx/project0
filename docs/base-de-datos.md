@@ -73,8 +73,7 @@ kills de todo el equipo.
 
 Cada jugador de cada partida tiene una nota de 0 a 10, y el mejor de cada
 equipo se lleva un sello: **MVP** en el equipo que gana y **BASTION** en el
-que pierde. La idea es la de op.gg, pero op.gg no publica su fórmula, así que
-esta es propia.
+que pierde.
 
 La nota sale de cuatro estadísticas. Cada una se divide por la mejor de los
 diez jugadores de esa partida, así que queda entre 0 y 1 y una partida larga
@@ -91,10 +90,8 @@ nota = 10 × (kda + participación + daño + 0,5 × visión) / 3,5
 
 El 3,5 es la suma de los pesos, así que quien sea el mejor en las cuatro saca
 un 10. La visión cuenta la mitad porque se puede inflar poniendo guardianes
-sin que cueste nada. Con el mismo peso que las demás, un Blitzcrank 3/7/12
-salía BASTION en una partida en la que deeplol lo ponía octavo de diez. El
-daño recibido se descartó, porque recibir mucho no dice por sí solo que se
-haya jugado bien.
+sin que cueste nada. El daño recibido se descartó, porque recibir mucho no
+dice por sí solo que se haya jugado bien.
 
 Se calcula en la vista `participant_scores` (`V8`), que no guarda filas y se
 calcula cada vez que se lee, así que siempre sale de lo que haya en
