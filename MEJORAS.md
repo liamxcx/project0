@@ -98,6 +98,10 @@ hace, se borra de aquí y pasa al README.
   añadiendo campos sin quitar los viejos hasta el despliegue siguiente. Durante
   un rolling update conviven páginas y APIs de las dos versiones, y una página
   nueva puede recibir el formato viejo y fallar hasta que se recarga.
+- Calcular las anotaciones `checksum/…` de la API solo sobre los `data` de sus
+  ConfigMaps. Hoy se calculan sobre el fichero entero, etiquetas incluidas, así
+  que subir la `version` del chart cambia la suma y reinicia la API aunque su
+  configuración sea la misma.
 - Quitar el `DeprecationWarning` que sale en cada `pytest`. Viene del
   `TestClient` de Starlette, que usa un nombre antiguo de `anyio`, así que se
   arregla actualizando Starlette cuando publique una versión que lo corrija.

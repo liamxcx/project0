@@ -60,7 +60,7 @@ migrations:
 frontend:
   replicas: 2
   # nginx arranca dos workers (nginx.conf), así que la memoria no depende del
-  # nodo. Se vuelve a medir al desplegar la configuración nueva.
+  # nodo. En kind, unos 12 MiB sin tráfico.
   resources:
     requests:
       cpu: 10m

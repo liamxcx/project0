@@ -36,21 +36,21 @@ CronJob collector  ──cada hora──▶  pod collector  ──▶  API de Ri
 ```
 
 Cuando alguien abre la página, todo entra por un solo reverse proxy, que en el
-clúster es Traefik. Manda `/api/matches` a la API, quitándole el prefijo, y
-todo lo demás al frontend:
+clúster es Traefik. Manda `/api/` a la API, quitándole el prefijo, y todo lo
+demás al frontend:
 
 ```
-navegador ──▶ Traefik :80 ──┬── /             ──▶ frontend   la página (nginx)
+navegador ──▶ Traefik :80 ──┬── /        ──▶ frontend   la página (nginx)
                             │
-                            └── /api/matches  ──▶ api        como /matches
-                                                   ├──▶ Redis        ¿está cacheada?
-                                                   └──▶ PostgreSQL   solo si no lo está
+                            └── /api/…   ──▶ api        sin el /api
+                                              ├──▶ Redis        ¿está cacheada?
+                                              └──▶ PostgreSQL   solo si no lo está
 ```
 
 En Compose, el reverse proxy es el propio nginx del `frontend`, en
 `http://localhost:8080`, con las mismas dos reglas (ver [Frontend](#frontend)).
 
-La página pide los datos con una ruta relativa, `/api/matches`, así que la
+La página pide los datos con rutas relativas, como `/api/matches`, así que la
 página y la API comparten origen y el navegador no necesita CORS (ver
 [Sin CORS](#sin-cors)).
 
@@ -100,10 +100,7 @@ respuesta está en Redis, tampoco se consulta PostgreSQL.
 
 ### Qué falta
 
-- Llevar la página nueva al clúster. Usa casi todos los endpoints de la API
-  y la HTTPRoute solo publica `/api/matches` (en marcha)
-
-El resto, y la deuda técnica, están en [MEJORAS.md](MEJORAS.md).
+Lo que falta, y la deuda técnica, están en [MEJORAS.md](MEJORAS.md).
 
 ## Requisitos
 
@@ -476,8 +473,8 @@ docker compose exec db psql -U loltest -d lolstats -P pager=off \
 ## API
 
 Servicio `api`, con FastAPI y uvicorn. En Compose escucha en
-`http://localhost:8000`, publicado solo en `127.0.0.1`. En el clúster solo se
-publica `/matches`, como `http://localhost/api/matches` (ver
+`http://localhost:8000`, publicado solo en `127.0.0.1`. En el clúster se
+publica bajo `http://localhost/api/`, todo menos las rutas internas (ver
 [Entrada al clúster](#entrada-al-clúster)).
 
 Endpoints:
@@ -540,15 +537,22 @@ GET /champions            →  champions:<parche o season>
 Una partida que no existe queda en Redis como `null`, y la API responde 404
 sin volver a consultar PostgreSQL.
 
-Además de Redis, `/matches/{match_id}` lleva `Cache-Control: max-age=3600`,
-así que el navegador reutiliza el detalle de una partida durante una hora.
-El 404 no lo lleva, porque la partida puede llegar en la siguiente vuelta
-del `collector`.
+Cada clave lleva delante la versión de la API, que es el tag de su imagen,
+como `913b445:match:EUW1_…`, y `dev:` en Compose. En un rolling update conviven
+pods de las dos versiones, y así ninguno lee lo que guardó el otro con otro
+formato. Las claves de la versión vieja caducan solas con el TTL.
 
-Durante esa hora el navegador no vuelve a preguntar. Si en ese tiempo cambia
-el formato del detalle, sigue usando el que guardó y la página puede fallar al
-leerlo. Mientras se desarrolla, se evita marcando *Disable cache* en la
-pestaña Network de las herramientas del navegador.
+Además de Redis, `/matches/{match_id}` lleva una ETag, una huella del JSON, y
+`Cache-Control: no-cache`. El navegador guarda el detalle, pero pregunta
+antes de usarlo, y si no ha cambiado la API responde 304 sin cuerpo. Así
+nunca usa una copia vieja después de un despliegue que cambie la respuesta.
+El 404 no lleva nada de esto, porque la partida puede llegar en la siguiente
+vuelta del `collector`.
+
+Las respuestas de más de 500 bytes salen comprimidas con gzip cuando el
+cliente lo pide, con el `GZipMiddleware` de FastAPI. Va en la API y no en
+nginx ni en Traefik para que valga igual en Compose y en el clúster. El
+detalle de una partida pasa de unos 13 kB a unos 2 kB.
 
 FastAPI genera la documentación sola a partir de las rutas registradas:
 
@@ -704,18 +708,23 @@ está en ella no se sirve. En Compose se abre en `http://localhost:8080`, y en e
 clúster en `http://localhost` (ver [Kubernetes](#kubernetes)).
 
 En Compose, nginx hace también de reverse proxy, como Traefik en el
-clúster. Su configuración está en `frontend/nginx-compose.conf`: pasa todo
-lo que empieza por `/api/` a la API quitándole el prefijo (`/api/rank` llega
-como `/rank`) y sirve lo demás desde el disco. Por eso levantar el
-`frontend` levanta también la API, y las respuestas de la API llegan con
-`Server: nginx`.
+clúster. Pasa todo lo que empieza por `/api/` a la API quitándole el prefijo
+(`/api/rank` llega como `/rank`) y sirve lo demás desde el disco. Por eso
+levantar el `frontend` levanta también la API, y las respuestas de la API
+llegan con `Server: nginx`.
+
+La configuración va en dos ficheros. `frontend/nginx-common.conf` tiene las
+reglas de la página, que son las mismas en el clúster, como las rutas, la
+caché, la codificación y la CSP. `frontend/nginx-compose.conf` es el `server`
+de Compose, con su puerto y el proxy de la API, y trae las comunes con un
+`include`.
 
 Las rutas internas de la API (`/health`, `/ready`, `/docs`, `/redoc` y
 `/openapi.json`) no se publican, y por el reverse proxy devuelven 404.
 Desde el propio ordenador siguen en `http://localhost:8000`.
 
-En Compose se montan `frontend/public/` y `frontend/nginx-compose.conf`,
-como bind mounts de solo lectura. Editar la página y recargar el navegador
+En Compose se montan `frontend/public/` y los dos ficheros de nginx, como
+bind mounts de solo lectura. Editar la página y recargar el navegador
 basta, sin reconstruir ni reiniciar nada. Si el cambio no se ve, suele ser la
 caché del navegador (`Ctrl + Shift + R`, o `Cmd + Shift + R` en Mac).
 
@@ -735,7 +744,7 @@ y Compose lo reinicia detrás de ella.
 ### Rutas del perfil
 
 Cada perfil tiene su dirección, `/invocador/Nombre-Tag`, igual que en op.gg.
-No es un fichero, así que `nginx-compose.conf` devuelve `index.html` para
+No es un fichero, así que `nginx-common.conf` devuelve `index.html` para
 todo lo que empieza por `/invocador/`, y el JavaScript lee la dirección para
 saber qué perfil enseñar. Sin esa regla, abrir un perfil desde un enlace o
 recargarlo daría 404.
@@ -757,7 +766,7 @@ nginx manda un `Cache-Control` distinto según lo que sirve:
 |---|---|---|
 | La página, el JavaScript y el CSS | `no-cache` | Cambian con cada versión. El navegador los guarda, pero pregunta antes de usarlos |
 | La fuente y los emblemas | `max-age=86400` | Casi nunca cambian, así que valen un día sin preguntar |
-| `/api/matches/{match_id}` | `max-age=3600` | La pone la API, no nginx (ver [API](#api)) |
+| `/api/matches/{match_id}` | `no-cache`, con ETag | La pone la API, no nginx (ver [API](#api)) |
 
 Para preguntar, el navegador manda la ETag que le dio nginx en la cabecera
 `If-None-Match`. Si el fichero no ha cambiado, nginx responde 304 sin
@@ -847,11 +856,8 @@ al mismo sitio del que salió la página: mismo protocolo, host y puerto.
 Para el navegador, la página y la API son el mismo origen, y puede leer sus
 respuestas sin pedir permiso.
 
-Antes, en Compose, la página estaba en el 8080 y la API en el 8000, que son
-orígenes distintos, y la API autorizaba a la página con `CORSMiddleware` y
-la variable `CORS_ORIGINS`. Al pasar las dos por el mismo reverse proxy se
-quitaron. Si algún día una página de otro origen necesita leer la API, habrá
-que volver a añadirlos.
+Si algún día una página de otro origen necesita leer la API, habrá que
+añadir `CORSMiddleware` en `api.py`.
 
 Data Dragon sí es otro origen. Sus JSON se leen con `fetch`, y el navegador
 solo los deja leer porque Data Dragon responde con
@@ -864,8 +870,27 @@ Si no se le pide, nginx manda el CSS sin decir en qué codificación está, y el
 navegador la adivina. Adivinaba mal, y la flecha `›` que separa los minutos
 de la build salía como `â€º`, que son sus tres bytes de UTF-8 leídos uno a uno
 como si fueran Windows-1252. `charset` y `charset_types`, en
-`nginx-compose.conf`, añaden `; charset=utf-8` al `Content-Type` del CSS y
+`nginx-common.conf`, añaden `; charset=utf-8` al `Content-Type` del CSS y
 del JavaScript.
+
+### La CSP
+
+Con la página, nginx manda la cabecera `Content-Security-Policy`, que le dice
+al navegador de dónde puede cargar cada cosa. La de project0 solo deja cargar
+scripts, estilos y fuentes del propio origen, e imágenes y peticiones con
+`fetch` del propio origen y de Data Dragon. Si alguien consiguiera colar un
+`<script>` en la página, el navegador no lo ejecutaría.
+
+La política está en `nginx-common.conf`, en la variable `$csp`, y va dentro de
+las dos `location` que devuelven `index.html`. No puede ir fuera, porque una
+`location` con su propio `add_header` ignora los de fuera, y todas tienen el
+suyo.
+
+Una CSP así también bloquea los estilos escritos en el HTML, incluido el
+atributo `style`. Por eso la página pone los que dependen de los datos desde
+JavaScript, con `style.setProperty`, que la CSP no bloquea. Si algún día la
+página carga algo de otro sitio, hay que añadirlo a la política. Lo que
+bloquea sale en la consola del navegador, con el motivo.
 
 ## Logs
 
@@ -1295,9 +1320,16 @@ desplegarlas, se pone ese tag en `appVersion`, en
 `charts/project0/Chart.yaml`, y:
 
 ```bash
+helm template project0 charts/project0 -n project0 --no-hooks | kubectl diff -n project0 -f -
 helm upgrade project0 charts/project0 -n project0 --wait --timeout 5m
 helm history project0 -n project0                     # la revisión nueva, en deployed
 ```
+
+El `kubectl diff` enseña qué va a cambiar, sin aplicar nada. Va con
+`--no-hooks` porque el Job de migraciones de la vez anterior sigue en el
+clúster, y Kubernetes no deja cambiar su `template`. Con una imagen nueva,
+el `diff` fallaría entero. Si el despliegue trae migraciones, antes se hace
+un backup (ver [Backups](#backups)), porque un rollback no las deshace.
 
 Helm lanza primero las migraciones y espera a que acaben, porque el código
 nuevo puede necesitar una columna nueva. Si fallan, el upgrade se para, la
@@ -1348,20 +1380,6 @@ ConfigMap ya cambió en el upgrade fallido, el que lo arregla no cambia la
 suma y no recrea los pods, así que conviene comprobar que tienen la
 configuración nueva, por ejemplo con
 `kubectl exec -n project0 deploy/api -- printenv CACHE_TTL_SECONDS`.
-
-### De manifiestos sueltos a Helm
-
-Antes del chart, la aplicación se desplegaba con manifiestos sueltos y
-`kubectl apply`. Se pasó a Helm sin caída, adoptando los objetos que ya
-corrían en vez de recrearlos. Para eso se les puso el label
-`app.kubernetes.io/managed-by: Helm` y las dos anotaciones
-`meta.helm.sh/…` con las que Helm reconoce lo suyo.
-
-Helm 4 aplica con server-side apply, en el que el apiserver apunta qué
-herramienta es dueña de cada campo (los `managedFields`). Los campos que
-había escrito `kubectl` seguían siendo también suyos y bloqueaban los
-cambios, así que se quitó a `kubectl` de los `managedFields` de cada objeto
-con `kubectl patch`.
 
 ### PostgreSQL
 
@@ -1416,21 +1434,49 @@ Cuando algo va mal:
   perdida, y solo si no han pasado más de 30 minutos desde su hora.
 - Si termina con error se reintenta una vez, y si pasa de 10 minutos se
   corta.
+- Si el clúster se para con una ejecución a medias, por ejemplo con el
+  ordenador en reposo, al volver lleva más de 10 minutos y acaba `Failed`
+  con `DeadlineExceeded`. No se pierde nada, porque la siguiente vuelve a
+  pedir lo que falte.
 
 Cada ejecución mira las últimas `MATCH_COUNT` partidas (20, en
 `collector.matchCount` de `values.yaml`). Si se juegan más con el clúster
 parado, las más antiguas se recuperan lanzándolo a mano con un
 `MATCH_COUNT` más alto.
 
+Un `--refetch` no cabe en esos 10 minutos, porque con el rate limit 70
+partidas tardan unos 12. Se lanza con un Job a mano, generado a partir del
+CronJob y con tres cambios en el fichero: `--refetch` en `command`,
+`MATCH_COUNT` en `env` y `activeDeadlineSeconds: 1800`.
+
+```bash
+kubectl create job collector-refetch -n project0 --from=cronjob/collector \
+  --dry-run=client -o yaml > backups/collector-refetch.yaml
+kubectl apply -f backups/collector-refetch.yaml        # después de editarlo
+kubectl logs -f job/collector-refetch -n project0
+kubectl delete job collector-refetch -n project0       # cuando acabe
+```
+
+El `MATCH_COUNT` de `env` gana al del ConfigMap. El Job queda a nombre del
+CronJob, así que si se alarga, la ejecución de la hora siguiente espera a que
+acabe.
+
 ### Frontend
 
 En el clúster la página va dentro de su propia imagen, construida con
 `frontend/Dockerfile`: nginx sin root, que escucha en el 8080, con
 `frontend/public/` copiada. Así que un cambio en la página necesita una imagen
-nueva, como el resto del código. Usa la configuración de nginx que trae la
-imagen, sin las reglas de `nginx-compose.conf`. La sirven dos réplicas detrás
-del Service `frontend`, y desde fuera se llega por Traefik (ver
+nueva, como el resto del código. La sirven dos réplicas detrás del Service
+`frontend`, y desde fuera se llega por Traefik (ver
 [Entrada al clúster](#entrada-al-clúster)).
+
+La imagen lleva tres ficheros de nginx. `nginx-cluster.conf` sustituye el
+`server` de ejemplo de la imagen y trae las reglas de `nginx-common.conf`,
+igual que en Compose pero sin el proxy de la API, que aquí hace Traefik.
+`nginx.conf` es el de la imagen con un solo cambio, `worker_processes 2`, y
+hay que compararlo con el suyo al subir de versión la imagen. Con `auto`,
+nginx arrancaría un worker por cada CPU del nodo, no del contenedor, y en un
+nodo grande no cabrían en el límite de memoria.
 
 ### Entrada al clúster
 
@@ -1451,20 +1497,22 @@ Las reglas de project0 van en la HTTPRoute `project0`, un template más del
 chart, colgada del Gateway `public` (`gateway` en `values.yaml`):
 
 ```
-/api/matches   →  Service api, como /matches
-/              →  Service frontend
+/api/health, /api/ready, /api/docs…  →  Service frontend, que da 404
+/api/…                               →  Service api, sin el /api
+/                                    →  Service frontend
 ```
 
 La API tiene sus rutas sin prefijo, así que la HTTPRoute lo quita con un
-filtro `URLRewrite`. Solo se publica `/api/matches`, que era lo único que
-usaba la primera página. `/health`, `/ready`, `/docs` y el resto de la API se
-quedan dentro del clúster.
+filtro `URLRewrite`. Las rutas internas no se publican, como en Compose.
+Gateway API no tiene una acción de responder 404, así que van al frontend,
+que no las tiene. Cuando varias reglas encajan, gana el prefijo más largo.
 
 ```bash
 helm list -n traefik                              # la release y su revisión
 kubectl get gateway -n traefik                    # public, con PROGRAMMED True
 kubectl describe httproute project0 -n project0   # Accepted y ResolvedRefs en True
-curl -i http://localhost/api/matches              # la API, a través de Traefik
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost/api/patches   # 200, la API
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost/api/health    # 404, interna
 ```
 
 ## Estructura
@@ -1479,7 +1527,10 @@ migrations/             el esquema, versionado paso a paso    → servicio flywa
 migrations/Dockerfile   la imagen de migraciones para el clúster
 frontend/public/        la página, sus emblemas y su fuente   → servicio frontend
 frontend/Dockerfile     la imagen del frontend para el clúster
-frontend/nginx-compose.conf el reverse proxy de Compose      → servicio frontend
+frontend/nginx-common.conf las reglas de la página, en Compose y en el clúster
+frontend/nginx-compose.conf el reverse proxy de Compose       → servicio frontend
+frontend/nginx-cluster.conf la web del clúster                → imagen del frontend
+frontend/nginx.conf     nginx entero, con 2 workers           → imagen del frontend
 Dockerfile              la imagen de collector y api
 docker-compose.yml      los seis servicios, el volumen y los healthchecks
 docker-compose.test.yml la base y el Redis de test, aparte
@@ -1531,11 +1582,6 @@ El logging se configura en `config.py` y no en cada script. `config.py` es
 lo primero que importan `collector.py` y `api.py`, así que cuando el resto
 del código escribe su primer mensaje el formato ya está puesto. Hace falta
 configurarlo porque uvicorn solo ajusta sus propios loggers.
-
-`collector.py` no contiene ningún bucle: arranca, descarga, guarda y
-termina. Lo repite quien lo lanza, que en el clúster es un CronJob. Por eso
-el bucle de shell que había en Compose se pudo sustituir sin tocar el
-código.
 
 Redis es opcional por diseño. Las llamadas a la caché van envueltas en
 `cache_get` y `cache_set`, que capturan cualquier error y lo tratan como
