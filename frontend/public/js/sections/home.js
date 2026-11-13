@@ -3,7 +3,7 @@ import { dataDragonReady, profileIconUrl } from "../ddragon.js";
 import { el } from "../dom.js";
 import { profilePath } from "../routes.js";
 
-// "Charli xcx" → "CX". Es lo que se ve en lugar del icono si no se puede cargar
+// "Gato Negro" → "GN". Es lo que se ve en lugar del icono si no se puede cargar
 function initials(name) {
   const words = name.trim().split(/\s+/);
   const letters = words.length > 1 ? words[0][0] + words[1][0] : name.slice(0, 2);

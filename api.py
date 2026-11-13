@@ -57,7 +57,7 @@ CHAMPION_STATS_SELECT = """
 """
 
 
-# El parche público va 10 por delante del interno; ver el README. Se mete en
+# El parche público va 10 por delante del interno; ver docs/api.md. Se mete en
 # las consultas con un f-string, y la tabla matches tiene que llevar el alias m.
 PATCH_SQL = (
     "(split_part(m.game_version, '.', 1)::int + 10)"
