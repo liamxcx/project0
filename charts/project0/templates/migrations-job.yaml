@@ -10,7 +10,7 @@ metadata:
     {{- include "project0.labels" . | nindent 4 }}
   annotations:
     # En la primera instalación va después de crearlo todo, porque necesita
-    # PostgreSQL y project0-config. En los upgrades, antes de tocar la API.
+    # Postgres y project0-config. En los upgrades, antes de tocar la API.
     helm.sh/hook: post-install,pre-upgrade
     # El último Job se queda hasta el siguiente upgrade, para poder ver sus logs
     # tanto si salió bien como si falló.

@@ -1,4 +1,3 @@
-# Da a los pods de la API un nombre y una IP fijos dentro del clúster. Es
 # ClusterIP porque desde fuera se entra por Traefik y no por aquí.
 apiVersion: v1
 kind: Service

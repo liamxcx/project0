@@ -63,7 +63,7 @@ export function spellName(id) {
   return spells.get(String(id))?.name ?? String(id);
 }
 
-// Sin Data Dragon no hay versión con la que construir la dirección, así que
+// Sin Data Dragon no hay versión con la que construir la URL, así que
 // devuelve null y quien la pida enseña otra cosa en su lugar
 export function profileIconUrl(iconId) {
   if (version === null || iconId === null || iconId === undefined) return null;

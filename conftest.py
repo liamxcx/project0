@@ -12,10 +12,8 @@ os.environ["POSTGRES_PASSWORD"] = "test"
 os.environ["POSTGRES_DB"] = "test"
 os.environ["REDIS_URL"] = "redis://localhost:6380/0"
 
-# Tres partidas inventadas. Ahri sale dos veces (una victoria y una derrota) y
-# Lux una. En cada partida hay además un rival sin puuid, que la API no debe
-# contar nunca. Hay dos con Yasuo, que tú no has jugado, y uno con Ahri, que
-# sí, para comprobar que sus partidas no se suman a las tuyas.
+# Tres partidas del invocador seguido, dos con Ahri (una victoria y una derrota)
+# y una con Lux. Cada una lleva un rival sin puuid que la API no debe contar nunca
 SEED_SQL = """
     INSERT INTO summoners (puuid, game_name, tag_line, profile_icon_id, summoner_level)
     VALUES ('yo', 'Invocador', 'TEST', 29, 100);
@@ -37,9 +35,8 @@ SEED_SQL = """
         ('EUW1_3', 6, NULL, 'Ahri',  'MIDDLE',   5,  5,  5, false);
 """
 
-# Una cuarta partida con los diez jugadores, para lo que necesita al equipo
-# entero: la nota, los sellos y los porcentajes. Tú eres el jugador 1, el
-# mejor en todo, y ganas. Las compras del jugador 6 no deben salir en las tuyas.
+# Una cuarta partida con los diez jugadores, para la nota, los sellos y los
+# porcentajes. El invocador seguido es el jugador 1, gana y es el mejor en todo.
 FULL_MATCH_SQL = """
     INSERT INTO matches (match_id, played_at, duration_seconds, queue_id, game_version)
     VALUES ('EUW1_4', '2026-09-04 20:00+02', 1800, 420, '16.18.123.4567');

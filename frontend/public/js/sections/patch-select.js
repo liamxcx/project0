@@ -4,7 +4,7 @@ import { formatGames } from "../format.js";
 import { seasonOf } from "../season.js";
 
 export async function renderPatchSelect(container, patches, rankData, selected, onChange) {
-  // Con la B, "General" son los totales de Riot, así que cuenta sus partidas
+  // En "General" el resumen usa los totales de Riot, así que se cuentan sus partidas
   const rank = await rankData.catch(() => null);
   const season = seasonOf(patches);
   const options = [

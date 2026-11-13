@@ -22,7 +22,6 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     steps:
-      # Clona el repo en el runner, que empieza vacío
       - uses: actions/checkout@v7
 
       # La misma versión que la imagen y el .venv
@@ -115,6 +114,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # Guarda las capas en la caché de Actions, una por imagen para que
-          # cada build no pise la caché del otro
+          # cada build no pise la caché de los otros
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}

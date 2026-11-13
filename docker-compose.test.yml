@@ -1,6 +1,5 @@
-# Base de datos y Redis aparte para los tests. Se levantan antes de pytest y
-# se tiran al acabar, para que los tests no dependan de las partidas que tengas
-# guardadas.
+# Base de datos y Redis aparte para los tests, que se levantan antes de pytest
+# y se tiran al acabar. Así no dependen de las partidas guardadas.
 name: project0-test
 
 services:
@@ -37,8 +36,8 @@ services:
 
   redis-test:
     image: redis:8-alpine
-    # Otro puerto que el 6379, igual que el 5433, para que no choque con otro
-    # Redis que haya instalado en la máquina
+    # Un puerto distinto del 6379, como el 5433, para que no choque con otro Redis
+    # instalado en la máquina
     ports:
       - "127.0.0.1:6380:6379"
     healthcheck:

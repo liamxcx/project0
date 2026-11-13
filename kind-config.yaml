@@ -5,8 +5,8 @@ apiVersion: kind.x-k8s.io/v1alpha4
 name: project0
 nodes:
   - role: control-plane
-  # El controlador de Ingress irá en este nodo, por eso es el único que
-  # publica el 80 y el 443. El label sirve para mandarlo aquí.
+  # Traefik va en este nodo, y por eso es el único que publica el 80 y el 443.
+  # El label sirve para mandarlo aquí.
   - role: worker
     labels:
       ingress-ready: "true"

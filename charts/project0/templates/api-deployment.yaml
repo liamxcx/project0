@@ -13,8 +13,8 @@ spec:
       app.kubernetes.io/name: api
   template:
     metadata:
-      # La API lee las variables al arrancar. Con la suma de cada ConfigMap, si uno
-      # cambia, cambia el pod y Kubernetes lo recrea.
+      # La API lee las variables al arrancar. Con el checksum de cada ConfigMap, si
+      # uno cambia, cambia el pod y Kubernetes lo recrea.
       annotations:
         checksum/project0-config: {{ include (print $.Template.BasePath "/project0-configmap.yaml") . | sha256sum }}
         checksum/api-config: {{ include (print $.Template.BasePath "/api-configmap.yaml") . | sha256sum }}
@@ -34,14 +34,10 @@ spec:
           ports:
             - name: http
               containerPort: 8000
-          # Si /health deja de responder, el kubelet reinicia el contenedor. Por eso
-          # no mira Postgres, porque reiniciar la API no arregla la base.
           livenessProbe:
             httpGet:
               path: /health
               port: http
-          # Si /ready falla, el pod deja de recibir tráfico del Service, pero no se
-          # reinicia. Vuelve a recibirlo cuando Postgres responde otra vez.
           readinessProbe:
             httpGet:
               path: /ready

@@ -79,10 +79,10 @@ def test_matches_filters_by_patch(seeded_db):
 def test_matches_filters_by_champion(seeded_db):
     response = client.get("/matches", params={"champion": "Ahri"})
 
-    # Tus dos partidas con Ahri. La Ahri rival de EUW1_3 no es tuya.
+    # Las dos partidas del invocador seguido con Ahri. La Ahri rival de EUW1_3 no cuenta.
     assert [m["match_id"] for m in response.json()["matches"]] == ["EUW1_2", "EUW1_1"]
 
-    # Se combina con el parche: Lux solo jugó en la 26.18
+    # Se combina con el parche, y Lux solo jugó en la 26.18
     response = client.get("/matches", params={"champion": "Lux", "patch": "26.17"})
     assert response.json() == {"matches": [], "has_more": False}
 
@@ -141,9 +141,9 @@ def test_match_detail_returns_me_and_players(full_match):
 
     me = detail["me"]
     assert me["participant_id"] == 1
-    # (10 + 1) de los 14 asesinatos de tu equipo
+    # (10 + 1) de los 14 asesinatos de su equipo
     assert me["kill_participation_pct"] == 78.6
-    # 30.000 de los 70.000 de daño de tu equipo
+    # 30.000 de los 70.000 de daño de su equipo
     assert me["damage_share_pct"] == 42.9
 
     players = detail["players"]
@@ -162,8 +162,8 @@ def test_match_detail_returns_me_and_players(full_match):
     # Los cinco rivales empatan, y el sello va al de número más bajo
     badges = {p["participant_id"]: p["badge"] for p in players if p["badge"]}
     assert badges == {1: "MVP", 6: "BASTION"}
-    # Cada jugador trae lo del marcador, no solo tú. El 7 tiene 157 súbditos
-    # y 10 monstruos neutrales
+    # Cada jugador trae lo del marcador, no solo el invocador seguido. El 7 tiene 157
+    # súbditos y 10 monstruos neutrales
     rival = players[6]
     assert rival["damage_to_champions"] == 10000
     assert rival["cs"] == 167
@@ -254,7 +254,7 @@ def test_summary_filters_by_patch(seeded_db):
 
 
 def test_rank_returns_the_latest_snapshot(seeded_db):
-    # Dos fotos: la de ayer y la de hoy, con 24 LP más y una victoria más
+    # Dos snapshots de días seguidos. Vale el segundo, con 24 LP y una victoria más
     with psycopg.connect(DB_URL) as connection:
         connection.execute(
             """
@@ -290,7 +290,7 @@ def test_rank_history_keeps_the_last_snapshot_of_each_day(seeded_db):
             INSERT INTO ranked_snapshots
                 (puuid, taken_at, tier, division, league_points, wins, losses)
             VALUES
-                -- Dos fotos del mismo día, hace dos días: vale la de la noche
+                -- Dos snapshots del mismo día, hace dos días. Vale el de la noche
                 ('yo', date_trunc('day', now()) - interval '2 days' + interval '10 hours',
                  'MASTER', 'I', 800, 610, 600),
                 ('yo', date_trunc('day', now()) - interval '2 days' + interval '20 hours',
@@ -375,7 +375,7 @@ def test_champions_counts_every_match_of_the_season(seeded_db):
 
     response = client.get("/champions")
 
-    # No se queda en las 20 últimas: Ahri y Lux siguen contando
+    # No se queda en las 20 últimas, así que Ahri y Lux siguen contando
     champions = response.json()
     assert [c["champion"] for c in champions] == ["Jinx", "Ahri", "Lux"]
     assert champions[0]["games"] == 20

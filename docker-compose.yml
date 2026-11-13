@@ -1,3 +1,4 @@
+# Rota los logs de cada contenedor para que no llenen el disco
 x-logging: &default-logging
   driver: json-file
   options:

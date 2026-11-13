@@ -17,7 +17,7 @@ function stat(value, label) {
 let latest = 0;
 
 // project0 aún no tiene todas las partidas de esta temporada, así que el total
-// sale de Riot. Con la de enero puede salir de /summary (ver MEJORAS.md)
+// sale de Riot. Con la temporada nueva, en enero, puede salir de /summary (ver MEJORAS.md)
 export async function renderSummary(card, rankData, patches, patch) {
   const turn = ++latest;
   const message = (text) => el("p", { className: "card-message" }, text);
