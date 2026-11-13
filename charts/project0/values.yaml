@@ -69,7 +69,7 @@ frontend:
       memory: 64Mi
 
 collector:
-  # Formato cron, en la zona de timezone. Cada hora en punto.
+  # Cada hora en punto, en la zona de timezone
   schedule: "0 * * * *"
   riotGameName: "Charli xcx"
   riotTagLine: Wink

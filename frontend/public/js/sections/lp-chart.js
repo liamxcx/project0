@@ -24,7 +24,7 @@ function pointRank(point) {
   return `${rankName(point.tier, point.division)} · ${formatNumber(point.league_points, 0)} LP`;
 }
 
-// La misma escalera que ladder_lp en la API: 400 LP por rango con divisiones, y
+// La misma escalera que ladder_lp en la API, con 400 LP por rango con divisiones, y
 // Master, Grandmaster y Challenger siguen la cuenta a partir de Diamante
 const DIVISION_TIERS = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "EMERALD", "DIAMOND"];
 const DIVISIONS = ["IV", "III", "II", "I"];
@@ -84,7 +84,7 @@ export async function renderLpChart(card, history) {
     const last = points[points.length - 1];
     card.classList.add(`tier-${last.tier.toLowerCase()}`);
 
-    // El eje horizontal va por fechas, así que los días sin foto dejan su hueco
+    // El eje horizontal va por fechas, así que los días sin snapshot dejan su hueco
     const end = Math.floor(Date.now() / DAY_MS);
     const start = end - DAYS;
     const x = (point) => ((dayNumber(point.day) - start) / DAYS) * 100;
@@ -115,9 +115,8 @@ export async function renderLpChart(card, history) {
       );
     }
 
-    // Un tramo recto entre foto y foto, del color del rango de la foto a la que
-    // llega. Va por el rango y no por la altura, porque Master, Grandmaster y
-    // Challenger comparten escala y entre ellos no hay una altura fija
+    // Cada tramo lleva el color del rango del snapshot al que llega, y no el de su
+    // altura, porque Master, Grandmaster y Challenger comparten escala
     const top = (point) => (100 - y(point)).toFixed(2);
     const line = document.createElementNS(SVG_NS, "svg");
     line.setAttribute("class", "lp-line");
@@ -162,7 +161,7 @@ export async function renderLpChart(card, history) {
       }),
     );
 
-    // Al pasar el ratón, o el dedo, una línea marca la foto más cercana y un
+    // Al pasar el ratón, o el dedo, una línea marca el snapshot más cercano y un
     // tooltip enseña su día, su rango y sus LP
     const cursor = el("div", { className: "lp-cursor", attrs: { hidden: "" } });
     const tipDate = el("span", { className: "lp-tip-date" });

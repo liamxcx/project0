@@ -1,5 +1,5 @@
-# nginx sin root. Por eso escucha en el 8080, porque sin root no puede abrir
-# puertos por debajo del 1024.
+# nginx sin root. Escucha en el 8080 porque sin root no puede abrir puertos por
+# debajo del 1024.
 FROM nginxinc/nginx-unprivileged:1.30-alpine
 
 COPY nginx.conf /etc/nginx/nginx.conf

@@ -1,9 +1,7 @@
 import { el } from "./dom.js";
 
-// Junta un botón y su menú. El botón lo abre y lo cierra, y el menú también se
-// cierra al pulsar fuera o con Escape. Devuelve el elemento para colocarlo en la
-// página y close para cerrarlo después de elegir una opción. onOpen es opcional
-// y se llama cada vez que se abre
+// Junta un botón y su menú, que también se cierra al pulsar fuera o con Escape.
+// onOpen es opcional y se llama cada vez que se abre
 export function dropdown(className, button, caret, menu, onOpen) {
   const element = el("div", { className }, button, menu);
 

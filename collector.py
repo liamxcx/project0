@@ -30,8 +30,8 @@ RIOT_TAG_LINE = required_env("RIOT_TAG_LINE")
 # rellenar columnas añadidas después. Sin él, las que ya están se saltan.
 refetch = "--refetch" in sys.argv
 
-# En estos rangos se sube por plazas. Cada día Riot ordena a todos los de Master
-# para arriba, y en EUW los 300 primeros son Challenger y los 700 siguientes GM
+# En estos rangos se sube por plazas. Cada día Riot ordena a todos los jugadores
+# desde Master, y en EUW los 300 primeros son Challenger y los 700 siguientes GM
 APEX_LEAGUES = ["challengerleagues", "grandmasterleagues", "masterleagues"]
 
 # Para cada rango, el puesto que ocupa la última plaza del siguiente y el mínimo
@@ -84,7 +84,7 @@ def fetch(url, params=None, attempts=3):
 def save_timeline(cursor, match_id):
     """Descarga el timeline de una partida y guarda compras y habilidades.
 
-    Es una petición extra por partida: el detalle y el timeline son dos
+    Es una petición extra por partida, porque el detalle y el timeline son dos
     endpoints distintos. Devuelve cuántas filas ha guardado de cada cosa.
     """
     response = fetch(f"{RIOT_BASE_URL}/lol/match/v5/matches/{match_id}/timeline")
@@ -97,7 +97,7 @@ def save_timeline(cursor, match_id):
 
     for frame in response.json()["info"]["frames"]:
         for event in frame["events"]:
-            # El participante 0 no existe, son artefactos del arranque
+            # El participante 0 no existe. Son artefactos del arranque
             participant_id = event.get("participantId", 0)
             if participant_id < 1:
                 continue
@@ -110,9 +110,8 @@ def save_timeline(cursor, match_id):
                 )
 
             elif event_type == "ITEM_UNDO" and event["afterId"] == 0:
-                # Se busca la última compra de ese objeto y se quita, porque
-                # esa compra no llegó a ocurrir. Con afterId distinto de 0
-                # sería deshacer una venta, que no afecta aquí.
+                # Se quita la última compra del objeto, porque no llegó a ocurrir. Un
+                # afterId distinto de 0 deshace una venta, que aquí no cuenta.
                 for i in range(len(purchases) - 1, -1, -1):
                     if (
                         purchases[i][1] == participant_id
@@ -132,7 +131,7 @@ def save_timeline(cursor, match_id):
                     ]
                 )
 
-    # Con --refetch la partida puede tener filas de una pasada anterior. Como
+    # Con --refetch la partida puede tener filas de una ejecución anterior. Como
     # la clave es un id automático, insertar sin más las duplicaría.
     cursor.execute("DELETE FROM item_purchases WHERE match_id = %s", (match_id,))
     cursor.execute("DELETE FROM skill_levelups WHERE match_id = %s", (match_id,))
@@ -195,7 +194,7 @@ def solo_rank(player_puuid, cache):
     """Devuelve la entrada de Solo/Duo de un jugador de la partida, o None.
 
     Se apunta en cache, porque el mismo jugador puede salir en varias partidas
-    de la misma vuelta, como un compañero de dúo. Si la petición falla no se
+    de la misma ejecución, como un compañero de dúo. Si la petición falla no se
     apunta, y la partida se guarda igual con el rango vacío.
     """
     if player_puuid in cache:
@@ -213,7 +212,7 @@ def solo_rank(player_puuid, cache):
 
 
 def save_ranked(cursor, puuid):
-    """Guarda una foto de la clasificatoria de Solo/Duo del invocador.
+    """Guarda un snapshot de la clasificatoria de Solo/Duo del invocador.
 
     Devuelve la entrada de Riot y el corte, o None si no tiene clasificatoria.
     """
@@ -275,7 +274,7 @@ account_response = fetch(
 )
 
 if account_response is None:
-    log.error("No se ha podido conectar con la API tras varios intentos")
+    log.error("No se ha podido conectar con la API de Riot tras varios intentos")
     sys.exit(1)
 
 if account_response.status_code != 200:
@@ -293,7 +292,7 @@ if account_response.status_code != 200:
     )
 
     if account_response.status_code in (401, 403):
-        log.error("La clave ha caducado. Regenérala en developer.riotgames.com")
+        log.error("La clave no es válida. Revísala en developer.riotgames.com")
     sys.exit(1)
 
 puuid = account_response.json()["puuid"]
@@ -329,7 +328,7 @@ log.info("Partidas encontradas: %s", len(match_ids))
 
 saved = 0
 
-# Rango de Solo/Duo de cada jugador ya consultado en esta vuelta, por PUUID.
+# Rango de Solo/Duo de cada jugador ya consultado en esta ejecución, por PUUID.
 # Vive solo mientras corre el collector, no se guarda en ningún sitio
 rank_cache = {}
 
@@ -346,7 +345,7 @@ with (
         ON CONFLICT (puuid) DO UPDATE SET
             game_name       = EXCLUDED.game_name,
             tag_line        = EXCLUDED.tag_line,
-            -- Con NULL, porque SUMMONER-V4 falló, se queda el de la vuelta anterior
+            -- Con NULL, porque SUMMONER-V4 falló, se queda el de la ejecución anterior
             profile_icon_id = COALESCE(EXCLUDED.profile_icon_id, summoners.profile_icon_id),
             summoner_level  = COALESCE(EXCLUDED.summoner_level, summoners.summoner_level)
         """,
@@ -364,7 +363,7 @@ with (
         connection.rollback()
         log.exception("Clasificatoria no guardada")
     else:
-        # Tu rango ya está pedido, así que en las partidas no se vuelve a pedir
+        # El rango del invocador ya está pedido, así que en las partidas no se repite
         rank_cache[puuid] = ranked[0] if ranked else None
         if ranked is None:
             log.info("Sin clasificatoria de Solo/Duo esta temporada")
@@ -380,9 +379,8 @@ with (
                 cutoff,
             )
 
-    # Se comprueba sobre item_purchases, que es la última tabla que se
-    # rellena. Una partida que esté ahí se guardó entera. Mirando matches se
-    # daría por buena una partida cuyos participantes o timeline fallaran.
+    # Cada partida se guarda entera en una transacción, así que basta con ver si
+    # tiene compras. Mirando matches se saltarían las guardadas antes del timeline
     cursor.execute(
         """
         SELECT DISTINCT match_id FROM item_purchases WHERE match_id = ANY(%s)
@@ -441,7 +439,7 @@ with (
 
             for participant in info["participants"]:
                 # Solo se guarda el PUUID de los invocadores seguidos. Del
-                # resto basta el número de jugador, su identidad no hace falta.
+                # resto basta el número de jugador, porque su identidad no hace falta.
                 followed = participant["puuid"] == puuid
                 if followed:
                     me = participant
@@ -545,8 +543,8 @@ with (
 
             if me is None:
                 # Pasa en partidas raras, como los remakes. Sin el
-                # participante propio la partida no sirve para nada.
-                raise RuntimeError("el invocador no aparece entre los participantes")
+                # invocador seguido la partida no sirve para nada.
+                raise RuntimeError("El invocador no aparece entre los participantes")
 
             n_purchases, n_level_ups = save_timeline(cursor, match_id)
 

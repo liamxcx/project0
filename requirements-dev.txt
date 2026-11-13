@@ -1,6 +1,5 @@
-# Herramientas de desarrollo. No van en requirements.txt porque ese fichero
-# se instala dentro de la imagen y la aplicación no necesita nada de esto
-# para funcionar.
+# Herramientas de desarrollo. No van en requirements.txt porque ese se instala
+# en la imagen, y la aplicación no las necesita para funcionar.
 
 pytest==9.1.1
 iniconfig==2.3.0

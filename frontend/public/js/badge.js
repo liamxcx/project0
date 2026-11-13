@@ -2,7 +2,7 @@ import { el } from "./dom.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-// La corona y el escudo de la maqueta, con lo que significa cada sello
+// El icono de cada sello y lo que significa
 const BADGES = {
   MVP: {
     title: "MVP: mejor nota del equipo ganador",

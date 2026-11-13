@@ -43,8 +43,8 @@ export async function renderProfile(content, riotId) {
     content.replaceChildren(el("div", { className: "overview" }, hero, side), top, history);
     // Varias secciones usan los mismos datos, así que se piden una sola vez
     const rankData = getJson("/rank");
-    // Los parches solo dan el año de la temporada, así que si fallan, las
-    // secciones se pintan igual, sin el año
+    // Si los parches fallan, las secciones se pintan igual, pero sin el año de la
+    // temporada ni los filtros de parche
     const patches = getJson("/patches").catch((error) => {
       console.warn("No se ha podido cargar la lista de parches.", error);
       return [];

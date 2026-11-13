@@ -34,7 +34,7 @@ export function rankName(tier, division) {
   return APEX.includes(tier) ? name : `${name} ${division}`;
 }
 
-// El siguiente escalón y cuántos LP pide. En Master y Gran Maestro el corte
+// El siguiente escalón y cuántos LP pide. En Master y Grandmaster el corte
 // cambia cada día con la liga, así que viene de la API
 function nextStep(rank) {
   if (rank.tier === "CHALLENGER") return null;
@@ -122,7 +122,7 @@ export async function renderRank(card, rankData) {
         ),
       ),
       progress(rank, nextStep(rank)),
-      // Es la última foto del collector, así que un dato viejo no debe
+      // Es el último snapshot del collector, así que un dato viejo no debe
       // parecer de ahora
       el("p", { className: "rank-updated" }, `Actualizado ${formatTimeAgo(rank.taken_at)}`),
     );

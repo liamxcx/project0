@@ -10,7 +10,7 @@ export class RequestError extends Error {
   }
 }
 
-// Pide un JSON a cualquier dirección. fetch no falla con un 404 o un 500, solo
+// Pide un JSON a cualquier URL. fetch no falla con un 404 o un 500, solo
 // cuando no hay respuesta, así que el código se comprueba a mano.
 export async function fetchJson(url, timeoutMs = TIMEOUT_MS) {
   let response;

@@ -21,7 +21,7 @@ function splash(champion) {
   const url = championSplashUrl(champion);
   const image = el("img", { className: "hero-splash", attrs: { src: url, alt: "" } });
   // La misma imagen en color, que solo se ve por la franja de luz. Usa la
-  // misma dirección, así que el navegador no la descarga dos veces
+  // misma URL, así que el navegador no la descarga dos veces
   const reveal = el("img", { className: "hero-reveal", attrs: { src: url, alt: "" } });
   // Sin la imagen queda el fondo oscuro, que también se lee bien
   image.addEventListener(

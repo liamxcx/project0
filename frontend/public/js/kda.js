@@ -5,7 +5,7 @@ export function ratio({ kills, deaths, assists }) {
   return Math.round(((kills + assists) / deaths) * 100) / 100;
 }
 
-// Los cortes de color de la maqueta. Sin muertes cuenta como el más alto
+// Sin muertes cuenta como el ratio más alto
 export function ratioClass(value) {
   if (value === null || value >= 4) return "ratio-high";
   if (value >= 3) return "ratio-good";

@@ -6,9 +6,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# El logging se configura aquí porque config.py es lo primero que importan
-# collector.py y api.py. Si se configurara en ellos, los mensajes de este
-# fichero saldrían antes de tiempo y sin formato.
+# El logging se configura aquí y no en collector.py ni en api.py, porque es lo
+# primero que importan. Así los mensajes de este fichero también salen con formato.
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-7s  %(message)s",
@@ -27,7 +26,7 @@ def required_env(name):
     """
     value = os.getenv(name)
     if not value:
-        log.error("Falta la variable %s en el .env", name)
+        log.error("Falta la variable de entorno %s", name)
         sys.exit(1)
     return value
 

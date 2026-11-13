@@ -15,10 +15,11 @@ from config import APP_VERSION, CACHE_TTL_SECONDS, DB_URL, REDIS_URL
 log = logging.getLogger("api")
 
 app = FastAPI(title="Estadísticas de LoL")
-# Comprime las respuestas de más de 500 bytes cuando el cliente lo pide. Va aquí y
+# Comprime las respuestas desde 500 bytes cuando el cliente lo pide. Va aquí y
 # no en nginx ni en Traefik para que valga igual en Compose y en el clúster
 app.add_middleware(GZipMiddleware)
 
+# Con timeout, un Redis que no contesta no deja colgadas las peticiones
 cache = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=1)
 
 
@@ -92,7 +93,7 @@ def health():
     return {"estado": "ok"}
 
 
-# Comprueba PostgreSQL porque sin él la API no puede responder nada útil.
+# Comprueba Postgres porque sin él la API no puede responder nada útil.
 # Mientras falle, Kubernetes deja de mandar tráfico a este pod.
 @app.get("/ready")
 def ready():
@@ -100,8 +101,8 @@ def ready():
         with psycopg.connect(DB_URL, connect_timeout=2) as connection:
             connection.execute("SELECT 1")
     except psycopg.Error as error:
-        # Con la causa se distingue un Postgres parado de una contraseña mal o de
-        # un problema de red, que también hacen fallar la readiness
+        # Con la causa se distingue un Postgres parado de una contraseña incorrecta o
+        # de un problema de red, que también hacen fallar la readiness
         log.warning("No se ha podido consultar PostgreSQL desde /ready: %s", error)
         raise HTTPException(status_code=503, detail="PostgreSQL no disponible")
 
@@ -135,7 +136,6 @@ def summoners():
     return rows
 
 
-# Partidas por página del historial
 MATCHES_PAGE_SIZE = 10
 
 
@@ -201,7 +201,7 @@ def matches(
 
 
 def load_match_detail(match_id):
-    """Devuelve el detalle de una partida, o None si no hay ninguna tuya con ese id."""
+    """Devuelve el detalle de una partida, o None si el invocador seguido no la jugó."""
     with (
         psycopg.connect(DB_URL, row_factory=dict_row) as connection,
         connection.cursor() as cursor,
@@ -265,7 +265,6 @@ def load_match_detail(match_id):
                    p.deaths,
                    p.assists,
                    p.win,
-                   -- Lo que enseña el marcador de la partida de cada jugador
                    p.damage_to_champions,
                    p.minions_killed + p.neutral_minions_killed AS cs,
                    p.vision_score,
@@ -318,7 +317,6 @@ def load_match_detail(match_id):
         )
         skills = cursor.fetchall()
 
-    # Cada jugador con sus compras y sus habilidades, en el orden en que pasaron
     for player in players:
         number = player["participant_id"]
         player["purchases"] = [
@@ -354,8 +352,8 @@ def match_detail(match_id: str, request: Request, response: Response):
         cache_set(key, body)
     detail = json.loads(body)
 
-    # El 404 crea su propia respuesta, sin las cabeceras de abajo. Así el
-    # navegador no guarda una partida que puede llegar en la siguiente vuelta.
+    # El 404 crea su propia respuesta, sin las cabeceras de abajo. Así el navegador
+    # no guarda una partida que el collector puede traer en su siguiente ejecución.
     if detail is None:
         raise HTTPException(status_code=404, detail=f"Sin la partida {match_id}")
 
@@ -434,7 +432,7 @@ def summary(patch: str | None = None):
     return row
 
 
-# Hoy solo se sigue a un invocador, así que vale la foto más reciente de la
+# Hoy solo se sigue a un invocador, así que vale el snapshot más reciente de la
 # tabla. Con varios habría que indicar de cuál se quiere el rango.
 @app.get("/rank")
 def rank():
@@ -464,14 +462,14 @@ def rank():
             LIMIT 1
             """
         )
-        # Sin ninguna foto, porque no hay clasificatoria, la API devuelve null
+        # Sin ningún snapshot, porque no hay clasificatoria, la API devuelve null
         row = jsonable_encoder(cursor.fetchone())
 
     cache_set(key, json.dumps(row))
     return row
 
 
-# Rangos con divisiones, de menor a mayor. Cada uno son 400 LP: cuatro de 100
+# Rangos con divisiones, de menor a mayor. Cada uno son 400 LP, cuatro de 100
 DIVISION_TIERS = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "EMERALD", "DIAMOND"]
 DIVISIONS = ["IV", "III", "II", "I"]
 
@@ -488,7 +486,7 @@ def ladder_lp(tier, division, league_points):
     return len(DIVISION_TIERS) * 400 + league_points
 
 
-# Como en /rank, hoy solo se sigue a un invocador, así que valen todas las fotos
+# Como en /rank, hoy solo se sigue a un invocador, así que valen todos los snapshots
 @app.get("/rank/history")
 def rank_history():
     key = "rank:history"
@@ -501,7 +499,7 @@ def rank_history():
         psycopg.connect(DB_URL, row_factory=dict_row) as connection,
         connection.cursor() as cursor,
     ):
-        # La última foto de cada día de los últimos 30. Los días se cuentan en
+        # El último snapshot de cada día de los últimos 30. Los días se cuentan en
         # UTC, la zona de la base, para no meter la zona horaria en la API
         cursor.execute(
             """

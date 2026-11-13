@@ -2,7 +2,7 @@ apiVersion: v2
 name: project0
 description: Estadísticas de League of Legends a partir de la API de Riot
 type: application
-# version es la del chart y sube cuando cambian los templates. appVersion es
-# la de la aplicación que instala, y aquí es el tag de las imágenes.
+# version es la del chart y sube cuando cambian los templates o los values.
+# appVersion es la de la aplicación que instala, y aquí es el tag de las imágenes.
 version: 0.2.0
 appVersion: "913b445"

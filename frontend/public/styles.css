@@ -95,8 +95,6 @@ input:focus-visible {
   color: var(--text-muted);
 }
 
-/* Portada */
-
 .home {
   min-height: 100vh;
   display: grid;
@@ -202,7 +200,6 @@ input:focus-visible {
   color: var(--text-soft);
 }
 
-/* En pantallas estrechas las dos columnas de la portada van una debajo de otra */
 .profile {
   border-top: 2px solid var(--accent);
 }
@@ -230,7 +227,6 @@ input:focus-visible {
   color: var(--text);
 }
 
-/* El héroe a la izquierda y las tarjetas a la derecha, como en la maqueta */
 .overview {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(300px, 0.9fr);
@@ -1143,7 +1139,7 @@ input:focus-visible {
   color: var(--text-muted);
 }
 
-/* Centrado bajo el botón: el borde izquierdo va a su mitad y luego el menú
+/* Centrado bajo el botón. El borde izquierdo va a su mitad y luego el menú
    retrocede la mitad de su propio ancho */
 .filter-dropdown .patch-menu {
   right: auto;
@@ -1271,7 +1267,7 @@ input:focus-visible {
   background: var(--bg-deep);
 }
 
-/* Solo el tono del campeón: borrosa, con poco color y casi transparente, para
+/* Solo el tono del campeón: borroso, con poco color y casi transparente, para
    no competir con los iconos del marcador */
 .match-detail::before {
   content: "";
@@ -1454,7 +1450,7 @@ input:focus-visible {
   left: 0;
   padding: 1px 3px;
   background: rgba(11, 10, 10, 0.85);
-  /* Crece con el icono: un cuarto de su lado */
+  /* Crece con el icono, un cuarto de su lado */
   font: 700 calc(var(--sb-icon) / 4) / 1 "Archivo", sans-serif;
   color: var(--text);
 }
@@ -1477,7 +1473,7 @@ input:focus-visible {
   background: var(--bg-deep);
 }
 
-/* El árbol secundario se ve algo más pequeño, como en el cliente */
+/* El árbol secundario se ve algo más pequeño */
 .sb-rune.is-style {
   padding: 2px;
 }
@@ -1668,9 +1664,8 @@ input:focus-visible {
   color: var(--text-muted);
 }
 
-/* La columna izquierda tiene un mínimo para que quepa la cuadrícula de 18
-   niveles. Las runas se quedan con lo demás, y si no les basta, los
-   fragmentos bajan debajo de los árboles en vez de salirse del panel */
+/* La columna izquierda tiene un mínimo para que quepa la cuadrícula de 18 niveles.
+   Si a las runas no les basta el resto, los fragmentos pasan debajo de los árboles */
 .build {
   display: grid;
   flex: 1;
@@ -1851,7 +1846,7 @@ input:focus-visible {
   color: var(--bg);
 }
 
-/* --levels lo pone la página: son los niveles que llegó a subir. Las casillas
+/* --levels lo pone la página y son los niveles que llegó a subir. Las casillas
    se reparten el ancho, pero sin pasar de 44 px para no verse alargadas */
 .skill-grid {
   display: grid;
@@ -2022,6 +2017,7 @@ input:focus-visible {
 .ratio-high { color: var(--ratio-high); }
 
 @media (max-width: 800px) {
+  /* Las dos columnas de la portada van una debajo de otra */
   .home {
     min-height: auto;
     grid-template-columns: 1fr;
@@ -2096,7 +2092,7 @@ input:focus-visible {
     background: linear-gradient(90deg, rgba(16, 15, 14, 0.45) 0%, rgba(16, 15, 14, 0.85) 100%);
   }
 
-  /* En el móvil el panel tendrá su propio diseño, sin llenar la pantalla */
+  /* En el móvil el panel no llena la pantalla */
   .match-detail {
     min-height: 0;
   }
@@ -2145,9 +2141,8 @@ input:focus-visible {
     display: none;
   }
 
-  /* Los botones pueden caer en cualquier lado al saltar de línea, y un menú
-     centrado en ellos se saldría de la pantalla. Aquí se abre debajo de toda
-     la fila de filtros y con su mismo ancho */
+  /* Un menú centrado en su botón se saldría de la pantalla al saltar de línea,
+     así que se abre debajo de toda la fila de filtros y con su mismo ancho */
   .history-filters {
     position: relative;
   }

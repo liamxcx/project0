@@ -27,7 +27,7 @@ function stat(value, label, className) {
   );
 }
 
-// La splash va de fondo, y si no carga la barra se queda con el color de fondo
+// El splash va de fondo, y si no carga la barra se queda con el color de fondo
 function splash(key) {
   const image = el("img", {
     className: "match-splash",
@@ -49,8 +49,8 @@ function row(match) {
   const date = DATE_FORMAT.format(new Date(match.played_at));
   const result = match.win ? "Victoria" : "Derrota";
   const caret = el("span", { className: "match-caret", attrs: { "aria-hidden": "true" } }, "▼");
-  // La splash del campeón va también de fondo del panel, muy difuminada. Se pasa
-  // como variable de CSS, porque el atributo style lo bloquearía una CSP estricta
+  // El splash del campeón va también de fondo del panel, muy difuminado. Se pasa
+  // como variable de CSS, porque el atributo style lo bloquearía la CSP
   const panel = el("div", {
     className: "match-detail",
     attrs: { id: `detalle-${match.match_id}` },
@@ -359,9 +359,8 @@ function championFilter(onChange) {
     onChange(champion);
   }
 
-  // Cambia la lista a la del parche. Si el campeón elegido no jugó en ese
-  // parche, vuelve a "Todos". Devuelve el campeón con el que hay que seguir, o
-  // undefined si mientras tanto se pidió la lista de otro parche
+  // Cambia la lista a la del parche y, si el elegido no jugó en él, vuelve a "Todos".
+  // Devuelve el campeón con el que seguir, o undefined si se pidió otro parche
   async function load(patch) {
     const turn = ++latestList;
     try {

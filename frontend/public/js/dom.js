@@ -7,7 +7,7 @@ export function el(tag, options = {}, ...children) {
   if (className) node.className = className;
   for (const [name, value] of Object.entries(attrs)) node.setAttribute(name, value);
   // Los estilos que dependen de los datos van por aquí y no en un atributo
-  // style, porque una Content-Security-Policy estricta bloquea ese atributo
+  // style, porque la CSP de la página bloquea ese atributo
   for (const [name, value] of Object.entries(style)) node.style.setProperty(name, value);
   for (const [event, handler] of Object.entries(on)) node.addEventListener(event, handler);
 

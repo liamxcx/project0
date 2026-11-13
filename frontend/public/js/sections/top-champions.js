@@ -9,8 +9,7 @@ import { seasonOf } from "../season.js";
 // que el winrate diga algo
 const TOP = 6;
 
-// Cada petición lleva un turno. Si se elige otro parche mientras llega una
-// respuesta, esa respuesta ya no vale
+// Como en summary.js, descarta la respuesta de un parche que ya no está elegido
 let latest = 0;
 
 function card(row, onPick) {
@@ -45,8 +44,8 @@ function card(row, onPick) {
   );
 }
 
-// Los cinco campeones más jugados del periodo del selector de arriba. Al
-// pinchar en uno, onPick enseña sus partidas en el historial
+// Los campeones más jugados del periodo del selector de arriba. Al pinchar en
+// uno, onPick enseña sus partidas en el historial
 export async function renderTopChampions(section, patches, patch, onPick) {
   const turn = ++latest;
   const season = seasonOf(patches);

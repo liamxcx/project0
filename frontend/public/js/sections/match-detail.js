@@ -201,7 +201,6 @@ function teamBlock(title, players, contextOf) {
 
 function teamsTab(detail) {
   const { players, me } = detail;
-  // Las partidas guardadas antes de tener a los diez jugadores no tienen marcador
   if (players.length < 10) {
     return message("Esta partida se guardó antes de tener a los diez jugadores, así que no hay marcador.");
   }
@@ -479,8 +478,8 @@ function tabs(detail) {
   return [el("div", { className: "detail-tabs", attrs: { role: "tablist" } }, buttons), content];
 }
 
-// Pinta el detalle dentro del panel que hay debajo de la partida. La API manda
-// Cache-Control, así que al volver a abrir la misma el navegador no la pide
+// Pinta el detalle en el panel de debajo de la partida. Al volver a abrir la
+// misma, el navegador manda su ETag y, si no ha cambiado, recibe un 304 sin cuerpo
 export async function renderMatchDetail(panel, matchId) {
   const turn = ++latest;
   panel.replaceChildren(message("Cargando…"));
