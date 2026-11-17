@@ -1,4 +1,4 @@
-{{- if .Values.api.serviceMonitor.enabled }}
+{{- if .Values.monitoring.enabled }}
 # Le dice a Prometheus que lea /metrics en cada pod de la API. Prometheus usa el
 # Service solo para encontrar los pods, y luego pregunta a cada uno por su IP.
 apiVersion: monitoring.coreos.com/v1

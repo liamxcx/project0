@@ -48,10 +48,11 @@ api:
       memory: 64Mi
     limits:
       memory: 256Mi
-  # El ServiceMonitor es un tipo del Prometheus Operator. En un clúster sin él la
-  # instalación fallaría, así que ahí hay que apagarlo.
-  serviceMonitor:
-    enabled: true
+
+# El ServiceMonitor de la API y las alertas son tipos del Prometheus Operator. En
+# un clúster sin él la instalación fallaría, así que ahí hay que apagarlo.
+monitoring:
+  enabled: true
 
 migrations:
   resources:
