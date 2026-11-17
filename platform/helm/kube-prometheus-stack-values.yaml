@@ -17,6 +17,10 @@ grafana:
 
 prometheus:
   prometheusSpec:
+    # Lee los ServiceMonitor y PrometheusRule de todo el clúster, no solo los de este
+    # chart, así que las aplicaciones no tienen que saber el nombre de esta release.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
     # Por debajo del disco, para que Prometheus borre lo viejo antes de llenarlo.
     retentionSize: 4GB
     # Con disco propio el historial sobrevive a los reinicios. Usa standard y no
