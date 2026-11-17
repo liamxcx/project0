@@ -1,0 +1,13 @@
+# El dashboard de la API. El sidecar de Grafana carga los ConfigMap con el label
+# grafana_dashboard de cualquier namespace, así que no hay que tocar Grafana.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+    {{- include "project0.labels" . | nindent 4 }}
+data:
+  project0-api.json: |-
+{{ .Files.Get "dashboards/api.json" | indent 4 }}
