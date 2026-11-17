@@ -1,13 +1,14 @@
 import hashlib
 import json
 import logging
+import time
 
 import psycopg
 import redis
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.gzip import GZipMiddleware
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from psycopg.rows import dict_row
 
 from config import APP_VERSION, CACHE_TTL_SECONDS, DB_URL, REDIS_URL
@@ -19,6 +20,39 @@ app = FastAPI(title="Estadísticas de LoL")
 # Comprime las respuestas desde 500 bytes cuando el cliente lo pide. Va aquí y
 # no en nginx ni en Traefik para que valga igual en Compose y en el clúster
 app.add_middleware(GZipMiddleware)
+
+# Por plantilla de ruta y no por URL, para que /matches/EUW1_1 y /matches/EUW1_2
+# cuenten juntas. Con la URL habría una serie por partida y no pararía de crecer.
+REQUESTS = Counter(
+    "http_requests", "Peticiones atendidas por la API", ["method", "route", "status"]
+)
+REQUEST_DURATION = Histogram(
+    "http_request_duration_seconds",
+    "Tiempo de respuesta de la API",
+    ["method", "route"],
+)
+
+
+@app.middleware("http")
+async def record_metrics(request: Request, call_next):
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+        status = response.status_code
+    except Exception:
+        # Un error sin capturar no devuelve respuesta aquí, pero el cliente recibe un 500
+        status = 500
+        raise
+    finally:
+        # La ruta solo se sabe cuando FastAPI la ha resuelto. Las URL que no existen
+        # van juntas en unmatched, para no crear una serie por cada una.
+        route = request.scope.get("route")
+        path = route.path if route else "unmatched"
+        elapsed = time.perf_counter() - start
+        REQUESTS.labels(request.method, path, str(status)).inc()
+        REQUEST_DURATION.labels(request.method, path).observe(elapsed)
+    return response
+
 
 # Con timeout, un Redis que no contesta no deja colgadas las peticiones
 cache = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=1)

@@ -2,6 +2,7 @@ import psycopg
 import pytest
 import redis
 from fastapi.testclient import TestClient
+from prometheus_client import REGISTRY
 
 import api
 from api import app, ladder_lp
@@ -42,6 +43,31 @@ def test_metrics_returns_prometheus_format():
     assert response.headers["content-type"].startswith("text/plain")
     # prometheus_client la registra de serie, así que sale aunque no haya métricas propias
     assert "python_info" in response.text
+
+
+def requests_total(route, status):
+    """Lee el contador de la API para una ruta y un código. Sin peticiones, 0."""
+    labels = {"method": "GET", "route": route, "status": status}
+    return REGISTRY.get_sample_value("http_requests_total", labels) or 0
+
+
+def test_metrics_count_requests_by_route_template(full_match):
+    # El contador vive en el proceso y suma también lo de otros tests, así que se
+    # compara con el valor de antes y no con un número fijo
+    before = requests_total("/matches/{match_id}", "200")
+
+    client.get("/matches/EUW1_4")
+
+    assert requests_total("/matches/{match_id}", "200") == before + 1
+
+
+def test_metrics_group_unknown_urls_together():
+    before = requests_total("unmatched", "404")
+
+    client.get("/does-not-exist")
+    client.get("/does-not-exist-either")
+
+    assert requests_total("unmatched", "404") == before + 2
 
 
 def test_summoners_returns_followed_summoners(seeded_db):
