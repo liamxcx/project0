@@ -13,11 +13,11 @@ spec:
       app.kubernetes.io/name: api
   template:
     metadata:
-      # La API lee las variables al arrancar. Con el checksum de cada ConfigMap, si
-      # uno cambia, cambia el pod y Kubernetes lo recrea.
+      # La API lee las variables al arrancar. El checksum es solo de los data de cada
+      # ConfigMap, así que el pod se recrea si cambian ellos y no si cambia un label.
       annotations:
-        checksum/project0-config: {{ include (print $.Template.BasePath "/project0-configmap.yaml") . | sha256sum }}
-        checksum/api-config: {{ include (print $.Template.BasePath "/api-configmap.yaml") . | sha256sum }}
+        checksum/project0-config: {{ (include (print $.Template.BasePath "/project0-configmap.yaml") . | fromYaml).data | toYaml | sha256sum }}
+        checksum/api-config: {{ (include (print $.Template.BasePath "/api-configmap.yaml") . | fromYaml).data | toYaml | sha256sum }}
       labels:
         app.kubernetes.io/name: api
     spec:
