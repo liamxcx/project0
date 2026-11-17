@@ -4,5 +4,5 @@ description: Estadísticas de League of Legends a partir de la API de Riot
 type: application
 # version es la del chart y sube cuando cambian los templates o los values.
 # appVersion es la de la aplicación que instala, y aquí es el tag de las imágenes.
-version: 0.4.0
+version: 0.5.0
 appVersion: "e36314b"

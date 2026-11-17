@@ -1,0 +1,38 @@
+{{- if .Values.monitoring.enabled }}
+# Las alertas propias de project0. Las de un Job fallido o un objetivo caído ya
+# vienen con kube-prometheus-stack, así que aquí no se repiten.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: project0
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "project0.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: project0
+      rules:
+        # Salta también si el CronJob no llega a lanzarse, que KubeJobFailed no ve
+        # porque solo mira los Jobs que existen. Corre cada hora, así que son dos fallos.
+        - alert: CollectorNotSucceeding
+          expr: time() - kube_cronjob_status_last_successful_time{namespace="{{ .Release.Namespace }}", cronjob="collector"} > 7200
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: El collector lleva más de dos horas sin acabar bien
+            description: {{`La última ejecución correcta fue hace {{ $value | humanizeDuration }}.`}}
+        # Los 404 no cuentan, porque una partida que no existe es una respuesta correcta.
+        # Con el for, un pico suelto no la dispara.
+        - alert: ApiHighErrorRate
+          expr: |
+            sum(rate(http_requests_total{namespace="{{ .Release.Namespace }}", status=~"5.."}[5m]))
+              / sum(rate(http_requests_total{namespace="{{ .Release.Namespace }}", route!~"/health|/ready|/metrics"}[5m]))
+              > 0.05
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: La API da más de un 5% de errores 5xx
+            description: {{`El {{ $value | humanizePercentage }} de las respuestas de los últimos 5 minutos son 5xx.`}}
+{{- end }}

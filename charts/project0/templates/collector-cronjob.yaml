@@ -17,6 +17,9 @@ spec:
     spec:
       backoffLimit: 1
       activeDeadlineSeconds: 600
+      # Borra cada Job tres días después de acabar. Un Job fallido mantiene
+      # disparada la alerta KubeJobFailed, y así no se queda para siempre.
+      ttlSecondsAfterFinished: 259200
       template:
         metadata:
           labels:
