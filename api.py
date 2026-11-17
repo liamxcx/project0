@@ -7,6 +7,7 @@ import redis
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.gzip import GZipMiddleware
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from psycopg.rows import dict_row
 
 from config import APP_VERSION, CACHE_TTL_SECONDS, DB_URL, REDIS_URL
@@ -107,6 +108,13 @@ def ready():
         raise HTTPException(status_code=503, detail="PostgreSQL no disponible")
 
     return {"estado": "listo"}
+
+
+# La lee Prometheus cada 30 segundos desde dentro del clúster. Fuera de /docs
+# porque no es parte de la API que usa la página.
+@app.get("/metrics", include_in_schema=False)
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 # Solo los invocadores seguidos tienen fila en summoners, porque de los otros
