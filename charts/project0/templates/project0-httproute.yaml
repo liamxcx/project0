@@ -22,6 +22,7 @@ spec:
         - path: { type: PathPrefix, value: /api/docs }
         - path: { type: PathPrefix, value: /api/redoc }
         - path: { type: PathPrefix, value: /api/openapi.json }
+        - path: { type: PathPrefix, value: /api/metrics }
       backendRefs:
         - name: frontend
           port: 80

@@ -17,8 +17,9 @@ caché, la codificación y la CSP. `frontend/nginx-compose.conf` es el `server`
 de Compose, con su puerto y el proxy de la API, y trae las comunes con un
 `include`.
 
-Las rutas internas de la API (`/health`, `/ready`, `/docs`, `/redoc` y
-`/openapi.json`) no se publican, y por el reverse proxy devuelven 404.
+Las rutas internas de la API (`/health`, `/ready`, `/docs`, `/redoc`,
+`/openapi.json` y `/metrics`) no se publican, y por el reverse proxy
+devuelven 404.
 Desde la propia máquina siguen en `http://localhost:8000`.
 
 En Compose se montan `frontend/public/` y los dos ficheros de nginx, como
