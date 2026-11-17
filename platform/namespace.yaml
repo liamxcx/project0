@@ -4,3 +4,10 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: project0
+---
+# El de Prometheus y Grafana. Va aparte porque el Secret de Grafana tiene que
+# existir antes de instalar el chart, así que no vale --create-namespace.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring

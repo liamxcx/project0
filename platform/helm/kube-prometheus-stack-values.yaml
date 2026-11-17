@@ -1,0 +1,35 @@
+# En kind estos cuatro solo escuchan en 127.0.0.1 dentro del nodo y Prometheus no
+# llega a ellos. Apagarlos quita también sus alertas, que saltarían siempre.
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+grafana:
+  admin:
+    # Creado a mano, como el resto de Secrets. Si lo genera el chart, cambia en
+    # cada helm template y el kubectl diff lo daría siempre por modificado.
+    existingSecret: grafana-admin
+
+prometheus:
+  prometheusSpec:
+    # Lee los ServiceMonitor y PrometheusRule de todo el clúster, no solo los de este
+    # chart, así que las aplicaciones no tienen que saber el nombre de esta release.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    # Por debajo del disco, para que Prometheus borre lo viejo antes de llenarlo.
+    retentionSize: 4GB
+    # Con disco propio el historial sobrevive a los reinicios. Usa standard y no
+    # standard-retain porque perder métricas no es grave, al revés que las partidas.
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: standard
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi
