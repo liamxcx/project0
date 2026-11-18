@@ -12,6 +12,11 @@ gateway:
   namespace: traefik
   sectionName: web
 
+# Los nombres por los que se entra a la página. Sin ninguno, la ruta acepta
+# cualquier nombre y se quedaría con el /api de las demás aplicaciones del Gateway.
+hostnames:
+  - localhost
+
 postgres:
   image: postgres:16
   user: loltest

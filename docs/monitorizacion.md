@@ -65,19 +65,31 @@ release.
 
 ## Entrar
 
-Ninguno de los tres se publica por Traefik. Se entra con un port-forward,
-que se queda corriendo en la terminal:
+Los tres entran por Traefik, cada uno con su nombre:
 
-```bash
-kubectl port-forward -n monitoring service/kube-prometheus-stack-prometheus 9090:9090
-kubectl port-forward -n monitoring service/kube-prometheus-stack-grafana 3000:80
-kubectl port-forward -n monitoring service/kube-prometheus-stack-alertmanager 9093:9093
-```
+| Pieza | Dirección |
+|---|---|
+| Grafana | `http://grafana.localhost` |
+| Prometheus | `http://prometheus.localhost` |
+| Alertmanager | `http://alertmanager.localhost` |
 
-Prometheus queda en `http://localhost:9090`, Grafana en
-`http://localhost:3000` y Alertmanager en `http://localhost:9093`. En
-Prometheus, Status → Target health enseña todo lo que lee y si responde, y
-Query sirve para probar consultas de PromQL.
+Un nombre `.localhost` apunta siempre a la propia máquina, y Chrome, Firefox
+y `curl` lo resuelven sin tocar nada. Cada pieza tiene su HTTPRoute, que crea su chart
+a partir de `route.main` en los values, colgada del Gateway `public`. El
+Gateway acepta rutas del namespace `monitoring` además del de project0 (ver
+[kubernetes.md](kubernetes.md#entrada-al-clúster)).
+
+Prometheus y Alertmanager no tienen login. Aquí no es un problema, porque
+kind solo publica el 80 en `127.0.0.1` y no se llega desde otra máquina,
+pero no se pueden publicar así en un clúster al que se llegue desde fuera.
+
+Con el nombre de la ruta, el chart pone también la dirección externa de
+cada uno (`externalUrl` en Prometheus y Alertmanager, `domain` en Grafana),
+así que los enlaces que generan, como el Source de una alerta en
+Alertmanager, llevan a esas direcciones.
+
+En Prometheus, Status → Target health enseña todo lo que lee y si responde,
+y Query sirve para probar consultas de PromQL.
 
 Grafana entra con el usuario `admin`. La contraseña se copia al portapapeles
 sin que salga por pantalla:
@@ -87,6 +99,14 @@ kubectl get secret grafana-admin -n monitoring -o jsonpath='{.data.admin-passwor
 ```
 
 `pbcopy` es de macOS. En Linux, `xclip -selection clipboard` hace lo mismo.
+
+Si Traefik no funciona, se puede entrar igual con un port-forward, que se
+queda corriendo en la terminal. Por ejemplo, Grafana en
+`http://localhost:3000`:
+
+```bash
+kubectl port-forward -n monitoring service/kube-prometheus-stack-grafana 3000:80
+```
 
 ## Métricas de la API
 
@@ -213,7 +233,10 @@ sin la opción el diff falla entero. Aun así salen como nuevos los Jobs
 `admission-create` y `admission-patch` y sus permisos. Son hooks que Helm
 crea y borra en cada upgrade para el certificado del webhook del operator.
 
-`kubectl diff` no enseña los campos que se quitan, porque mezcla lo nuevo
-sobre lo que hay en el clúster. Cuando un cambio consiste en quitar algo,
-hay que comprobarlo después del upgrade, por ejemplo con
+`kubectl diff` no enseña los campos que se quitan en los objetos que crea
+Helm. Para saber qué quitar necesita la anotación
+`kubectl.kubernetes.io/last-applied-configuration`, que solo pone
+`kubectl apply`, y sin ella mezcla lo nuevo sobre lo que hay en el clúster.
+Cuando un cambio consiste en quitar algo, hay que comprobarlo después del
+upgrade, por ejemplo con
 `kubectl get prometheus -n monitoring kube-prometheus-stack-prometheus -o yaml`.
