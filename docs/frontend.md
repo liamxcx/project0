@@ -77,7 +77,7 @@ nginx manda un `Cache-Control` distinto según lo que sirve:
 
 | Qué | `Cache-Control` | Por qué |
 |---|---|---|
-| La página, el JavaScript y el CSS | `no-cache` | Cambian con cada versión. El navegador los guarda, pero pregunta antes de usarlos |
+| La página, el JavaScript, el CSS y el favicon | `no-cache` | Cambian con cada versión. El navegador los guarda, pero pregunta antes de usarlos |
 | La fuente y los emblemas | `max-age=86400` | Casi nunca cambian, así que valen un día sin preguntar |
 | `/api/matches/{match_id}` | `no-cache`, con ETag | La pone la API, no nginx (ver [api.md](api.md#etag-y-gzip)) |
 
@@ -86,6 +86,18 @@ nginx manda un `Cache-Control` distinto según lo que sirve:
 La fuente, Archivo, va en `frontend/public/fonts/` con su licencia
 (`OFL.txt`), y la sirve el mismo nginx. Así la página no le pide nada a
 Google Fonts, que vería la IP de cada visita.
+
+## El favicon
+
+El icono de la pestaña es `frontend/public/favicon.svg`, un dibujo propio de
+un mapa de tres líneas con una base en cada esquina, con los colores de
+`styles.css`. Va en SVG porque se ve nítido a cualquier tamaño, también a los
+16 píxeles de una pestaña. `index.html` lo declara con
+`<link rel="icon">`, y sin esa línea el navegador lo busca en `/favicon.ico`.
+
+Los navegadores guardan el favicon aparte del resto de la página, así que al
+cambiarlo puede seguir saliendo el antiguo. Abrir `/favicon.svg` directamente
+y recargarlo lo actualiza.
 
 ## Data Dragon
 
