@@ -17,7 +17,9 @@ haya dentro.
 
 La aplicación se instala con un chart de Helm propio, en `charts/project0`,
 como la release `project0` del namespace `project0`. Lo que va fuera del
-chart, como el namespace, la StorageClass y el Gateway, está en `platform/`.
+chart, como los namespaces, la StorageClass y el Gateway, está en `platform/`.
+Prometheus, Grafana y Alertmanager van aparte, en el namespace `monitoring`
+(ver [monitorizacion.md](monitorizacion.md)).
 
 ## Instalar desde cero
 
@@ -33,7 +35,7 @@ helm install traefik traefik/traefik --version 42.1.3 \
   --namespace traefik --create-namespace \
   --values platform/helm/traefik-values.yaml
 
-# 3. El namespace de la aplicación, la StorageClass y el Gateway
+# 3. Los namespaces, la StorageClass y el Gateway
 kubectl apply -f platform/
 
 # 4. Los Secrets, que no están en el repo
@@ -50,13 +52,31 @@ kubectl create secret generic riot-credentials -n project0 \
   --from-literal=RIOT_GAME_NAME="$(grep '^RIOT_GAME_NAME=' .env | cut -d= -f2-)" \
   --from-literal=RIOT_TAG_LINE="$(grep '^RIOT_TAG_LINE=' .env | cut -d= -f2-)"
 
-# 5. La aplicación
+kubectl create secret generic grafana-admin -n monitoring \
+  --from-literal=admin-user=admin \
+  --from-literal=admin-password="$(openssl rand -hex 24)"
+
+# 5. Prometheus, Grafana y Alertmanager
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  --version 93.3.0 --namespace monitoring \
+  --values platform/helm/kube-prometheus-stack-values.yaml \
+  --wait --timeout 10m
+
+# 6. La aplicación
 helm install project0 charts/project0 -n project0 --wait --timeout 5m
 ```
 
 El token de GHCR es un token classic de GitHub con solo el permiso
 `read:packages`. Lo demás sale del `.env`. El Riot ID no es secreto, pero va
-en el Secret de Riot para que no esté en el repo.
+en el Secret de Riot para que no esté en el repo. La contraseña de Grafana
+no sale del `.env`, porque solo la usa el clúster. Se genera al crear el
+Secret y se lee de él cuando hace falta.
+
+La monitorización va antes que la aplicación porque el chart de project0 crea
+un ServiceMonitor y una PrometheusRule, que son tipos del Prometheus Operator.
+En un clúster sin él, la aplicación se instala con
+`--set monitoring.enabled=false`.
 
 El namespace y los Secrets van fuera del chart. Helm guarda la release
 dentro del namespace, y `helm uninstall` lo borraría con todo lo que tiene
@@ -93,10 +113,12 @@ curl localhost:8001/ready
 
 En el clúster, la configuración que no es secreta no sale del `.env`, sino
 de los ConfigMaps del chart, que se rellenan con `values.yaml`. El template
-de los pods de la API lleva un checksum de cada ConfigMap que lee, así que
-si un `helm upgrade` cambia uno de esos valores, cambia el checksum y
-Kubernetes recrea los pods con el valor nuevo. El collector no lo necesita,
-porque cada ejecución es un pod nuevo.
+de los pods de la API lleva un checksum de los `data` de cada ConfigMap que
+lee, así que si un `helm upgrade` cambia uno de esos valores, cambia el
+checksum y Kubernetes recrea los pods con el valor nuevo. Se calcula solo
+sobre los `data` para que subir la versión del chart, que cambia el label
+`helm.sh/chart` de todos los objetos, no reinicie la API. El collector no lo
+necesita, porque cada ejecución es un pod nuevo.
 
 Las migraciones las aplica un hook de Helm, un Job que no se instala con lo
 demás sino en el momento que marca su anotación. En la primera instalación
@@ -222,9 +244,13 @@ kubectl create job collector-manual -n project0 --from=cronjob/collector   # eje
 ```
 
 Se guardan los Jobs, con sus logs, de las 3 últimas ejecuciones buenas y de
-las 3 últimas fallidas. Un Job `Complete` no asegura que se guardaran todas
-las partidas. Si una falla, el collector la salta, termina bien y la vuelve
-a intentar en la ejecución siguiente, así que el fallo solo queda en los logs.
+las 3 últimas fallidas, y cada uno se borra tres días después de acabar. Un
+Job fallido mantiene disparada la alerta `KubeJobFailed`, y así no se queda
+para siempre (ver [monitorizacion.md](monitorizacion.md#alertas)).
+
+Un Job `Complete` no asegura que se guardaran todas las partidas. Si una
+falla, el collector la salta, termina bien y la vuelve a intentar en la
+ejecución siguiente, así que el fallo solo queda en los logs.
 
 Cuando algo va mal:
 

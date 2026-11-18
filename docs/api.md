@@ -15,6 +15,7 @@ menos las rutas internas (ver
 |---|---|---|
 | `GET /health` | Dice que el proceso responde, sin consultar nada. Es la liveness probe en Kubernetes | |
 | `GET /ready` | Hace un `SELECT 1` contra PostgreSQL y devuelve 503 si no responde. Es la readiness probe | |
+| `GET /metrics` | Las métricas para Prometheus, en su formato de texto. No sale en `/docs` (ver [monitorizacion.md](monitorizacion.md#métricas-de-la-api)) | |
 | `GET /summoners` | Los invocadores seguidos, con su icono de perfil y su nivel | |
 | `GET /matches` | El historial de 10 en 10, de la partida más nueva a la más antigua, con el sello [MVP o BASTION](base-de-datos.md#la-nota-y-los-sellos). Viene como `{"matches": [...], "has_more": true}`, y `has_more` dice si quedan más | `patch`, `champion`, `offset` |
 | `GET /matches/{match_id}` | El detalle de una partida: las estadísticas del invocador seguido y los diez jugadores con su nota, su marcador, su nivel, sus runas, su rango, sus compras con su minuto y su orden de habilidades. 404 si no existe | |
@@ -76,9 +77,9 @@ GET /rank/history         →  rank:history
 GET /champions            →  champions:<parche o season>
 ```
 
-`/health` y `/ready` no se cachean. Las respuestas vacías también se guardan.
-Una partida que no existe queda en Redis como `null`, y la API responde 404
-sin volver a consultar PostgreSQL.
+`/health`, `/ready` y `/metrics` no se cachean. Las respuestas vacías
+también se guardan. Una partida que no existe queda en Redis como `null`, y
+la API responde 404 sin volver a consultar PostgreSQL.
 
 Cada clave lleva delante la versión de la API, que es el tag de su imagen,
 como `913b445:match:EUW1_…`, y `dev:` en Compose. En un rolling update conviven

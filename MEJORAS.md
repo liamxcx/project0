@@ -51,7 +51,9 @@ hace, se borra de aquí y pasa a la documentación.
   guarda el historial de Helm, para no romper un rollback.
 - Instalar el plugin `helm diff` comprobando su firma, para ver qué cambia
   antes de cada `helm upgrade`. Hoy se hace con
-  `helm template … | kubectl diff -f -`.
+  `helm template … | kubectl diff -f -`, que no enseña los campos que se
+  quitan, porque mezcla lo nuevo sobre lo que hay en el clúster. `helm diff`
+  compara con la revisión anterior de la release.
 - Desplegarlo en público, en un servidor en la nube con su dominio. Hoy solo
   funciona en local, así que nadie puede abrirlo desde fuera de casa. Haría
   falta HTTPS con un certificado de verdad, que el CI despliegue solo y
@@ -60,9 +62,19 @@ hace, se borra de aquí y pasa a la documentación.
 
 ## Observabilidad
 
-- Métricas con Prometheus y Grafana, y los logs recogidos con Loki. Hoy solo
-  se ven con `kubectl logs`, y se pierden cuando el pod desaparece.
+- Los logs recogidos con Loki. Hoy solo se ven con `kubectl logs`, y se
+  pierden cuando el pod desaparece. Un Job del collector cortado por
+  `activeDeadlineSeconds` borra su pod, y con él los logs.
 - Logs estructurados en JSON, para poder filtrarlos en Loki por campo.
+- Que las alertas lleguen a algún sitio, como un correo o un canal de chat.
+  Hoy Alertmanager las manda al destino `null` del chart, así que solo se ven
+  en su web.
+- Métricas propias del collector, como las partidas guardadas o las
+  peticiones a Riot de cada ejecución. Como es un Job que acaba en segundos,
+  Prometheus no llega a leerlo, y tendría que empujarlas a un Pushgateway al
+  terminar.
+- La zona horaria de Grafana. El dashboard de la API usa la del navegador,
+  pero los del chart salen en UTC.
 
 ## Infraestructura y seguridad
 
@@ -75,7 +87,11 @@ hace, se borra de aquí y pasa a la documentación.
 - Un usuario de PostgreSQL de solo lectura para la API. Hoy usa el mismo
   usuario que crea la base, con todos los permisos.
 - Medir cuánto gasta Traefik y ponerle `resources` en sus values, como al
-  resto de pods.
+  resto de pods. Lo mismo con Prometheus, Grafana y el resto de
+  kube-prometheus-stack.
+- Revisar el `request` de memoria de la API con unos días de datos en
+  Grafana. En el clúster gasta unos 70-75 MiB y pide 64 MiB, y el comentario
+  de `values.yaml` habla de los 53 MiB que gastaba en Compose.
 - Probar un HorizontalPodAutoscaler en la API, con metrics-server.
 - Comprimir en la entrada y no en la API, como se suele hacer en una empresa.
   En el clúster sería un Middleware `compress` de Traefik enganchado a la

@@ -6,8 +6,8 @@ las enseña en una página con el rango, la evolución de LP, los campeones más
 jugados y el detalle de cada partida.
 
 Es un proyecto para aprender DevOps con una aplicación real, de punta a
-punta: contenedores con Docker y Compose, CI con GitHub Actions y despliegue
-en Kubernetes con Helm.
+punta: contenedores con Docker y Compose, CI con GitHub Actions, despliegue
+en Kubernetes con Helm y monitorización con Prometheus y Grafana.
 
 ![Perfil de un invocador en project0](docs/img/perfil.jpg)
 
@@ -29,6 +29,10 @@ en Kubernetes con Helm.
   chart de Helm propio. Las migraciones van en un hook, PostgreSQL en un
   StatefulSet con un disco que se conserva, el collector en un CronJob y la
   entrada por Traefik con Gateway API.
+- **Monitorización** — Prometheus lee las métricas del clúster y las de la
+  API, que cuenta sus peticiones y cuánto tarda en cada ruta. Grafana tiene
+  un dashboard de la API, y hay alertas para cuando el collector deja de
+  funcionar o la API da errores.
 
 ## Capturas
 
@@ -93,6 +97,7 @@ db ──sano──▶ flyway ──termina──▶ collector / api
 | Contenedores | Docker, Docker Compose |
 | CI | GitHub Actions, Ruff, pytest, `helm lint`, GitHub Container Registry |
 | Kubernetes | kind, Helm 4, Traefik con Gateway API |
+| Monitorización | Prometheus, Grafana y Alertmanager con kube-prometheus-stack |
 
 ## Arrancarlo
 
@@ -125,6 +130,7 @@ cero está en [docs/kubernetes.md](docs/kubernetes.md#instalar-desde-cero).
 | [frontend.md](docs/frontend.md) | La página, nginx, Data Dragon y la CSP |
 | [tests-y-ci.md](docs/tests-y-ci.md) | Los tests y el pipeline |
 | [kubernetes.md](docs/kubernetes.md) | Instalar, desplegar, volver atrás y cada pieza en el clúster |
+| [monitorizacion.md](docs/monitorizacion.md) | Prometheus, Grafana y Alertmanager, las métricas de la API, el dashboard y las alertas |
 
 ## Estructura
 
@@ -135,8 +141,8 @@ config.py                 la configuración común
 test_api.py, conftest.py  los tests
 migrations/               el esquema, versionado con Flyway
 frontend/                 la página y su configuración de nginx
-charts/project0/          el chart de Helm de la aplicación
-platform/                 lo que va fuera del chart: namespace, StorageClass, Gateway y Traefik
+charts/project0/          el chart de Helm de la aplicación, con el dashboard de Grafana
+platform/                 lo que va fuera del chart: namespaces, StorageClass, Gateway, Traefik y Prometheus
 .github/workflows/        el pipeline de GitHub Actions
 docker-compose.yml        el entorno de desarrollo
 docker-compose.test.yml   la base y el Redis de los tests

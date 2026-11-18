@@ -63,7 +63,7 @@ podría recibir la respuesta que dejó cacheada el anterior.
 
 ### Qué cubren y qué no
 
-Son 29 tests, y todos los endpoints tienen al menos uno. `/ready` se prueba
+Son 32 tests, y todos los endpoints tienen al menos uno. `/ready` se prueba
 con la base de test, que debe dar 200, y con la conexión apuntada a un puerto
 donde no escucha nadie, que debe dar 503. Entre los datos hay rivales sin
 `puuid`, uno de ellos con un campeón que también lleva el invocador seguido,
@@ -75,6 +75,13 @@ Dos tests comprueban Redis. El primero llama a `/matches`, borra las
 partidas de la base y vuelve a llamar, y la segunda respuesta tiene que
 salir de la caché. El segundo apunta el cliente de Redis a un puerto donde no
 escucha nadie y comprueba que `/matches` responde igual desde la base.
+
+Tres tests comprueban las métricas. El primero mira que `/metrics` responda
+en el formato de texto de Prometheus. Los otros dos miran que el contador
+sume en la plantilla de la ruta (`/matches/{match_id}`) y que las URL que no
+existen vayan juntas en `unmatched`. Comparan con el valor de antes de la
+petición y no con un número fijo, porque el contador vive en el proceso y
+suma también lo de otros tests.
 
 Estos tests no usan el `Dockerfile`. Que la imagen se construya lo
 comprueba el job `build` del CI. Que uvicorn arranque dentro del contenedor
