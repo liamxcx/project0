@@ -14,8 +14,28 @@ grafana:
     # Creado a mano, como el resto de Secrets. Si lo genera el chart, cambia en
     # cada helm template y el kubectl diff lo daría siempre por modificado.
     existingSecret: grafana-admin
+  # Se entra por Traefik en http://grafana.localhost. Un nombre .localhost apunta
+  # siempre a la propia máquina, y kind solo publica el 80 en 127.0.0.1.
+  route:
+    main:
+      enabled: true
+      hostnames: [grafana.localhost]
+      parentRefs:
+        - name: public
+          namespace: traefik
+          sectionName: web
 
 prometheus:
+  # Como Grafana, en http://prometheus.localhost. No tiene login, así que no se
+  # puede publicar así en un clúster al que se llegue desde fuera.
+  route:
+    main:
+      enabled: true
+      hostnames: [prometheus.localhost]
+      parentRefs:
+        - name: public
+          namespace: traefik
+          sectionName: web
   prometheusSpec:
     # Lee los ServiceMonitor y PrometheusRule de todo el clúster, no solo los de este
     # chart, así que las aplicaciones no tienen que saber el nombre de esta release.
@@ -33,3 +53,14 @@ prometheus:
           resources:
             requests:
               storage: 5Gi
+
+alertmanager:
+  # Como Grafana, en http://alertmanager.localhost. Tampoco tiene login.
+  route:
+    main:
+      enabled: true
+      hostnames: [alertmanager.localhost]
+      parentRefs:
+        - name: public
+          namespace: traefik
+          sectionName: web

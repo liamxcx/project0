@@ -13,9 +13,13 @@ spec:
       # Tiene que coincidir con el entryPoint web de Traefik, que escucha en el
       # 8000. El 80 de fuera llega a él por el hostPort.
       port: 8000
+      # Solo se aceptan rutas de estos namespaces. Una aplicación nueva que
+      # quiera entrar por aquí se añade a la lista.
       allowedRoutes:
         namespaces:
           from: Selector
           selector:
-            matchLabels:
-              kubernetes.io/metadata.name: project0
+            matchExpressions:
+              - key: kubernetes.io/metadata.name
+                operator: In
+                values: [project0, monitoring]
