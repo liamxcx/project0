@@ -13,6 +13,10 @@ spec:
     - name: {{ .Values.gateway.name }}
       namespace: {{ .Values.gateway.namespace }}
       sectionName: {{ .Values.gateway.sectionName }}
+  {{- with .Values.hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   rules:
     # Las rutas internas de la API no se publican. Gateway API no tiene una
     # acción de responder 404, así que van al frontend, que no las tiene
