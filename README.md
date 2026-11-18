@@ -116,8 +116,10 @@ La página queda en `http://localhost:8080` y la API en
 `http://localhost:8000`. Las variables del `.env` y el resto de comandos
 están en [docs/desarrollo.md](docs/desarrollo.md).
 
-En el clúster la página queda en `http://localhost`. La instalación desde
-cero está en [docs/kubernetes.md](docs/kubernetes.md#instalar-desde-cero).
+En el clúster la página queda en `http://localhost`, y Grafana, Prometheus y
+Alertmanager en `http://grafana.localhost`, `http://prometheus.localhost` y
+`http://alertmanager.localhost`. La instalación desde cero está en
+[docs/kubernetes.md](docs/kubernetes.md#instalar-desde-cero).
 
 ## Documentación
 

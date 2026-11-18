@@ -105,8 +105,8 @@ curl localhost:8001/ready
   `appVersion` es el tag de las imágenes que despliega.
 - `values.yaml` — lo que puede cambiar de un clúster a otro o con el
   tiempo, como el tag, las réplicas, los recursos, el horario del
-  collector, la configuración de la API, el disco de PostgreSQL y el
-  Gateway del que cuelga la ruta.
+  collector, la configuración de la API, el disco de PostgreSQL, y el
+  Gateway del que cuelga la ruta y el nombre por el que se entra.
 - `templates/` — un template por objeto de la aplicación.
 - `templates/_helpers.tpl` — los labels comunes y la regla del tag, que
   usan varios templates.
@@ -335,10 +335,32 @@ filtro `URLRewrite`. Las rutas internas no se publican, como en Compose.
 Gateway API no tiene una acción de responder 404, así que van al frontend,
 que no las tiene. Cuando varias reglas encajan, gana el prefijo más largo.
 
+El Gateway lo comparten project0 y la monitorización, y solo acepta rutas de
+sus dos namespaces (`allowedRoutes` en `platform/gateway.yaml`). Cada ruta
+atiende un nombre:
+
+```
+localhost               →  HTTPRoute project0
+grafana.localhost       →  Grafana
+prometheus.localhost    →  Prometheus
+alertmanager.localhost  →  Alertmanager
+```
+
+El nombre de project0 está en `hostnames`, en `values.yaml`. Sin él, la ruta
+acepta cualquier nombre, y su regla de `/api` se quedaba con las peticiones
+a `/api/...` de Grafana, Prometheus y Alertmanager, que es donde sus páginas
+piden los datos. Las páginas cargaban, pero sin datos. Con el nombre, la
+página solo responde en `http://localhost`, y por `http://127.0.0.1` da 404.
+
 ```bash
 helm list -n traefik                              # la release y su revisión
 kubectl get gateway -n traefik                    # public, con PROGRAMMED True
+kubectl get httproute -A                          # las cuatro, con su nombre en HOSTNAMES
 kubectl describe httproute project0 -n project0   # Accepted y ResolvedRefs en True
 curl -s -o /dev/null -w '%{http_code}\n' http://localhost/api/patches   # 200, la API
 curl -s -o /dev/null -w '%{http_code}\n' http://localhost/api/health    # 404, interna
+curl -s -H 'Host: grafana.localhost' http://localhost/api/health        # el JSON de Grafana
 ```
+
+Con `-H 'Host: ...'`, `curl` prueba cada nombre sin depender de cómo lo
+resuelva el sistema.
