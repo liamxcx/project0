@@ -5,4 +5,4 @@ type: application
 # version es la del chart y sube cuando cambian los templates o los values.
 # appVersion es la de la aplicación que instala, y aquí es el tag de las imágenes.
 version: 0.6.0
-appVersion: "e36314b"
+appVersion: "829bcd8"
