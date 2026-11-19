@@ -9,6 +9,12 @@ kubeControllerManager:
 kubeProxy:
   enabled: false
 
+defaultRules:
+  disabled:
+    # Los nodos de kind usan el reloj de la máquina virtual de Docker, sin NTP, y nunca
+    # salen sincronizados aunque vayan en hora. NodeClockSkewDetected sigue vigilando.
+    NodeClockNotSynchronising: true
+
 grafana:
   admin:
     # Creado a mano, como el resto de Secrets. Si lo genera el chart, cambia en
@@ -55,6 +61,25 @@ prometheus:
               storage: 5Gi
 
 alertmanager:
+  # Los avisos van a un canal de Discord. La URL del webhook es secreta, así que va
+  # en el Secret alertmanager-discord, creado a mano, y se lee del fichero montado.
+  config:
+    route:
+      receiver: discord
+      # Watchdog está siempre disparada a propósito, e InfoInhibitor solo sirve para
+      # callar las de gravedad info. Las dos siguen sin avisar, como en el chart.
+      routes:
+        - receiver: "null"
+          matchers:
+            - alertname =~ "Watchdog|InfoInhibitor"
+    receivers:
+      - name: "null"
+      - name: discord
+        discord_configs:
+          - webhook_url_file: /etc/alertmanager/secrets/alertmanager-discord/webhook-url
+  alertmanagerSpec:
+    secrets:
+      - alertmanager-discord
   # Como Grafana, en http://alertmanager.localhost. Tampoco tiene login.
   route:
     main:

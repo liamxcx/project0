@@ -67,9 +67,11 @@ hace, se borra de aquí y pasa a la documentación.
   pierden cuando el pod desaparece. Un Job del collector cortado por
   `activeDeadlineSeconds` borra su pod, y con él los logs.
 - Logs estructurados en JSON, para poder filtrarlos en Loki por campo.
-- Que las alertas lleguen a algún sitio, como un correo o un canal de chat.
-  Hoy Alertmanager las manda al destino `null` del chart, así que solo se ven
-  en su web.
+- Una plantilla para los mensajes de Discord. Los de Alertmanager llevan en el
+  título todas las etiquetas de la alerta, y bastaría con el nombre y el
+  resumen.
+- Mandar `Watchdog` a un servicio externo que avise si deja de llegar. Hoy, si
+  se para el clúster, no avisa nada.
 - Métricas propias del collector, como las partidas guardadas o las
   peticiones a Riot de cada ejecución. Como es un Job que acaba en segundos,
   Prometheus no llega a leerlo, y tendría que empujarlas a un Pushgateway al
