@@ -32,7 +32,7 @@ en Kubernetes con Helm y monitorización con Prometheus y Grafana.
 - **Monitorización** — Prometheus lee las métricas del clúster y las de la
   API, que cuenta sus peticiones y cuánto tarda en cada ruta. Grafana tiene
   un dashboard de la API, y hay alertas para cuando el collector deja de
-  funcionar o la API da errores.
+  funcionar o la API da errores, que llegan a un canal de Discord.
 
 ## Capturas
 

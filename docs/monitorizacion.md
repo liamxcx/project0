@@ -45,6 +45,12 @@ en `127.0.0.1` dentro del nodo, y Prometheus no llega a ellos. Por eso están
 apagados en los values. Así no se crean sus objetivos ni sus alertas, que
 saltarían siempre como caídos, ni sus dashboards, que saldrían vacíos.
 
+También está apagada la alerta `NodeClockNotSynchronising`
+(`defaultRules.disabled`). Los nodos de kind usan el reloj de la máquina
+virtual de Docker, que no sincroniza por NTP, así que salta siempre aunque
+la hora sea correcta. `NodeClockSkewDetected` sigue activa y avisa si el
+reloj se desvía de verdad.
+
 La contraseña de Grafana está en el Secret `grafana-admin`, creado a mano
 como el resto (`grafana.admin.existingSecret`). Si la generara el chart,
 cambiaría en cada `helm template` y el `kubectl diff` lo daría siempre por
@@ -206,9 +212,41 @@ Alertmanager enseña solo las disparadas, agrupadas por namespace, y desde
 ahí se crean los silencios. La alerta `Watchdog` está siempre disparada a
 propósito, para comprobar que la cadena funciona.
 
-Alertmanager no avisa a nadie todavía. Todas las alertas van al destino
-`null`, que viene en el chart y no manda nada, así que solo se ven en su
-web.
+Alertmanager manda las alertas a un canal de Discord, con un mensaje cuando
+pasan a `firing` y otro cuando se resuelven. Las de un mismo namespace van
+juntas en un mensaje, y si siguen disparadas se repiten cada 12 horas.
+`Watchdog` e `InfoInhibitor` van al destino `null`, que no manda nada.
+
+La URL del webhook es secreta, así que va en el Secret `alertmanager-discord`,
+creado a mano. Alertmanager la monta como fichero y la lee de ahí
+(`webhook_url_file`), y así no está en el repo:
+
+```bash
+read -rs DISCORD_WEBHOOK_URL
+kubectl create secret generic alertmanager-discord -n monitoring \
+  --from-literal=webhook-url="$DISCORD_WEBHOOK_URL"
+```
+
+La URL se copia del webhook del canal, en la configuración del servidor de
+Discord. `read -rs` la pide sin enseñarla en pantalla, así que no queda ni
+en la terminal ni en el historial.
+
+La configuración que ha cargado Alertmanager se ve en su web, en Status. Si
+una configuración nueva tiene un error, sigue con la anterior. Para probar el
+envío sin esperar a una alerta, se le puede mandar una a mano por su API:
+
+```bash
+curl -s -X POST -H 'Host: alertmanager.localhost' -H 'Content-Type: application/json' \
+  http://localhost/api/v2/alerts \
+  -d '[{"labels":{"alertname":"PruebaDiscord","severity":"warning","namespace":"project0"},"annotations":{"summary":"Prueba de aviso a Discord"}}]'
+```
+
+Llega unos 30 segundos después, y unos 5 minutos más tarde llega como
+resuelta.
+
+El clúster corre en kind, así que con el ordenador en reposo no se evalúa
+nada y no llega ningún aviso. Al volver, las alertas que se cumplan saltan
+de golpe, después de su `for`.
 
 ## Actualizar el stack
 

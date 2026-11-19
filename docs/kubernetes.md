@@ -56,6 +56,10 @@ kubectl create secret generic grafana-admin -n monitoring \
   --from-literal=admin-user=admin \
   --from-literal=admin-password="$(openssl rand -hex 24)"
 
+read -rs DISCORD_WEBHOOK_URL
+kubectl create secret generic alertmanager-discord -n monitoring \
+  --from-literal=webhook-url="$DISCORD_WEBHOOK_URL"
+
 # 5. Prometheus, Grafana y Alertmanager
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
@@ -71,7 +75,8 @@ El token de GHCR es un token classic de GitHub con solo el permiso
 `read:packages`. Lo demás sale del `.env`. El Riot ID no es secreto, pero va
 en el Secret de Riot para que no esté en el repo. La contraseña de Grafana
 no sale del `.env`, porque solo la usa el clúster. Se genera al crear el
-Secret y se lee de él cuando hace falta.
+Secret y se lee de él cuando hace falta. La URL del webhook de Discord
+tampoco está en el `.env`, y se pega a mano como el token de GHCR.
 
 La monitorización va antes que la aplicación porque el chart de project0 crea
 un ServiceMonitor y una PrometheusRule, que son tipos del Prometheus Operator.
