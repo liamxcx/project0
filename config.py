@@ -68,3 +68,7 @@ APP_VERSION = os.getenv("APP_VERSION", "dev")
 # Segundos que hay que esperar entre dos actualizaciones pedidas desde la web.
 # Una ejecución con partidas nuevas gasta buena parte de la cuota de Riot
 REFRESH_COOLDOWN_SECONDS = int(os.getenv("REFRESH_COOLDOWN_SECONDS", "300"))
+
+# El botón de actualizar crea Jobs con la API de Kubernetes, así que solo funciona
+# en el clúster. El chart lo enciende; en Compose se queda apagado.
+REFRESH_ENABLED = os.getenv("REFRESH_ENABLED") == "true"

@@ -533,3 +533,10 @@ def test_refresh_status_reports_the_wait(monkeypatch):
 
     assert before.json() == {"running": False, "retry_after": 0}
     assert after.json()["retry_after"] > 0
+
+
+def test_refresh_is_not_found_outside_kubernetes(monkeypatch):
+    monkeypatch.setattr(api, "REFRESH_ENABLED", False)
+
+    assert client.get("/refresh").status_code == 404
+    assert client.post("/refresh").status_code == 404

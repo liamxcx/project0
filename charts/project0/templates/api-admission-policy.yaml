@@ -1,3 +1,4 @@
+{{- if .Values.refresh.enabled }}
 # RBAC deja a la API crear cualquier Job, y un Job puede montar cualquier Secret
 # del namespace. Esta política solo le deja crear copias del collector.
 apiVersion: admissionregistration.k8s.io/v1
@@ -31,3 +32,4 @@ spec:
       message: El Job tiene que pertenecer al CronJob collector.
     - expression: object.spec.template.spec == params.spec.jobTemplate.spec.template.spec
       message: El pod del Job tiene que ser igual que el de la plantilla del collector.
+{{- end }}

@@ -1,3 +1,4 @@
+{{- if .Values.refresh.enabled }}
 # Lo justo para lanzar el collector a mano. Leer el CronJob para copiar su
 # plantilla, y crear y listar Jobs para saber si ya hay uno en marcha.
 apiVersion: rbac.authorization.k8s.io/v1
@@ -16,3 +17,4 @@ rules:
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["create", "list"]
+{{- end }}

@@ -20,6 +20,7 @@ from config import (
     DB_URL,
     REDIS_URL,
     REFRESH_COOLDOWN_SECONDS,
+    REFRESH_ENABLED,
 )
 
 # El formato lo configura config.py, que se importa antes
@@ -606,6 +607,15 @@ def champions(patch: str | None = None):
 REFRESH_COOLDOWN_KEY = "refresh:cooldown"
 
 
+def require_refresh_enabled():
+    # Un 404 y no un 500, porque no es un fallo. Así tampoco cuenta en la alerta
+    # de errores de la API, y la web simplemente no enseña el botón.
+    if not REFRESH_ENABLED:
+        raise HTTPException(
+            status_code=404, detail="Actualizar desde la web está desactivado"
+        )
+
+
 def release_refresh_cooldown():
     """Quita la espera cuando no se ha lanzado nada, para que no cuente."""
     try:
@@ -618,6 +628,7 @@ def release_refresh_cooldown():
 # minutos que faltan. Cada llamada pregunta a Kubernetes, porque no se guarda nada.
 @app.get("/refresh")
 def refresh_status():
+    require_refresh_enabled()
     try:
         wait = cache.ttl(REFRESH_COOLDOWN_KEY)
     except redis.RedisError as error:
@@ -638,6 +649,7 @@ def refresh_status():
 
 @app.post("/refresh", status_code=202)
 def refresh_now():
+    require_refresh_enabled()
     # Con nx, solo la primera de dos peticiones simultáneas consigue la clave, así
     # que no pueden lanzar un collector cada una
     try:

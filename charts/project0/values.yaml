@@ -54,6 +54,11 @@ api:
     limits:
       memory: 256Mi
 
+# El botón de actualizar de la web. Con false no se crean los permisos de la API
+# para lanzar el collector, y la web no enseña el botón.
+refresh:
+  enabled: true
+
 # El ServiceMonitor de la API y las alertas son tipos del Prometheus Operator. En
 # un clúster sin él la instalación fallaría, así que ahí hay que apagarlo.
 monitoring:
