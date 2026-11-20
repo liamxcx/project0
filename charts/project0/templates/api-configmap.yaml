@@ -8,4 +8,3 @@ metadata:
     {{- include "project0.labels" . | nindent 4 }}
 data:
   CACHE_TTL_SECONDS: {{ .Values.api.cacheTtlSeconds | quote }}
-  REDIS_URL: redis://redis:6379/0

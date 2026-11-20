@@ -13,6 +13,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 from psycopg.rows import dict_row
 
 import refresh
+from api_cache import PREFIX as CACHE_PREFIX
 from config import (
     APP_VERSION,
     CACHE_TTL_SECONDS,
@@ -69,7 +70,7 @@ cache = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=1)
 def cache_get(key):
     """Devuelve lo cacheado, o None si no está o si Redis falla."""
     try:
-        return cache.get(f"{APP_VERSION}:{key}")
+        return cache.get(f"{CACHE_PREFIX}{APP_VERSION}:{key}")
     except redis.RedisError as error:
         log.warning("No se ha podido leer %s de Redis: %s", key, error)
         return None
@@ -78,7 +79,7 @@ def cache_get(key):
 def cache_set(key, value):
     """Guarda en caché. Si Redis falla, sigue adelante sin guardar."""
     try:
-        cache.set(f"{APP_VERSION}:{key}", value, ex=CACHE_TTL_SECONDS)
+        cache.set(f"{CACHE_PREFIX}{APP_VERSION}:{key}", value, ex=CACHE_TTL_SECONDS)
     except redis.RedisError as error:
         log.warning("No se ha podido guardar %s en Redis: %s", key, error)
 
@@ -611,6 +612,28 @@ def release_refresh_cooldown():
         cache.delete(REFRESH_COOLDOWN_KEY)
     except redis.RedisError as error:
         log.warning("No se ha podido quitar la espera de Redis: %s", error)
+
+
+# La web la consulta para saber si enseñar el botón activo, en marcha o con los
+# minutos que faltan. Cada llamada pregunta a Kubernetes, porque no se guarda nada.
+@app.get("/refresh")
+def refresh_status():
+    try:
+        wait = cache.ttl(REFRESH_COOLDOWN_KEY)
+    except redis.RedisError as error:
+        log.warning("No se ha podido comprobar la espera en Redis: %s", error)
+        raise HTTPException(status_code=503, detail="Redis no disponible")
+
+    try:
+        running = refresh.collector_running(refresh.get_cronjob())
+    except requests.RequestException as error:
+        log.error("No se ha podido consultar el collector: %s", error)
+        raise HTTPException(
+            status_code=502, detail="No se ha podido consultar el collector"
+        )
+
+    # Sin la clave, Redis devuelve -2, que aquí significa que no hay que esperar
+    return {"running": running, "retry_after": max(wait, 0)}
 
 
 @app.post("/refresh", status_code=202)

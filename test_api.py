@@ -6,6 +6,7 @@ from prometheus_client import REGISTRY
 
 import api
 from api import app, ladder_lp
+from api_cache import clear_api_cache
 from config import DB_URL
 
 # Llama a los endpoints sin levantar uvicorn ni abrir ningún puerto
@@ -508,3 +509,27 @@ def test_refresh_does_not_launch_while_the_collector_runs(monkeypatch):
     assert created == []
     # Sin nada lanzado no hay espera, así que la segunda vuelve a mirar y no da 429
     assert second.status_code == 409
+
+
+@pytest.mark.with_cache
+def test_clear_api_cache_keeps_the_refresh_wait():
+    api.cache_set("matches:all", "[]")
+    api.cache.set(api.REFRESH_COOLDOWN_KEY, "1")
+
+    assert clear_api_cache() == 1
+
+    assert api.cache_get("matches:all") is None
+    # Si se borrara, cada ejecución del collector dejaría volver a pulsar al momento
+    assert api.cache.get(api.REFRESH_COOLDOWN_KEY) == "1"
+
+
+@pytest.mark.with_cache
+def test_refresh_status_reports_the_wait(monkeypatch):
+    fake_kubernetes(monkeypatch, running=False)
+
+    before = client.get("/refresh")
+    client.post("/refresh")
+    after = client.get("/refresh")
+
+    assert before.json() == {"running": False, "retry_after": 0}
+    assert after.json()["retry_after"] > 0
