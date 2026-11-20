@@ -1,13 +1,9 @@
 # Kubernetes
 
-Clúster local con kind, definido en `kind-config.yaml`: un control plane y
-dos workers.
-
-```bash
-kind create cluster --config kind-config.yaml   # crearlo
-kubectl get nodes                               # los tres nodos en Ready
-kind delete cluster --name project0             # borrarlo
-```
+Clúster local con kind, con un control plane y dos workers. Se crea con
+`kind create cluster --config kind-config.yaml`, y `kubectl get nodes` tiene
+que enseñar los tres nodos en `Ready`. Se borra con
+`kind delete cluster --name project0`.
 
 El primer worker publica el 80 y el 443 en `127.0.0.1` para Traefik (ver
 [Entrada al clúster](#entrada-al-clúster)).
@@ -23,60 +19,91 @@ Prometheus, Grafana y Alertmanager van aparte, en el namespace `monitoring`
 
 ## Instalar desde cero
 
-En un clúster recién creado, en este orden:
+En un clúster recién creado, en este orden.
+
+**1. Los tipos de Gateway API**, que no vienen con Kubernetes:
 
 ```bash
-# 1. Los tipos de Gateway API, que no vienen con Kubernetes
 kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.3/standard-install.yaml
+```
 
-# 2. Traefik, la entrada al clúster
+**2. Traefik**, la entrada al clúster:
+
+```bash
 helm repo add traefik https://traefik.github.io/charts
 helm install traefik traefik/traefik --version 42.1.3 \
   --namespace traefik --create-namespace \
   --values platform/helm/traefik-values.yaml
+```
 
-# 3. Los namespaces, la StorageClass y el Gateway
+**3. Los namespaces, la StorageClass y el Gateway:**
+
+```bash
 kubectl apply -f platform/
+```
 
-# 4. Los Secrets, que no están en el repo
+**4. Los Secrets**, que no están en el repo. El token de GHCR y la URL del
+webhook de Discord se piden con `read -rs`, que espera a que se pegue el
+valor y no lo enseña en pantalla ni lo deja en el historial.
+
+El token de GHCR es un token classic de GitHub con solo el permiso
+`read:packages`:
+
+```bash
 read -rs GHCR_TOKEN
 kubectl create secret docker-registry ghcr-pull -n project0 \
   --docker-server=ghcr.io --docker-username=<usuario de GitHub> \
   --docker-password="$GHCR_TOKEN"
+```
 
+La contraseña de PostgreSQL y lo de Riot salen del `.env`. El Riot ID no es
+secreto, pero va en el Secret de Riot para que no esté en el repo:
+
+```bash
 kubectl create secret generic db-credentials -n project0 \
-  --from-literal=POSTGRES_PASSWORD="$(grep '^POSTGRES_PASSWORD=' .env | cut -d= -f2-)"
+  --from-literal=POSTGRES_PASSWORD="$(grep "^POSTGRES_PASSWORD=" .env | cut -d= -f2-)"
 
 kubectl create secret generic riot-credentials -n project0 \
-  --from-literal=RIOT_API_KEY="$(grep '^RIOT_API_KEY=' .env | cut -d= -f2-)" \
-  --from-literal=RIOT_GAME_NAME="$(grep '^RIOT_GAME_NAME=' .env | cut -d= -f2-)" \
-  --from-literal=RIOT_TAG_LINE="$(grep '^RIOT_TAG_LINE=' .env | cut -d= -f2-)"
+  --from-literal=RIOT_API_KEY="$(grep "^RIOT_API_KEY=" .env | cut -d= -f2-)" \
+  --from-literal=RIOT_GAME_NAME="$(grep "^RIOT_GAME_NAME=" .env | cut -d= -f2-)" \
+  --from-literal=RIOT_TAG_LINE="$(grep "^RIOT_TAG_LINE=" .env | cut -d= -f2-)"
+```
 
+La contraseña de Grafana no sale del `.env`, porque solo la usa el clúster.
+Se genera al crear el Secret y se lee de él cuando hace falta:
+
+```bash
 kubectl create secret generic grafana-admin -n monitoring \
   --from-literal=admin-user=admin \
   --from-literal=admin-password="$(openssl rand -hex 24)"
+```
 
+La URL del webhook de Discord tampoco está en el `.env`:
+
+```bash
 read -rs DISCORD_WEBHOOK_URL
 kubectl create secret generic alertmanager-discord -n monitoring \
   --from-literal=webhook-url="$DISCORD_WEBHOOK_URL"
+```
 
-# 5. Prometheus, Grafana y Alertmanager
+**5. Prometheus, Grafana y Alertmanager:**
+
+```bash
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
   --version 93.3.0 --namespace monitoring \
   --values platform/helm/kube-prometheus-stack-values.yaml \
   --wait --timeout 10m
+```
 
-# 6. La aplicación
+**6. La aplicación:**
+
+```bash
 helm install project0 charts/project0 -n project0 --wait --timeout 5m
 ```
 
-El token de GHCR es un token classic de GitHub con solo el permiso
-`read:packages`. Lo demás sale del `.env`. El Riot ID no es secreto, pero va
-en el Secret de Riot para que no esté en el repo. La contraseña de Grafana
-no sale del `.env`, porque solo la usa el clúster. Se genera al crear el
-Secret y se lee de él cuando hace falta. La URL del webhook de Discord
-tampoco está en el `.env`, y se pega a mano como el token de GHCR.
+Al acabar, `kubectl get pods -n project0` tiene que enseñar dos pods de la
+API, dos del frontend, uno de Redis y `postgres-0`, todos en `1/1`.
 
 La monitorización va antes que la aplicación porque el chart de project0 crea
 un ServiceMonitor y una PrometheusRule, que son tipos del Prometheus Operator.
@@ -92,12 +119,17 @@ En un clúster nuevo PostgreSQL arranca vacío. Al instalar, las migraciones
 crean el esquema, y los datos se traen restaurando un backup (ver
 [base-de-datos.md](base-de-datos.md#backups)).
 
-Para llamar a las rutas de la API que no se publican, como `/ready` (el 8000
-lo ocupa Compose):
+Para llamar a las rutas de la API que no se publican, como `/ready`, se abre
+un port-forward en una terminal. Va en el 8001 porque el 8000 lo ocupa
+Compose:
 
 ```bash
-kubectl get pods -n project0                          # api y frontend (dos de cada), redis y postgres-0 en 1/1
-kubectl port-forward -n project0 service/api 8001:80  # y en otra terminal:
+kubectl port-forward -n project0 service/api 8001:80
+```
+
+Y desde otra terminal:
+
+```bash
 curl localhost:8001/ready
 ```
 
@@ -137,32 +169,35 @@ El disco de PostgreSQL (`postgres.storage`) solo se elige al crear el
 StatefulSet. Kubernetes no deja cambiar `volumeClaimTemplates` después, así
 que cambiarlo en una instalación que ya existe hace fallar el upgrade.
 
-Para revisar el chart y ver qué cambiaría antes de desplegar:
-
-```bash
-helm lint --strict charts/project0                                                 # lo mismo que hace el CI
-helm template project0 charts/project0 -n project0 --no-hooks | kubectl diff -f -  # la diferencia con el clúster
-```
+`helm lint --strict charts/project0` revisa el chart igual que el CI. Qué
+cambiaría en el clúster lo enseña el `kubectl diff` de
+[Desplegar una versión nueva](#desplegar-una-versión-nueva).
 
 ## Desplegar una versión nueva
 
 Cada push a `main` sube las tres imágenes con el SHA corto del commit. Para
 desplegarlas, se pone ese tag en `appVersion`, en
-`charts/project0/Chart.yaml`, y:
+`charts/project0/Chart.yaml`, y se mira qué va a cambiar, sin aplicar nada:
 
 ```bash
 helm template project0 charts/project0 -n project0 --no-hooks | kubectl diff -n project0 -f -
-helm upgrade project0 charts/project0 -n project0 --wait --timeout 5m
-helm history project0 -n project0                     # la revisión nueva, en deployed
 ```
 
-El `kubectl diff` enseña qué va a cambiar, sin aplicar nada. Va con
-`--no-hooks` porque el Job de migraciones de la vez anterior sigue en el
-clúster, y Kubernetes no deja cambiar su `template`. Con una imagen nueva,
-el `diff` fallaría entero, y Helm recrea el Job en cada upgrade de todos
-modos. Si el despliegue trae migraciones, antes se hace un backup (ver
+Va con `--no-hooks` porque el Job de migraciones de la vez anterior sigue en
+el clúster, y Kubernetes no deja cambiar su `template`. Con una imagen
+nueva, el `diff` fallaría entero, y Helm recrea el Job en cada upgrade de
+todos modos. Si el despliegue trae migraciones, antes se hace un backup (ver
 [base-de-datos.md](base-de-datos.md#backups)), porque un rollback no las
 deshace.
+
+Si el diff es lo esperado, se despliega:
+
+```bash
+helm upgrade project0 charts/project0 -n project0 --wait --timeout 5m
+helm history project0 -n project0
+```
+
+`helm history` tiene que enseñar la revisión nueva en `deployed`.
 
 Helm lanza primero las migraciones y espera a que acaben, porque el código
 nuevo puede necesitar una columna nueva. Si fallan, el upgrade se para, la
@@ -191,11 +226,12 @@ y el siguiente `helm upgrade` fallaría por conflicto.
 ## Volver atrás
 
 Si el despliegue no termina, los pods viejos siguen atendiendo hasta que el
-nuevo pasa la readiness. Para ver qué falla:
+nuevo pasa la readiness. Para ver qué falla, los eventos del pod nuevo salen
+al final del `describe`:
 
 ```bash
 kubectl get pods -n project0
-kubectl describe pod <pod nuevo> -n project0          # los eventos, al final
+kubectl describe pod <pod nuevo> -n project0
 ```
 
 Para volver a una revisión anterior:
@@ -248,11 +284,20 @@ el collector no vuelve a pedir las que ya tiene, ejecutarlo más a menudo
 tampoco gastaría peticiones de más. Qué pide a Riot está en
 [collector.md](collector.md).
 
+`get cronjob` enseña el horario y la última ejecución, `get jobs` un Job
+por ejecución, `Complete` o `Failed`, y el último comando los logs de todos
+los que quedan:
+
 ```bash
-kubectl get cronjob collector -n project0     # horario y última ejecución
-kubectl get jobs -n project0                  # una por hora, Complete o Failed
+kubectl get cronjob collector -n project0
+kubectl get jobs -n project0
 kubectl logs -n project0 -l app.kubernetes.io/name=collector --prefix --tail=-1
-kubectl create job collector-manual -n project0 --from=cronjob/collector   # ejecutarlo ya
+```
+
+Para lanzarlo en el momento, como hace el botón de la web:
+
+```bash
+kubectl create job collector-manual -n project0 --from=cronjob/collector
 ```
 
 Se guardan los Jobs, con sus logs, de las 3 últimas ejecuciones buenas y de
@@ -285,15 +330,25 @@ parado, las más antiguas se recuperan lanzándolo a mano con un
 
 Un `--refetch` no cabe en esos 10 minutos, porque con el rate limit 70
 partidas tardan unos 12. Se lanza con un Job a mano, generado a partir del
-CronJob y con tres cambios en el fichero: `--refetch` en `command`,
-`MATCH_COUNT` en `env` y `activeDeadlineSeconds: 1800`.
+CronJob:
 
 ```bash
 kubectl create job collector-refetch -n project0 --from=cronjob/collector \
   --dry-run=client -o yaml > backups/collector-refetch.yaml
-kubectl apply -f backups/collector-refetch.yaml        # después de editarlo
+```
+
+En el fichero se añaden `--refetch` en `command`, `MATCH_COUNT` en `env` y
+`activeDeadlineSeconds: 1800`. Después se aplica y se siguen sus logs:
+
+```bash
+kubectl apply -f backups/collector-refetch.yaml
 kubectl logs -f job/collector-refetch -n project0
-kubectl delete job collector-refetch -n project0       # cuando acabe
+```
+
+Cuando acaba, se borra:
+
+```bash
+kubectl delete job collector-refetch -n project0
 ```
 
 El `MATCH_COUNT` de `env` gana al del ConfigMap. El Job queda a nombre del
@@ -396,15 +451,25 @@ a `/api/...` de Grafana, Prometheus y Alertmanager, que es donde sus páginas
 piden los datos. Las páginas cargaban, pero sin datos. Con el nombre, la
 página solo responde en `http://localhost`, y por `http://127.0.0.1` da 404.
 
+Para comprobar la entrada:
+
 ```bash
-helm list -n traefik                              # la release y su revisión
-kubectl get gateway -n traefik                    # public, con PROGRAMMED True
-kubectl get httproute -A                          # las cuatro, con su nombre en HOSTNAMES
-kubectl describe httproute project0 -n project0   # Accepted y ResolvedRefs en True
-curl -s -o /dev/null -w '%{http_code}\n' http://localhost/api/patches   # 200, la API
-curl -s -o /dev/null -w '%{http_code}\n' http://localhost/api/health    # 404, interna
-curl -s -H 'Host: grafana.localhost' http://localhost/api/health        # el JSON de Grafana
+helm list -n traefik
+kubectl get gateway -n traefik
+kubectl get httproute -A
+kubectl describe httproute project0 -n project0
 ```
 
-Con `-H 'Host: ...'`, `curl` prueba cada nombre sin depender de cómo lo
-resuelva el sistema.
+El Gateway `public` tiene que salir con `PROGRAMMED` en `True`, las cuatro
+HTTPRoute con su nombre en `HOSTNAMES`, y la de project0 con `Accepted` y
+`ResolvedRefs` en `True`.
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost/api/patches
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost/api/health
+curl -s -H "Host: grafana.localhost" http://localhost/api/health
+```
+
+El primero da 200, porque es la API, y el segundo 404, porque `/health` es
+interna. El tercero devuelve el JSON de Grafana. Con `-H "Host: ..."`, `curl`
+prueba cada nombre sin depender de cómo lo resuelva el sistema.

@@ -140,25 +140,9 @@ porque esas partidas siguen existiendo.
 
 ## Migraciones
 
-El esquema vive en `migrations/`, un fichero por cambio:
-
-```
-migrations/
-  V1__initial_schema.sql                 summoners, matches, participants
-  V2__index_matches_played_at.sql        índice para el ORDER BY de /matches
-  V3__participant_match_details.sql      oro, daño, CS, visión, objetos
-  V4__timeline_events.sql                item_purchases y skill_levelups
-  V5__participants_participant_id.sql    el número de jugador (1-10)
-  V6__all_ten_participants.sql           los diez jugadores y la clave nueva
-  V7__cascade_on_match_delete.sql        borrar una partida borra sus filas
-  V8__participant_scores.sql             la vista con la nota y los sellos
-  V9__ranked_snapshots.sql               los snapshots de la clasificatoria
-  V10__summoner_profile.sql              el icono y el nivel del invocador
-  V11__participant_level_runes_rank.sql  nivel, runas y rango de los diez
-```
-
-El nombre es la convención de Flyway: `V`, el número, **dos** guiones
-bajos y la descripción. Con un solo guion el fichero se ignora.
+El esquema vive en `migrations/`, un fichero por cambio. El nombre sigue la
+convención de Flyway, con `V`, el número, **dos** guiones bajos y la
+descripción. Con un solo guion el fichero se ignora.
 
 Cada fichero lleva solo su cambio, no el esquema entero. El estado de la
 base es el resultado de aplicarlos todos en orden.
@@ -186,13 +170,12 @@ docker compose up -d
 docker compose logs flyway
 ```
 
-Comandos sueltos, sin levantar nada:
+También se puede usar Flyway suelto, sin levantar nada, con
+`docker compose run --rm flyway` seguido de una orden:
 
-```bash
-docker compose run --rm flyway info      # en qué versión está la base
-docker compose run --rm flyway migrate   # aplicar lo que falte
-docker compose run --rm flyway validate  # comprobar que nada ha cambiado
-```
+- `info` dice en qué versión está la base.
+- `migrate` aplica lo que falte.
+- `validate` comprueba que no ha cambiado ninguna migración ya aplicada.
 
 ### Una migración aplicada no se toca
 
@@ -237,7 +220,7 @@ terminal estropearía la salida binaria de `pg_dump`.
 Para ver qué tablas trae un backup sin restaurarlo:
 
 ```bash
-kubectl exec -i -n project0 postgres-0 -- pg_restore --list < backups/<fichero>.dump | grep 'TABLE DATA'
+kubectl exec -i -n project0 postgres-0 -- pg_restore --list < backups/<fichero>.dump | grep "TABLE DATA"
 ```
 
 Para restaurarlo en una base vacía de Compose:

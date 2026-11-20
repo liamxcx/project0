@@ -28,11 +28,12 @@ basta, sin reconstruir ni reiniciar nada. Si el cambio no se ve, suele ser la
 caché del navegador (`Ctrl + Shift + R`, o `Cmd + Shift + R` en Mac).
 
 La configuración de nginx, en cambio, solo se lee al arrancar. Después de
-cambiarla se comprueba y se recarga, sin cortar las conexiones abiertas:
+cambiarla, `nginx -t` la comprueba y `nginx -s reload` la vuelve a leer, sin
+cortar las conexiones abiertas:
 
 ```bash
-docker compose exec frontend nginx -t          # comprueba la configuración
-docker compose exec frontend nginx -s reload   # la vuelve a leer
+docker compose exec frontend nginx -t
+docker compose exec frontend nginx -s reload
 ```
 
 nginx busca la IP de `api` al arrancar y se queda con ella. Cuando Compose
@@ -161,7 +162,7 @@ Para rehacerlos si Riot los cambia, con ImageMagick:
 ```bash
 unzip -j ranked-emblems-latest.zip "Ranked Emblems Latest/Rank=*" -d /tmp/emblems
 for f in /tmp/emblems/Rank=*.png; do
-  name=$(basename "$f" .png | sed 's/^Rank=//' | tr '[:upper:]' '[:lower:]')
+  name=$(basename "$f" .png | sed "s/^Rank=//" | tr "[:upper:]" "[:lower:]")
   magick "$f" -resize 256x256 "frontend/public/emblems/$name.png"
 done
 ```
@@ -171,7 +172,8 @@ En macOS también vale `sips -Z 256 "$f" --out ...`, que viene con el sistema.
 ## Sin CORS
 
 La página pide `/api/matches` con una ruta relativa, así que la petición va
-al mismo sitio del que salió la página: mismo protocolo, host y puerto.
+al mismo sitio del que salió la página, con el mismo protocolo, host y
+puerto.
 Para el navegador, la página y la API son el mismo origen, y puede leer sus
 respuestas sin pedir permiso.
 

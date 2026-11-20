@@ -64,7 +64,7 @@ podría recibir la respuesta que dejó cacheada el anterior.
 
 ### Qué cubren y qué no
 
-Son 41 tests, y todos los endpoints tienen al menos uno. `/ready` se prueba
+Todos los endpoints tienen al menos un test. `/ready` se prueba
 con la base de test, que debe dar 200, y con la conexión apuntada a un puerto
 donde no escucha nadie, que debe dar 503. Entre los datos hay rivales sin
 `puuid`, uno de ellos con un campeón que también lleva el invocador seguido,
@@ -81,9 +81,9 @@ Cuatro tests comprueban las métricas. El primero mira que `/metrics` responda
 en el formato de texto de Prometheus. Dos miran que el contador sume en la
 plantilla de la ruta (`/matches/{match_id}`) y que las URL que no existen
 vayan juntas en `unmatched`. El último mira que los resultados del botón de
-actualizar existan desde el arranque, con 0. Comparan con el valor de antes de la
-petición y no con un número fijo, porque el contador vive en el proceso y
-suma también lo de otros tests.
+actualizar existan desde el arranque, con 0. Comparan con el valor de antes
+de la petición y no con un número fijo, porque el contador vive en el
+proceso y suma también lo de otros tests.
 
 Ocho prueban el botón de actualizar sin clúster, porque `monkeypatch`
 sustituye las llamadas a la API de Kubernetes por listas de Jobs inventadas.
@@ -115,12 +115,9 @@ va a desplegar tiene errores.
 
 ### lint
 
-Pasa Ruff en dos pasos, para ver a la primera cuál de los dos ha fallado:
-
-```bash
-ruff format --check .   # el formato, sin cambiar nada
-ruff check .            # el linter
-```
+Pasa Ruff en dos pasos, `ruff format --check .` para el formato, sin
+cambiar nada, y `ruff check .` para el linter. Así se ve a la primera cuál
+de los dos ha fallado.
 
 Ruff está fijado en `requirements-dev.txt` para que el CI y cualquier
 máquina usen la misma versión, porque entre versiones cambian las reglas de

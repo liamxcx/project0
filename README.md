@@ -108,10 +108,16 @@ Hacen falta Docker y una clave de la API de Riot, que se pide en
 https://developer.riotgames.com. Para el clúster, además, kind, kubectl y
 Helm 4.
 
-Con Compose:
+Con Compose, primero se crea el `.env` a partir del ejemplo y se rellenan
+sus valores:
 
 ```bash
-cp .env.example .env    # y rellenar los valores
+cp .env.example .env
+```
+
+Después se levanta todo:
+
+```bash
 docker compose up
 ```
 

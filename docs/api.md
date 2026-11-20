@@ -34,8 +34,8 @@ Los parámetros son opcionales y se pueden combinar, por ejemplo
   `/champions` usan la temporada actual y `/matches` todas las partidas.
 - `champion` es la clave interna de Riot (`Kaisa`, `MonkeyKing`) y distingue
   mayúsculas.
-- `offset` es cuántas partidas saltarse: `0` da las 10 primeras y `10` las
-  siguientes. Un número negativo devuelve 422.
+- `offset` es cuántas partidas saltarse. Con `0` salen las 10 primeras y con
+  `10` las siguientes. Un número negativo devuelve 422.
 
 `next_cutoff_lp`, en `/rank`, son los LP que hacen falta para subir desde
 Master o Grandmaster. Riot lo recalcula cada día, así que cambia aunque el
@@ -66,22 +66,10 @@ temporada entera, así que el balance de la temporada sale de `/rank`.
 
 ## Caché en Redis
 
-Los endpoints de datos se cachean en Redis con estas claves:
-
-```
-GET /summoners            →  summoners:all
-GET /matches              →  matches:<parche o all>:<campeón o all>:<offset>
-GET /matches/{match_id}   →  match:<match_id>
-GET /patches              →  patches:all
-GET /summary              →  summary:<parche o season>
-GET /rank                 →  rank:latest
-GET /rank/history         →  rank:history
-GET /champions            →  champions:<parche o season>
-```
-
-`/health`, `/ready` y `/metrics` no se cachean. Las respuestas vacías
-también se guardan. Una partida que no existe queda en Redis como `null`, y
-la API responde 404 sin volver a consultar PostgreSQL.
+Los endpoints de datos se cachean en Redis, cada uno con su clave.
+`/health`, `/ready` y `/metrics` no se cachean. Las respuestas vacías también
+se guardan. Una partida que no existe queda en Redis como `null`, y la API
+responde 404 sin volver a consultar PostgreSQL.
 
 Cada clave lleva delante `cache:` y la versión de la API, que es el tag de su
 imagen, como `cache:913b445:match:EUW1_…`, y `cache:dev:` en Compose. En un

@@ -22,30 +22,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 
 ## Configuración
 
-Copiar `.env.example` a `.env` y rellenar los valores:
-
-```
-# Riot API
-RIOT_API_KEY=RGAPI-...
-RIOT_GAME_NAME=TuNombre
-RIOT_TAG_LINE=EUW
-
-# PostgreSQL
-POSTGRES_USER=loltest
-POSTGRES_PASSWORD=
-POSTGRES_DB=lolstats
-DB_HOST=db
-
-# Collector
-MATCH_COUNT=20
-
-# API
-REDIS_URL=redis://redis:6379/0
-CACHE_TTL_SECONDS=60
-
-# Zona horaria de los contenedores, por ejemplo Europe/Madrid
-TZ=Europe/Madrid
-```
+Copiar `.env.example` a `.env` y rellenar los valores.
 
 El Riot ID va separado. Si eres `TuNombre#EUW`, el nombre va en
 `RIOT_GAME_NAME` y el tag en `RIOT_TAG_LINE`, sin almohadilla.
@@ -85,7 +62,7 @@ arranquen `collector` y `api`, y la API espera además a que Redis esté sano.
 
 Los servicios no se comportan igual:
 
-- `db`, `redis`, `api` y `frontend` son procesos largos: se quedan
+- `db`, `redis`, `api` y `frontend` son procesos largos, que se quedan
   corriendo hasta que se paran.
 - `collector` y `flyway` terminan cuando acaban su trabajo. En
   `docker compose ps` aparecen como `Exited (0)`, que no es un error.
@@ -102,14 +79,14 @@ comando.
 
 Qué comando usar según lo que hayas cambiado:
 
-```bash
-docker compose up            # docker-compose.yml, .env o una migración nueva
-docker compose up --build    # el código o requirements.txt
-```
+- Con un cambio en `docker-compose.yml`, en el `.env` o una migración nueva,
+  basta con `docker compose up`.
+- Con un cambio en el código o en `requirements.txt`, hace falta
+  `docker compose up --build`.
 
 El `--build` hace falta porque los ficheros `.py` y `requirements.txt` se
-copian dentro de la imagen. El `.env` y las
-migraciones se leen al arrancar, así que esos no lo necesitan.
+copian dentro de la imagen. El `.env` y las migraciones se leen al arrancar,
+así que esos no lo necesitan.
 
 Va sin nombrar servicio. `collector` y `api` comparten el `Dockerfile`, pero
 Compose construye una imagen por servicio, así que
@@ -137,32 +114,27 @@ Todo se registra con `logging`, con hora, nivel y mensaje:
 2026-09-09 03:42:50  WARNING  No se ha podido leer champions:all de Redis: Error -2 connecting to redis:6379. Name or service not known.
 ```
 
-Los niveles: `INFO` para el curso normal, `WARNING` para lo que va mal pero
-no impide seguir (un reintento, Redis caído), y `ERROR` para lo que corta la
-ejecución (clave no válida, API de Riot inalcanzable).
+Se usa `INFO` para el curso normal, `WARNING` para lo que va mal pero no
+impide seguir, como un reintento o Redis caído, y `ERROR` para lo que corta
+la ejecución, como una clave no válida o la API de Riot inalcanzable.
 
-```bash
-docker compose logs -f api                    # seguir en directo
-docker compose logs --tail 20 api             # las últimas 20 líneas
-docker compose logs --since 3h api            # las últimas 3 horas
-docker compose logs collector | grep WARNING  # solo los problemas
-```
+Para leerlos:
 
-El logging se configura en `config.py` y no en cada script. `config.py` es
-lo primero que importan `collector.py` y `api.py`, así que cuando el resto
-del código escribe su primer mensaje el formato ya está puesto. Hace falta
-configurarlo porque uvicorn solo ajusta sus propios loggers.
+- `docker compose logs -f api` los sigue en directo.
+- `docker compose logs --tail 20 api` enseña las últimas 20 líneas, y con
+  `--since 3h` en vez de `--tail 20`, las de las últimas 3 horas.
+- `docker compose logs collector | grep WARNING` deja solo los problemas.
 
-Los logs se rotan para que no crezcan sin límite. Cada servicio guarda
-como mucho 3 ficheros de 10 MB, y al abrir el cuarto se borra el más
-viejo. Sin esto un servicio que no termina nunca, como `api`, acabaría
-llenando el disco.
+El logging se configura en `config.py`, que es lo primero que importan
+`collector.py` y `api.py`. Hace falta configurarlo porque uvicorn solo ajusta
+sus propios loggers.
 
-La configuración está en el bloque `x-logging` del `docker-compose.yml`,
-y cada servicio la referencia con `logging: *default-logging`. Los
-cambios ahí solo afectan a contenedores nuevos:
+Los logs se rotan con el bloque `x-logging` del `docker-compose.yml`, porque
+un servicio que no termina nunca, como `api`, acabaría llenando el disco.
+Los cambios ahí solo afectan a contenedores nuevos, así que hay que
+recrearlos y luego se puede comprobar en uno:
 
 ```bash
 docker compose up -d --force-recreate
-docker inspect project0-api-1 --format '{{json .HostConfig.LogConfig}}'
+docker inspect project0-api-1 --format "{{json .HostConfig.LogConfig}}"
 ```

@@ -80,10 +80,10 @@ Los tres entran por Traefik, cada uno con su nombre:
 | Alertmanager | `http://alertmanager.localhost` |
 
 Un nombre `.localhost` apunta siempre a la propia máquina, y Chrome, Firefox
-y `curl` lo resuelven sin tocar nada. Cada pieza tiene su HTTPRoute, que crea su chart
-a partir de `route.main` en los values, colgada del Gateway `public`. El
-Gateway acepta rutas del namespace `monitoring` además del de project0 (ver
-[kubernetes.md](kubernetes.md#entrada-al-clúster)).
+y `curl` lo resuelven sin tocar nada. Cada pieza tiene su HTTPRoute, que crea
+su chart a partir de `route.main` en los values, colgada del Gateway
+`public`. El Gateway acepta rutas del namespace `monitoring` además del de
+project0 (ver [kubernetes.md](kubernetes.md#entrada-al-clúster)).
 
 Prometheus y Alertmanager no tienen login. Aquí no es un problema, porque
 kind solo publica el 80 en `127.0.0.1` y no se llega desde otra máquina,
@@ -101,7 +101,7 @@ Grafana entra con el usuario `admin`. La contraseña se copia al portapapeles
 sin que salga por pantalla:
 
 ```bash
-kubectl get secret grafana-admin -n monitoring -o jsonpath='{.data.admin-password}' | base64 -d | pbcopy
+kubectl get secret grafana-admin -n monitoring -o jsonpath="{.data.admin-password}" | base64 -d | pbcopy
 ```
 
 `pbcopy` es de macOS. En Linux, `xclip -selection clipboard` hace lo mismo.
@@ -186,7 +186,8 @@ se despliega con `helm upgrade`.
 
 ## Alertas
 
-Las propias de project0 están en `charts/project0/templates/monitoring/prometheusrule.yaml`:
+Las propias de project0 están en
+`charts/project0/templates/monitoring/prometheusrule.yaml`:
 
 | Alerta | Cuándo salta | Gravedad |
 |---|---|---|
@@ -248,7 +249,7 @@ una configuración nueva tiene un error, sigue con la anterior. Para probar el
 envío sin esperar a una alerta, se le puede mandar una a mano por su API:
 
 ```bash
-curl -s -X POST -H 'Host: alertmanager.localhost' -H 'Content-Type: application/json' \
+curl -s -X POST -H "Host: alertmanager.localhost" -H "Content-Type: application/json" \
   http://localhost/api/v2/alerts \
   -d '[{"labels":{"alertname":"PruebaDiscord","severity":"warning","namespace":"project0"},"annotations":{"summary":"Prueba de aviso a Discord"}}]'
 ```
