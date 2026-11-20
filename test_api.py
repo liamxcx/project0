@@ -466,3 +466,45 @@ def test_api_works_when_redis_is_down(seeded_db, monkeypatch):
 
     assert response.status_code == 200
     assert len(response.json()["matches"]) == 3
+
+
+def fake_kubernetes(monkeypatch, running):
+    """Sustituye las llamadas a Kubernetes y devuelve los Jobs que se crean."""
+    created = []
+    monkeypatch.setattr(api.refresh, "get_cronjob", lambda: {"metadata": {}})
+    monkeypatch.setattr(api.refresh, "collector_running", lambda cronjob: running)
+
+    def create_job(cronjob):
+        created.append(cronjob)
+        return {"metadata": {"name": "collector-refresh-abc12"}}
+
+    monkeypatch.setattr(api.refresh, "create_job", create_job)
+    return created
+
+
+@pytest.mark.with_cache
+def test_refresh_launches_the_collector_and_then_waits(monkeypatch):
+    created = fake_kubernetes(monkeypatch, running=False)
+
+    first = client.post("/refresh")
+    second = client.post("/refresh")
+
+    assert first.status_code == 202
+    assert first.json() == {"job": "collector-refresh-abc12"}
+    # La segunda llega dentro de la espera, así que no lanza otro
+    assert second.status_code == 429
+    assert int(second.headers["Retry-After"]) > 0
+    assert len(created) == 1
+
+
+@pytest.mark.with_cache
+def test_refresh_does_not_launch_while_the_collector_runs(monkeypatch):
+    created = fake_kubernetes(monkeypatch, running=True)
+
+    first = client.post("/refresh")
+    second = client.post("/refresh")
+
+    assert first.status_code == 409
+    assert created == []
+    # Sin nada lanzado no hay espera, así que la segunda vuelve a mirar y no da 429
+    assert second.status_code == 409

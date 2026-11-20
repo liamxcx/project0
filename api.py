@@ -5,13 +5,21 @@ import time
 
 import psycopg
 import redis
+import requests
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.gzip import GZipMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from psycopg.rows import dict_row
 
-from config import APP_VERSION, CACHE_TTL_SECONDS, DB_URL, REDIS_URL
+import refresh
+from config import (
+    APP_VERSION,
+    CACHE_TTL_SECONDS,
+    DB_URL,
+    REDIS_URL,
+    REFRESH_COOLDOWN_SECONDS,
+)
 
 # El formato lo configura config.py, que se importa antes
 log = logging.getLogger("api")
@@ -590,3 +598,56 @@ def champions(patch: str | None = None):
 
     cache_set(key, json.dumps(rows))
     return rows
+
+
+# Sin la versión delante, al revés que la caché, para que la espera siga
+# valiendo aunque se despliegue una versión nueva en medio
+REFRESH_COOLDOWN_KEY = "refresh:cooldown"
+
+
+def release_refresh_cooldown():
+    """Quita la espera cuando no se ha lanzado nada, para que no cuente."""
+    try:
+        cache.delete(REFRESH_COOLDOWN_KEY)
+    except redis.RedisError as error:
+        log.warning("No se ha podido quitar la espera de Redis: %s", error)
+
+
+@app.post("/refresh", status_code=202)
+def refresh_now():
+    # Con nx, solo la primera de dos peticiones simultáneas consigue la clave, así
+    # que no pueden lanzar un collector cada una
+    try:
+        acquired = cache.set(
+            REFRESH_COOLDOWN_KEY, "1", nx=True, ex=REFRESH_COOLDOWN_SECONDS
+        )
+        wait = None if acquired else cache.ttl(REFRESH_COOLDOWN_KEY)
+    except redis.RedisError as error:
+        # Sin Redis no se puede controlar la espera, y sin ella se gastaría la cuota
+        log.warning("No se ha podido comprobar la espera en Redis: %s", error)
+        raise HTTPException(status_code=503, detail="Redis no disponible")
+
+    if not acquired:
+        raise HTTPException(
+            status_code=429,
+            detail="Hay que esperar antes de volver a actualizar",
+            headers={"Retry-After": str(max(wait, 1))},
+        )
+
+    try:
+        cronjob = refresh.get_cronjob()
+        if refresh.collector_running(cronjob):
+            release_refresh_cooldown()
+            raise HTTPException(
+                status_code=409, detail="Ya hay una actualización en marcha"
+            )
+        job = refresh.create_job(cronjob)
+    except requests.RequestException as error:
+        release_refresh_cooldown()
+        log.error("No se ha podido lanzar el collector: %s", error)
+        raise HTTPException(
+            status_code=502, detail="No se ha podido lanzar el collector"
+        )
+
+    log.info("Lanzado el collector desde la web: %s", job["metadata"]["name"])
+    return {"job": job["metadata"]["name"]}

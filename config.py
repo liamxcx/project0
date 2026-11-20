@@ -64,3 +64,7 @@ CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "60"))
 # El tag de la imagen, que pone el chart. Va delante de cada clave de Redis para
 # que dos versiones de la API no lean lo que guardó la otra en un despliegue
 APP_VERSION = os.getenv("APP_VERSION", "dev")
+
+# Segundos que hay que esperar entre dos actualizaciones pedidas desde la web.
+# Una ejecución con partidas nuevas gasta buena parte de la cuota de Riot
+REFRESH_COOLDOWN_SECONDS = int(os.getenv("REFRESH_COOLDOWN_SECONDS", "300"))

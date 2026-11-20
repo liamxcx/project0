@@ -21,6 +21,9 @@ spec:
       labels:
         app.kubernetes.io/name: api
     spec:
+      # Con permisos para lanzar el collector, que la default no tiene. Ver
+      # api-role.yaml y api-admission-policy.yaml.
+      serviceAccountName: api
       # La imagen es privada en GHCR. El Secret se crea a mano porque lleva el
       # token, así que no está en el repo.
       imagePullSecrets:
