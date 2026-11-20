@@ -109,6 +109,38 @@
         "defaults": { "unit": "s", "min": 0 },
         "overrides": []
       }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Actualizaciones desde la web",
+      "description": "Pulsaciones del botón de actualizar en el rango elegido, según lo que respondió la API. Salen de la misma métrica que el resto del dashboard.",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (increase(http_requests_total{namespace=\"project0\", route=\"/refresh\", method=\"POST\"}[$__range]))",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value_and_name",
+        "text": { "titleSize": 14, "valueSize": 28 },
+        "colorMode": "none",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": { "unit": "none", "decimals": 0 },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "202" }, "properties": [{ "id": "displayName", "value": "Lanzadas" }] },
+          { "matcher": { "id": "byName", "options": "429" }, "properties": [{ "id": "displayName", "value": "Rechazadas por la espera" }] },
+          { "matcher": { "id": "byName", "options": "409" }, "properties": [{ "id": "displayName", "value": "Ya había una en marcha" }] },
+          { "matcher": { "id": "byName", "options": "502" }, "properties": [{ "id": "displayName", "value": "Fallo de Kubernetes" }] },
+          { "matcher": { "id": "byName", "options": "503" }, "properties": [{ "id": "displayName", "value": "Fallo de Redis" }] }
+        ]
+      }
     }
   ]
 }

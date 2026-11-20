@@ -1,0 +1,35 @@
+{{- if .Values.refresh.enabled }}
+# RBAC deja a la API crear cualquier Job, y un Job puede montar cualquier Secret
+# del namespace. Esta política solo le deja crear copias del collector.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ .Release.Namespace }}-collector-trigger
+  labels:
+    app.kubernetes.io/name: api
+    {{- include "project0.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  # El CronJob se pasa como parámetro, así que se compara con su plantilla y no
+  # hay que repetir aquí la imagen ni el comando.
+  paramKind:
+    apiVersion: batch/v1
+    kind: CronJob
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["jobs"]
+  matchConditions:
+    - name: only-api-serviceaccount
+      expression: request.userInfo.username == "system:serviceaccount:{{ .Release.Namespace }}:api"
+  validations:
+    - expression: >-
+        has(object.metadata.ownerReferences) &&
+        object.metadata.ownerReferences.exists(r,
+          r.kind == "CronJob" && r.name == params.metadata.name && r.uid == params.metadata.uid)
+      message: El Job tiene que pertenecer al CronJob collector.
+    - expression: object.spec.template.spec == params.spec.jobTemplate.spec.template.spec
+      message: El pod del Job tiene que ser igual que el de la plantilla del collector.
+{{- end }}

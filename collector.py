@@ -7,6 +7,7 @@ from urllib.parse import quote
 import psycopg
 import requests
 
+from api_cache import clear_api_cache
 from config import (
     DB_URL,
     MATCH_COUNT,
@@ -578,3 +579,7 @@ if refetch:
     log.info("Partidas actualizadas: %s", saved)
 else:
     log.info("Partidas nuevas guardadas: %s", saved)
+
+# Aunque no haya partidas nuevas, la clasificatoria se guarda en cada ejecución.
+# Sin esto, la API seguiría enseñando lo de antes hasta que caducara su caché.
+log.info("Respuestas de la API borradas de la caché: %s", clear_api_cache())

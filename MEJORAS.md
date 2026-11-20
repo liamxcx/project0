@@ -32,6 +32,12 @@ hace, se borra de aquí y pasa a la documentación.
 - El "+LP" de cada partida. Riot no lo da, así que haría falta una foto de la
   clasificatoria antes y después de cada partida, con el `collector` lanzado
   cada pocos minutos.
+- Que una página abierta se entere de las ejecuciones de cada hora. Habría que
+  hacerlo con Server-Sent Events desde la API y no preguntando cada pocos
+  segundos, porque cada consulta del estado son dos peticiones a la API de
+  Kubernetes.
+- Un mensaje en la página cuando falla el botón de actualizar. Hoy vuelve a
+  "Actualizar" y el error solo sale en la consola del navegador.
 
 ## Despliegue
 
@@ -55,11 +61,17 @@ hace, se borra de aquí y pasa a la documentación.
   quitan en los objetos que crea Helm, porque no llevan la anotación
   `last-applied-configuration` de `kubectl apply`. `helm diff` compara con la
   revisión anterior de la release.
+- Arrancar en el CI la imagen que se acaba de construir y comprobar que la
+  aplicación carga, por ejemplo con `python -c "import api"`. Hoy el CI solo
+  comprueba que la imagen se construye, y así se coló una sin `refresh.py`,
+  porque el `Dockerfile` copia los ficheros uno a uno.
 - Desplegarlo en público, en un servidor en la nube con su dominio. Hoy solo
   funciona en local, así que nadie puede abrirlo desde fuera de casa. Haría
   falta HTTPS con un certificado de verdad, que el CI despliegue solo y
-  revisar qué queda expuesto, como `/docs`. Riot pide además una clave de
-  producción y su aviso legal en un sitio visible de la propia página.
+  revisar qué queda expuesto, como `/docs` o `POST /refresh`, que no pide
+  autenticación y hoy solo lo frena la espera de 5 minutos. Riot pide además
+  una clave de producción y su aviso legal en un sitio visible de la propia
+  página.
 
 ## Observabilidad
 
@@ -104,13 +116,22 @@ hace, se borra de aquí y pasa a la documentación.
 
 ## Deuda técnica
 
+- Separar la caché de la API de la espera del botón de actualizar, en otro
+  Redis o en otra base de Redis. Un Redis de caché suele tener un límite de
+  memoria y borra claves solo cuando se llena, y podría borrar la espera.
+- Pasar `refresh.py` a una librería ligera como `lightkube` si la API llega a
+  necesitar mucho más de Kubernetes, como vigilar cambios o manejar más tipos
+  de objeto. Para tres peticiones no compensa.
+- Que el botón de actualizar no vuelva a crear el selector de parche al
+  acabar. Hoy repinta el perfil entero, y cada vez el selector deja
+  registrados en `document` sus listeners de clic y de Escape, aunque el
+  viejo ya no esté en la página. No se nota, pero se acumulan mientras no se
+  recargue.
 - Un pool de conexiones en la API. Hoy cada petición abre su propia
   conexión a PostgreSQL y la cierra al terminar, con su conexión TCP y su
   autenticación cada vez. Con un usuario no se nota, pero con más tráfico sí.
   `psycopg` trae uno. Aplazado hasta tener tests que comprueben que las
   respuestas no cambian.
-- Invalidar la caché desde el `collector` cuando guarde partidas nuevas, en
-  vez de esperar a que caduque el TTL.
 - Guardar en Redis la ETag del detalle de partida junto a su JSON. Hoy se
   calcula en cada petición, y un 304 obliga a sacar la respuesta entera de
   Redis o PostgreSQL solo para compararla. Con mucho tráfico se notaría.
@@ -118,10 +139,6 @@ hace, se borra de aquí y pasa a la documentación.
   añadiendo campos sin quitar los viejos hasta el despliegue siguiente. Durante
   un rolling update conviven páginas y APIs de las dos versiones, y una página
   nueva puede recibir el formato viejo y fallar hasta que se recarga.
-- Calcular las anotaciones `checksum/…` de la API solo sobre los `data` de sus
-  ConfigMaps. Hoy se calculan sobre el fichero entero, etiquetas incluidas, así
-  que subir la `version` del chart cambia la suma y reinicia la API aunque su
-  configuración sea la misma.
 - Quitar el `DeprecationWarning` que sale en cada `pytest`. Viene del
   `TestClient` de Starlette, que usa un nombre antiguo de `anyio`, así que se
   arregla actualizando Starlette cuando publique una versión que lo corrija.

@@ -11,4 +11,5 @@ data:
   POSTGRES_USER: {{ .Values.postgres.user | quote }}
   POSTGRES_DB: {{ .Values.postgres.database | quote }}
   DB_HOST: postgres
+  REDIS_URL: redis://redis:6379/0
   TZ: {{ .Values.timezone | quote }}

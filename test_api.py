@@ -6,6 +6,7 @@ from prometheus_client import REGISTRY
 
 import api
 from api import app, ladder_lp
+from api_cache import clear_api_cache
 from config import DB_URL
 
 # Llama a los endpoints sin levantar uvicorn ni abrir ningún puerto
@@ -59,6 +60,13 @@ def test_metrics_count_requests_by_route_template(full_match):
     client.get("/matches/EUW1_4")
 
     assert requests_total("/matches/{match_id}", "200") == before + 1
+
+
+def test_metrics_start_refresh_results_at_zero():
+    labels = {"method": "POST", "route": "/refresh", "status": "429"}
+
+    # Existe antes de la primera petición, con 0 o con lo que hayan sumado otros tests
+    assert REGISTRY.get_sample_value("http_requests_total", labels) is not None
 
 
 def test_metrics_group_unknown_urls_together():
@@ -466,3 +474,76 @@ def test_api_works_when_redis_is_down(seeded_db, monkeypatch):
 
     assert response.status_code == 200
     assert len(response.json()["matches"]) == 3
+
+
+def fake_kubernetes(monkeypatch, running):
+    """Sustituye las llamadas a Kubernetes y devuelve los Jobs que se crean."""
+    created = []
+    monkeypatch.setattr(api.refresh, "get_cronjob", lambda: {"metadata": {}})
+    monkeypatch.setattr(api.refresh, "collector_running", lambda cronjob: running)
+
+    def create_job(cronjob):
+        created.append(cronjob)
+        return {"metadata": {"name": "collector-refresh-abc12"}}
+
+    monkeypatch.setattr(api.refresh, "create_job", create_job)
+    return created
+
+
+@pytest.mark.with_cache
+def test_refresh_launches_the_collector_and_then_waits(monkeypatch):
+    created = fake_kubernetes(monkeypatch, running=False)
+
+    first = client.post("/refresh")
+    second = client.post("/refresh")
+
+    assert first.status_code == 202
+    assert first.json() == {"job": "collector-refresh-abc12"}
+    # La segunda llega dentro de la espera, así que no lanza otro
+    assert second.status_code == 429
+    assert int(second.headers["Retry-After"]) > 0
+    assert len(created) == 1
+
+
+@pytest.mark.with_cache
+def test_refresh_does_not_launch_while_the_collector_runs(monkeypatch):
+    created = fake_kubernetes(monkeypatch, running=True)
+
+    first = client.post("/refresh")
+    second = client.post("/refresh")
+
+    assert first.status_code == 409
+    assert created == []
+    # Sin nada lanzado no hay espera, así que la segunda vuelve a mirar y no da 429
+    assert second.status_code == 409
+
+
+@pytest.mark.with_cache
+def test_clear_api_cache_keeps_the_refresh_wait():
+    api.cache_set("matches:all", "[]")
+    api.cache.set(api.REFRESH_COOLDOWN_KEY, "1")
+
+    assert clear_api_cache() == 1
+
+    assert api.cache_get("matches:all") is None
+    # Si se borrara, cada ejecución del collector dejaría volver a pulsar al momento
+    assert api.cache.get(api.REFRESH_COOLDOWN_KEY) == "1"
+
+
+@pytest.mark.with_cache
+def test_refresh_status_reports_the_wait(monkeypatch):
+    fake_kubernetes(monkeypatch, running=False)
+
+    before = client.get("/refresh")
+    client.post("/refresh")
+    after = client.get("/refresh")
+
+    assert before.json() == {"running": False, "retry_after": 0}
+    assert after.json()["retry_after"] > 0
+
+
+def test_refresh_is_not_found_outside_kubernetes(monkeypatch):
+    monkeypatch.setattr(api, "REFRESH_ENABLED", False)
+
+    assert client.get("/refresh").status_code == 404
+    assert client.post("/refresh").status_code == 404

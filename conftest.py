@@ -11,6 +11,7 @@ os.environ["POSTGRES_USER"] = "test"
 os.environ["POSTGRES_PASSWORD"] = "test"
 os.environ["POSTGRES_DB"] = "test"
 os.environ["REDIS_URL"] = "redis://localhost:6380/0"
+os.environ["REFRESH_ENABLED"] = "true"
 
 # Tres partidas del invocador seguido, dos con Ahri (una victoria y una derrota)
 # y una con Lux. Cada una lleva un rival sin puuid que la API no debe contar nunca

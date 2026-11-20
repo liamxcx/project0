@@ -293,6 +293,38 @@ El `MATCH_COUNT` de `env` gana al del ConfigMap. El Job queda a nombre del
 CronJob, así que si se alarga, la ejecución de la hora siguiente espera a que
 acabe.
 
+## Permisos de la API
+
+La API lanza el collector cuando se pide una actualización desde la web, y
+para eso crea un Job a partir del CronJob. Usa su propia ServiceAccount,
+`api`, con un Role que solo le deja leer el CronJob `collector` y crear y
+listar Jobs. El resto de pods usan la `default`, que no tiene permisos.
+
+Quien puede crear Jobs puede crear uno con cualquier imagen, y su pod puede
+montar cualquier Secret del namespace, como la clave de Riot. Por eso la
+ValidatingAdmissionPolicy `project0-collector-trigger` solo deja pasar los
+Jobs de `api` cuyo dueño es el CronJob `collector` y cuyo pod es idéntico al
+de su plantilla. Las ValidatingAdmissionPolicy vienen con Kubernetes desde la
+1.30, así que no hay que instalar nada.
+
+Se comprueba haciéndose pasar por la ServiceAccount, con `--dry-run=server`
+para que no se guarde nada. La copia del collector se crea, y la misma copia
+con otra imagen se rechaza:
+
+```bash
+kubectl create job prueba-ok --from=cronjob/collector -n project0 \
+  --as=system:serviceaccount:project0:api --dry-run=server
+
+kubectl create job prueba-cambiada --from=cronjob/collector -n project0 --dry-run=client -o yaml \
+  | sed "s#image: .*#image: busybox#" \
+  | kubectl create -f - -n project0 --as=system:serviceaccount:project0:api --dry-run=server
+```
+
+Con `refresh.enabled: false` en los values no se crean los permisos ni la
+política, la API usa la `default` y la página no enseña el botón. Qué hace la
+API con estos permisos está en
+[api.md](api.md#actualizar-desde-la-web).
+
 ## Frontend
 
 En el clúster la página va dentro de su propia imagen, construida con

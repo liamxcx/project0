@@ -5,13 +5,23 @@ import time
 
 import psycopg
 import redis
+import requests
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.gzip import GZipMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from psycopg.rows import dict_row
 
-from config import APP_VERSION, CACHE_TTL_SECONDS, DB_URL, REDIS_URL
+import refresh
+from api_cache import PREFIX as CACHE_PREFIX
+from config import (
+    APP_VERSION,
+    CACHE_TTL_SECONDS,
+    DB_URL,
+    REDIS_URL,
+    REFRESH_COOLDOWN_SECONDS,
+    REFRESH_ENABLED,
+)
 
 # El formato lo configura config.py, que se importa antes
 log = logging.getLogger("api")
@@ -31,6 +41,11 @@ REQUEST_DURATION = Histogram(
     "Tiempo de respuesta de la API",
     ["method", "route"],
 )
+
+# Los resultados del botón de actualizar empiezan en 0. Si no, cada uno aparece
+# la primera vez que ocurre, ya con 1, y Prometheus no cuenta esa primera vez.
+for status in ("202", "409", "429", "502", "503"):
+    REQUESTS.labels("POST", "/refresh", status)
 
 
 @app.middleware("http")
@@ -61,7 +76,7 @@ cache = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=1)
 def cache_get(key):
     """Devuelve lo cacheado, o None si no está o si Redis falla."""
     try:
-        return cache.get(f"{APP_VERSION}:{key}")
+        return cache.get(f"{CACHE_PREFIX}{APP_VERSION}:{key}")
     except redis.RedisError as error:
         log.warning("No se ha podido leer %s de Redis: %s", key, error)
         return None
@@ -70,7 +85,7 @@ def cache_get(key):
 def cache_set(key, value):
     """Guarda en caché. Si Redis falla, sigue adelante sin guardar."""
     try:
-        cache.set(f"{APP_VERSION}:{key}", value, ex=CACHE_TTL_SECONDS)
+        cache.set(f"{CACHE_PREFIX}{APP_VERSION}:{key}", value, ex=CACHE_TTL_SECONDS)
     except redis.RedisError as error:
         log.warning("No se ha podido guardar %s en Redis: %s", key, error)
 
@@ -590,3 +605,89 @@ def champions(patch: str | None = None):
 
     cache_set(key, json.dumps(rows))
     return rows
+
+
+# Sin la versión delante, al revés que la caché, para que la espera siga
+# valiendo aunque se despliegue una versión nueva en medio
+REFRESH_COOLDOWN_KEY = "refresh:cooldown"
+
+
+def require_refresh_enabled():
+    # Un 404 y no un 500, porque no es un fallo. Así tampoco cuenta en la alerta
+    # de errores de la API, y la web simplemente no enseña el botón.
+    if not REFRESH_ENABLED:
+        raise HTTPException(
+            status_code=404, detail="Actualizar desde la web está desactivado"
+        )
+
+
+def release_refresh_cooldown():
+    """Quita la espera cuando no se ha lanzado nada, para que no cuente."""
+    try:
+        cache.delete(REFRESH_COOLDOWN_KEY)
+    except redis.RedisError as error:
+        log.warning("No se ha podido quitar la espera de Redis: %s", error)
+
+
+# La web la consulta para saber si enseñar el botón activo, en marcha o con los
+# minutos que faltan. Cada llamada pregunta a Kubernetes, porque no se guarda nada.
+@app.get("/refresh")
+def refresh_status():
+    require_refresh_enabled()
+    try:
+        wait = cache.ttl(REFRESH_COOLDOWN_KEY)
+    except redis.RedisError as error:
+        log.warning("No se ha podido comprobar la espera en Redis: %s", error)
+        raise HTTPException(status_code=503, detail="Redis no disponible")
+
+    try:
+        running = refresh.collector_running(refresh.get_cronjob())
+    except requests.RequestException as error:
+        log.error("No se ha podido consultar el collector: %s", error)
+        raise HTTPException(
+            status_code=502, detail="No se ha podido consultar el collector"
+        )
+
+    # Sin la clave, Redis devuelve -2, que aquí significa que no hay que esperar
+    return {"running": running, "retry_after": max(wait, 0)}
+
+
+@app.post("/refresh", status_code=202)
+def refresh_now():
+    require_refresh_enabled()
+    # Con nx, solo la primera de dos peticiones simultáneas consigue la clave, así
+    # que no pueden lanzar un collector cada una
+    try:
+        acquired = cache.set(
+            REFRESH_COOLDOWN_KEY, "1", nx=True, ex=REFRESH_COOLDOWN_SECONDS
+        )
+        wait = None if acquired else cache.ttl(REFRESH_COOLDOWN_KEY)
+    except redis.RedisError as error:
+        # Sin Redis no se puede controlar la espera, y sin ella se gastaría la cuota
+        log.warning("No se ha podido comprobar la espera en Redis: %s", error)
+        raise HTTPException(status_code=503, detail="Redis no disponible")
+
+    if not acquired:
+        raise HTTPException(
+            status_code=429,
+            detail="Hay que esperar antes de volver a actualizar",
+            headers={"Retry-After": str(max(wait, 1))},
+        )
+
+    try:
+        cronjob = refresh.get_cronjob()
+        if refresh.collector_running(cronjob):
+            release_refresh_cooldown()
+            raise HTTPException(
+                status_code=409, detail="Ya hay una actualización en marcha"
+            )
+        job = refresh.create_job(cronjob)
+    except requests.RequestException as error:
+        release_refresh_cooldown()
+        log.error("No se ha podido lanzar el collector: %s", error)
+        raise HTTPException(
+            status_code=502, detail="No se ha podido lanzar el collector"
+        )
+
+    log.info("Lanzado el collector desde la web: %s", job["metadata"]["name"])
+    return {"job": job["metadata"]["name"]}

@@ -96,6 +96,10 @@ El collector se ejecuta una vez al hacer `up`, y después a mano:
 docker compose run --rm collector
 ```
 
+La página no enseña el botón de actualizar, porque funciona creando un Job
+de Kubernetes y en Compose no hay ninguno. Para actualizar se usa este
+comando.
+
 Qué comando usar según lo que hayas cambiado:
 
 ```bash
@@ -103,8 +107,8 @@ docker compose up            # docker-compose.yml, .env o una migración nueva
 docker compose up --build    # el código o requirements.txt
 ```
 
-El `--build` hace falta porque `collector.py`, `api.py`, `config.py` y
-`requirements.txt` se copian dentro de la imagen. El `.env` y las
+El `--build` hace falta porque los ficheros `.py` y `requirements.txt` se
+copian dentro de la imagen. El `.env` y las
 migraciones se leen al arrancar, así que esos no lo necesitan.
 
 Va sin nombrar servicio. `collector` y `api` comparten el `Dockerfile`, pero
