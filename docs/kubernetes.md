@@ -319,6 +319,11 @@ kubectl create job prueba-cambiada --from=cronjob/collector -n project0 --dry-ru
   | kubectl create -f - -n project0 --as=system:serviceaccount:project0:api --dry-run=server
 ```
 
+Con `refresh.enabled: false` en los values no se crean los permisos ni la
+política, la API usa la `default` y la página no enseña el botón. Qué hace la
+API con estos permisos está en
+[api.md](api.md#actualizar-desde-la-web).
+
 ## Frontend
 
 En el clúster la página va dentro de su propia imagen, construida con

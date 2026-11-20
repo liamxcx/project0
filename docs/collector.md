@@ -2,8 +2,13 @@
 
 `collector.py` arranca, pide a Riot lo que le falta, lo guarda en PostgreSQL
 y termina. En el clúster lo lanza un CronJob cada hora (ver
-[kubernetes.md](kubernetes.md#collector)). En Compose se ejecuta una vez al
-hacer `up`, y después a mano con `docker compose run --rm collector`.
+[kubernetes.md](kubernetes.md#collector)), y también el botón de actualizar
+de la página. En Compose se ejecuta una vez al hacer `up`, y después a mano
+con `docker compose run --rm collector`.
+
+Al terminar borra la caché de la API, para que la página enseñe ya lo nuevo
+(ver [api.md](api.md#caché-en-redis)). Lo hace aunque no haya partidas
+nuevas, porque la clasificatoria se guarda en cada ejecución.
 
 ## Qué pide a Riot
 

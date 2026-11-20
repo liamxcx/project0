@@ -69,7 +69,23 @@ Al abrir un perfil, la página pide a la API:
 /champions           el héroe, "Más jugados" y el filtro de campeón
 /matches             el historial, de 10 en 10
 /matches/{match_id}  el detalle, al abrir una partida
+/refresh             el botón de actualizar
 ```
+
+## El botón de actualizar
+
+Va en la barra de arriba del perfil, que se queda fija al bajar, así que se
+puede pulsar desde cualquier parte de la página. Al pulsarlo hace
+`POST /api/refresh` y, mientras el collector está en marcha, pregunta
+`GET /api/refresh` cada 3 segundos. Solo pregunta entonces, porque cada
+consulta son dos peticiones a la API de Kubernetes. Cuando acaba, vuelve a
+pintar el perfil, que pide los datos otra vez, y como el collector ha borrado
+la caché de la API, llegan los nuevos sin recargar la página. Después enseña
+los minutos que faltan para poder volver a pulsar.
+
+Si el estado no se puede consultar, como en Compose, el botón no sale. Una
+página abierta no se entera de las ejecuciones de cada hora, solo de las que
+lanza ella o de la que esté en marcha al abrirla.
 
 ## Caché de la página
 

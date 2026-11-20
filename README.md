@@ -21,14 +21,17 @@ en Kubernetes con Helm y monitorización con Prometheus y Grafana.
 - **Página** — JavaScript sin librerías, servido por nginx. Perfil con el
   rango, el resumen de la temporada, los campeones más jugados, el historial
   con filtros y el detalle de cada partida, con una nota propia para cada
-  jugador y los sellos MVP y BASTION.
+  jugador y los sellos MVP y BASTION. Un botón lanza el collector en el
+  momento, sin esperar a su hora.
 - **Tests y CI** — pytest contra un PostgreSQL y un Redis propios. GitHub
   Actions pasa Ruff, los tests y `helm lint`, construye las tres imágenes y,
   en `main`, las sube a GitHub Container Registry.
 - **Kubernetes** — todo corre en un clúster local con kind, instalado con un
   chart de Helm propio. Las migraciones van en un hook, PostgreSQL en un
   StatefulSet con un disco que se conserva, el collector en un CronJob y la
-  entrada por Traefik con Gateway API.
+  entrada por Traefik con Gateway API. Para el botón de actualizar, la API
+  crea Jobs con una ServiceAccount de permisos mínimos, y una política de
+  admisión solo le deja crear copias del collector.
 - **Monitorización** — Prometheus lee las métricas del clúster y las de la
   API, que cuenta sus peticiones y cuánto tarda en cada ruta. Grafana tiene
   un dashboard de la API, y hay alertas para cuando el collector deja de
@@ -139,8 +142,10 @@ Alertmanager en `http://grafana.localhost`, `http://prometheus.localhost` y
 ```
 collector.py              baja las partidas de Riot y las guarda
 api.py                    sirve lo guardado por HTTP
+api_cache.py              la caché de la API, que también vacía el collector
+refresh.py                lanza el collector desde la API, con la API de Kubernetes
 config.py                 la configuración común
-test_api.py, conftest.py  los tests
+test_*.py, conftest.py    los tests
 migrations/               el esquema, versionado con Flyway
 frontend/                 la página y su configuración de nginx
 charts/project0/          el chart de Helm de la aplicación, con el dashboard de Grafana

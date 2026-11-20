@@ -2,8 +2,9 @@
 
 ## Tests
 
-Los tests están en `test_api.py` y usan su propia base de datos y su propio
-Redis, que se levantan aparte con `docker-compose.test.yml`:
+Los tests están en `test_api.py` y `test_refresh.py`. Los de `test_api.py`
+usan su propia base de datos y su propio Redis, que se levantan aparte con
+`docker-compose.test.yml`:
 
 ```bash
 docker compose -f docker-compose.test.yml up -d --wait db-test redis-test
@@ -63,7 +64,7 @@ podría recibir la respuesta que dejó cacheada el anterior.
 
 ### Qué cubren y qué no
 
-Son 32 tests, y todos los endpoints tienen al menos uno. `/ready` se prueba
+Son 41 tests, y todos los endpoints tienen al menos uno. `/ready` se prueba
 con la base de test, que debe dar 200, y con la conexión apuntada a un puerto
 donde no escucha nadie, que debe dar 503. Entre los datos hay rivales sin
 `puuid`, uno de ellos con un campeón que también lleva el invocador seguido,
@@ -76,12 +77,22 @@ partidas de la base y vuelve a llamar, y la segunda respuesta tiene que
 salir de la caché. El segundo apunta el cliente de Redis a un puerto donde no
 escucha nadie y comprueba que `/matches` responde igual desde la base.
 
-Tres tests comprueban las métricas. El primero mira que `/metrics` responda
-en el formato de texto de Prometheus. Los otros dos miran que el contador
-sume en la plantilla de la ruta (`/matches/{match_id}`) y que las URL que no
-existen vayan juntas en `unmatched`. Comparan con el valor de antes de la
+Cuatro tests comprueban las métricas. El primero mira que `/metrics` responda
+en el formato de texto de Prometheus. Dos miran que el contador sume en la
+plantilla de la ruta (`/matches/{match_id}`) y que las URL que no existen
+vayan juntas en `unmatched`. El último mira que los resultados del botón de
+actualizar existan desde el arranque, con 0. Comparan con el valor de antes de la
 petición y no con un número fijo, porque el contador vive en el proceso y
 suma también lo de otros tests.
+
+Ocho prueban el botón de actualizar sin clúster, porque `monkeypatch`
+sustituye las llamadas a la API de Kubernetes por listas de Jobs inventadas.
+Los tres de `test_refresh.py` no necesitan ni base ni Redis. Comprueban que el
+Job que se crea es el que acepta la política de admisión y que se detecta si
+ya hay un collector en marcha. Los cinco de `test_api.py` comprueban la
+espera, el 409, el estado, que vaciar la caché no quita la espera y el 404
+fuera de Kubernetes. Que Kubernetes acepte el Job de verdad se prueba en el
+clúster (ver [kubernetes.md](kubernetes.md#permisos-de-la-api)).
 
 Estos tests no usan el `Dockerfile`. Que la imagen se construya lo
 comprueba el job `build` del CI. Que uvicorn arranque dentro del contenedor

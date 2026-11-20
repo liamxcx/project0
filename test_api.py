@@ -62,6 +62,13 @@ def test_metrics_count_requests_by_route_template(full_match):
     assert requests_total("/matches/{match_id}", "200") == before + 1
 
 
+def test_metrics_start_refresh_results_at_zero():
+    labels = {"method": "POST", "route": "/refresh", "status": "429"}
+
+    # Existe antes de la primera petición, con 0 o con lo que hayan sumado otros tests
+    assert REGISTRY.get_sample_value("http_requests_total", labels) is not None
+
+
 def test_metrics_group_unknown_urls_together():
     before = requests_total("unmatched", "404")
 

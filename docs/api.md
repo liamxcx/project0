@@ -24,6 +24,8 @@ menos las rutas internas (ver
 | `GET /rank` | El último snapshot de la clasificatoria solo/duo: liga, división, LP, balance de la temporada y corte del siguiente escalón. `null` si no hay ninguno | |
 | `GET /rank/history` | El último snapshot de cada día de los últimos 30, para la gráfica de LP. `ladder_lp` son los LP contados desde Hierro IV, para que subir de división no parezca una bajada | |
 | `GET /champions` | Estadísticas por campeón de la temporada o de un parche, del más jugado al menos. `kda_ratio` sale de las sumas y no de las medias redondeadas, y es `null` si no hay ninguna muerte | `patch` |
+| `GET /refresh` | Si hay un collector en marcha y cuántos segundos faltan para poder lanzar otro, como `{"running": false, "retry_after": 0}` | |
+| `POST /refresh` | Lanza el collector. 202 con el nombre del Job, 409 si ya hay uno en marcha y 429 si no ha pasado la espera (ver [Actualizar desde la web](#actualizar-desde-la-web)) | |
 
 Los parámetros son opcionales y se pueden combinar, por ejemplo
 `/matches?patch=26.17&champion=Ahri&offset=10`:
@@ -81,10 +83,16 @@ GET /champions            →  champions:<parche o season>
 también se guardan. Una partida que no existe queda en Redis como `null`, y
 la API responde 404 sin volver a consultar PostgreSQL.
 
-Cada clave lleva delante la versión de la API, que es el tag de su imagen,
-como `913b445:match:EUW1_…`, y `dev:` en Compose. En un rolling update conviven
-pods de las dos versiones, y así ninguno lee lo que guardó el otro con otro
-formato. Las claves de la versión vieja caducan solas con el TTL.
+Cada clave lleva delante `cache:` y la versión de la API, que es el tag de su
+imagen, como `cache:913b445:match:EUW1_…`, y `cache:dev:` en Compose. En un
+rolling update conviven pods de las dos versiones, y así ninguno lee lo que
+guardó el otro con otro formato. Las claves de la versión vieja caducan solas
+con el TTL.
+
+Al terminar, el collector borra todas las claves que empiezan por `cache:`
+(`api_cache.py`), así que la página ve los datos nuevos al momento y no
+cuando caduca el TTL. La espera del botón de actualizar va en otra clave,
+`refresh:cooldown`, y por eso no se borra.
 
 Redis es opcional. Las llamadas a la caché van envueltas en `cache_get` y
 `cache_set`, que capturan cualquier error y lo tratan como "no hay nada
@@ -93,6 +101,28 @@ logs. El cliente lleva además `socket_timeout=1`, para que un Redis que
 acepta la conexión pero no contesta no deje la petición esperando. Un test
 comprueba que la API responde con Redis caído (ver
 [tests-y-ci.md](tests-y-ci.md)).
+
+## Actualizar desde la web
+
+`POST /refresh` lanza el collector sin esperar a su hora. La API crea un Job
+a partir del CronJob `collector`, igual que `kubectl create job --from`, y
+habla con la API de Kubernetes usando `requests` (`refresh.py`). No usa la
+librería oficial de Kubernetes, que añadía unos 90 MB a la imagen y, al pasar
+el CronJob por sus modelos, podía perder campos y hacer que la política de
+admisión rechazara el Job. Los permisos y la política están en
+[kubernetes.md](kubernetes.md#permisos-de-la-api).
+
+Entre dos actualizaciones hay que esperar 5 minutos
+(`REFRESH_COOLDOWN_SECONDS`), porque una ejecución con partidas nuevas gasta
+buena parte de la cuota de Riot. La espera se guarda en Redis con `SET NX`,
+así que dos peticiones a la vez no pueden lanzar un collector cada una. Si al
+final no se lanza nada, porque ya hay uno en marcha o porque Kubernetes
+falla, la espera se quita. Sin Redis responde 503, porque sin la espera no
+hay forma de proteger la cuota.
+
+Solo funciona en Kubernetes. Fuera del clúster `REFRESH_ENABLED` no está
+puesta, y los dos endpoints responden 404, que no cuenta como error en las
+alertas.
 
 ## ETag y gzip
 

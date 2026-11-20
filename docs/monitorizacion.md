@@ -132,6 +132,12 @@ etiqueta crea una serie nueva en Prometheus, y con la URL habría una por
 partida. Por lo mismo, las URL que no existen suman todas en `unmatched`, y
 nadie puede crear series nuevas pidiendo URL inventadas.
 
+Una serie aparece la primera vez que se usa, ya con valor 1, y `increase()` no
+cuenta ese primer 1, porque no tiene un valor anterior con el que comparar.
+Con mucho tráfico no se nota, pero el botón de actualizar se pulsa pocas
+veces, y además cada despliegue empieza con pods nuevos. Por eso la API crea
+al arrancar, con 0, las series de los resultados de `POST /refresh`.
+
 El histograma reparte cada tiempo en tramos, de 5 ms a 10 s, y con ellos
 Prometheus estima los percentiles. El p95 de una ruta es el tiempo que no
 supera el 95% de sus peticiones. Es una estimación dentro del tramo, y con
@@ -164,7 +170,10 @@ Sigue el método RED, el habitual para un servicio que recibe peticiones:
 - **Tiempo de respuesta** (duration), el p95 por ruta.
 
 Además lleva el tiempo desde la última ejecución correcta del collector, que
-se pone en rojo a partir de dos horas.
+se pone en rojo a partir de dos horas, y las veces que se ha pulsado el botón
+de actualizar en el rango elegido, según lo que respondió la API. Ese panel
+sale de `http_requests_total` y no de una métrica propia, porque el código de
+respuesta ya dice si se lanzó, si tocaba esperar o si falló.
 
 Los tres paneles de la API dejan fuera `/health`, `/ready` y `/metrics`,
 porque son las sondas de Kubernetes y Prometheus, y taparían el tráfico de

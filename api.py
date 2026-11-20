@@ -42,6 +42,11 @@ REQUEST_DURATION = Histogram(
     ["method", "route"],
 )
 
+# Los resultados del botón de actualizar empiezan en 0. Si no, cada uno aparece
+# la primera vez que ocurre, ya con 1, y Prometheus no cuenta esa primera vez.
+for status in ("202", "409", "429", "502", "503"):
+    REQUESTS.labels("POST", "/refresh", status)
+
 
 @app.middleware("http")
 async def record_metrics(request: Request, call_next):
