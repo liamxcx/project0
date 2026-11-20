@@ -66,6 +66,9 @@ alertmanager:
   config:
     route:
       receiver: discord
+      # Cada alerta va en su propio grupo, así que cada mensaje habla de una sola y
+      # nunca se mezclan disparadas y resueltas. Sin esto se agrupan por namespace.
+      group_by: ["..."]
       # Watchdog está siempre disparada a propósito, e InfoInhibitor solo sirve para
       # callar las de gravedad info. Las dos siguen sin avisar, como en el chart.
       routes:

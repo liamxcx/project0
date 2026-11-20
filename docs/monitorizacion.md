@@ -208,13 +208,16 @@ estaba.
 
 En Prometheus, Alerts enseña todas las reglas y su estado. El buscador
 filtra por el nombre de la regla y sus etiquetas, no por el del grupo.
-Alertmanager enseña solo las disparadas, agrupadas por namespace, y desde
-ahí se crean los silencios. La alerta `Watchdog` está siempre disparada a
-propósito, para comprobar que la cadena funciona.
+Alertmanager enseña solo las disparadas, y desde ahí se crean los
+silencios. La alerta `Watchdog` está siempre disparada a propósito, para
+comprobar que la cadena funciona.
 
 Alertmanager manda las alertas a un canal de Discord, con un mensaje cuando
-pasan a `firing` y otro cuando se resuelven. Las de un mismo namespace van
-juntas en un mensaje, y si siguen disparadas se repiten cada 12 horas.
+pasan a `firing` y otro cuando se resuelven. Cada alerta va en su propio
+grupo (`group_by: ["..."]`), así que cada mensaje habla de una sola y nunca
+se mezclan disparadas y resueltas. Si sigue disparada, se repite cada 12
+horas. Con la agrupación por namespace que trae el chart, un mensaje
+enseñaría el grupo entero, con las disparadas y las resueltas juntas.
 `Watchdog` e `InfoInhibitor` van al destino `null`, que no manda nada.
 
 La URL del webhook es secreta, así que va en el Secret `alertmanager-discord`,
