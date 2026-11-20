@@ -1,0 +1,19 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ .Release.Namespace }}-collector-trigger
+  labels:
+    app.kubernetes.io/name: api
+    {{- include "project0.labels" . | nindent 4 }}
+spec:
+  policyName: {{ .Release.Namespace }}-collector-trigger
+  validationActions: [Deny]
+  paramRef:
+    name: collector
+    namespace: {{ .Release.Namespace }}
+    # Sin el CronJob no hay con qué comparar, así que se rechaza.
+    parameterNotFoundAction: Deny
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ .Release.Namespace }}
