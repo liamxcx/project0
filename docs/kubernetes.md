@@ -172,6 +172,11 @@ listos.
 
 El CronJob usa la imagen nueva desde su siguiente ejecución.
 
+Si en un upgrade anterior se pasó `--set image.tag=...` para probar una rama,
+Helm lo guarda en la release y lo vuelve a usar en los siguientes, por encima
+de `appVersion`. `helm get values project0 -n project0` enseña lo que quedó
+guardado, y `--reset-values` en el upgrade lo borra.
+
 Un cambio en `values.yaml` o en un template se despliega igual.
 
 El commit se hace después de comprobar que funciona, para que lo que hay en
