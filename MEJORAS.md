@@ -68,8 +68,10 @@ hace, se borra de aquí y pasa a la documentación.
 - Desplegarlo en público, en un servidor en la nube con su dominio. Hoy solo
   funciona en local, así que nadie puede abrirlo desde fuera de casa. Haría
   falta HTTPS con un certificado de verdad, que el CI despliegue solo y
-  revisar qué queda expuesto, como `/docs`. Riot pide además una clave de
-  producción y su aviso legal en un sitio visible de la propia página.
+  revisar qué queda expuesto, como `/docs` o `POST /refresh`, que no pide
+  autenticación y hoy solo lo frena la espera de 5 minutos. Riot pide además
+  una clave de producción y su aviso legal en un sitio visible de la propia
+  página.
 
 ## Observabilidad
 
@@ -120,6 +122,11 @@ hace, se borra de aquí y pasa a la documentación.
 - Pasar `refresh.py` a una librería ligera como `lightkube` si la API llega a
   necesitar mucho más de Kubernetes, como vigilar cambios o manejar más tipos
   de objeto. Para tres peticiones no compensa.
+- Que el botón de actualizar no vuelva a crear el selector de parche al
+  acabar. Hoy repinta el perfil entero, y cada vez el selector deja
+  registrados en `document` sus listeners de clic y de Escape, aunque el
+  viejo ya no esté en la página. No se nota, pero se acumulan mientras no se
+  recargue.
 - Un pool de conexiones en la API. Hoy cada petición abre su propia
   conexión a PostgreSQL y la cierra al terminar, con su conexión TCP y su
   autenticación cada vez. Con un usuario no se nota, pero con más tráfico sí.

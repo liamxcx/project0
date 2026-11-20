@@ -304,7 +304,8 @@ Quien puede crear Jobs puede crear uno con cualquier imagen, y su pod puede
 montar cualquier Secret del namespace, como la clave de Riot. Por eso la
 ValidatingAdmissionPolicy `project0-collector-trigger` solo deja pasar los
 Jobs de `api` cuyo dueño es el CronJob `collector` y cuyo pod es idéntico al
-de su plantilla.
+de su plantilla. Las ValidatingAdmissionPolicy vienen con Kubernetes desde la
+1.30, así que no hay que instalar nada.
 
 Se comprueba haciéndose pasar por la ServiceAccount, con `--dry-run=server`
 para que no se guarde nada. La copia del collector se crea, y la misma copia
