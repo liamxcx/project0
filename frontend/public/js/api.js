@@ -12,10 +12,10 @@ export class RequestError extends Error {
 
 // Pide un JSON a cualquier URL. fetch no falla con un 404 o un 500, solo
 // cuando no hay respuesta, así que el código se comprueba a mano.
-export async function fetchJson(url, timeoutMs = TIMEOUT_MS) {
+export async function fetchJson(url, timeoutMs = TIMEOUT_MS, method = "GET") {
   let response;
   try {
-    response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+    response = await fetch(url, { method, signal: AbortSignal.timeout(timeoutMs) });
   } catch (error) {
     if (error.name === "TimeoutError") {
       throw new RequestError(`Sin respuesta en ${timeoutMs / 1000} s: ${url}`);
@@ -43,4 +43,9 @@ export function getJson(path, params = {}) {
   }
   const queryString = query.toString();
   return fetchJson(queryString ? `/api${path}?${queryString}` : `/api${path}`);
+}
+
+// Pide a la API de project0 que haga algo, como lanzar el collector
+export function postJson(path) {
+  return fetchJson(`/api${path}`, TIMEOUT_MS, "POST");
 }
