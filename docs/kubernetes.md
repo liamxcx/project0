@@ -112,7 +112,9 @@ curl localhost:8001/ready
   tiempo, como el tag, las réplicas, los recursos, el horario del
   collector, la configuración de la API, el disco de PostgreSQL, y el
   Gateway del que cuelga la ruta y el nombre por el que se entra.
-- `templates/` — un template por objeto de la aplicación.
+- `templates/` — un template por objeto de la aplicación, en una carpeta por
+  componente. En `monitoring/` están los de Prometheus y Grafana, y fuera de
+  las carpetas lo que comparten todos, como el ConfigMap común y la ruta.
 - `templates/_helpers.tpl` — los labels comunes y la regla del tag, que
   usan varios templates.
 

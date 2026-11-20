@@ -186,7 +186,7 @@ se despliega con `helm upgrade`.
 
 ## Alertas
 
-Las propias de project0 están en `charts/project0/templates/prometheusrule.yaml`:
+Las propias de project0 están en `charts/project0/templates/monitoring/prometheusrule.yaml`:
 
 | Alerta | Cuándo salta | Gravedad |
 |---|---|---|

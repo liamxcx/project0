@@ -17,13 +17,13 @@ spec:
       # ConfigMap, así que el pod se recrea si cambian ellos y no si cambia un label.
       annotations:
         checksum/project0-config: {{ (include (print $.Template.BasePath "/project0-configmap.yaml") . | fromYaml).data | toYaml | sha256sum }}
-        checksum/api-config: {{ (include (print $.Template.BasePath "/api-configmap.yaml") . | fromYaml).data | toYaml | sha256sum }}
+        checksum/api-config: {{ (include (print $.Template.BasePath "/api/configmap.yaml") . | fromYaml).data | toYaml | sha256sum }}
       labels:
         app.kubernetes.io/name: api
     spec:
       {{- if .Values.refresh.enabled }}
       # Con permisos para lanzar el collector, que la default no tiene. Ver
-      # api-role.yaml y api-admission-policy.yaml.
+      # api/role.yaml y api/admission-policy.yaml.
       serviceAccountName: api
       {{- end }}
       # La imagen es privada en GHCR. El Secret se crea a mano porque lleva el
