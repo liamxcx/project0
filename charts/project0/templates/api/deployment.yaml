@@ -26,10 +26,6 @@ spec:
       # api/role.yaml y api/admission-policy.yaml.
       serviceAccountName: api
       {{- end }}
-      # La imagen es privada en GHCR. El Secret se crea a mano porque lleva el
-      # token, así que no está en el repo.
-      imagePullSecrets:
-        - name: ghcr-pull
       containers:
         - name: api
           image: ghcr.io/liamxcx/project0:{{ include "project0.imageTag" . }}

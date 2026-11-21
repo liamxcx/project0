@@ -27,8 +27,6 @@ spec:
       # Never deja el pod fallido en su sitio, con sus logs, en lugar de
       # reiniciar el contenedor dentro del mismo pod.
       restartPolicy: Never
-      imagePullSecrets:
-        - name: ghcr-pull
       containers:
         - name: flyway
           image: ghcr.io/liamxcx/project0-migrations:{{ include "project0.imageTag" . }}

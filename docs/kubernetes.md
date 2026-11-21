@@ -42,19 +42,8 @@ helm install traefik traefik/traefik --version 42.1.3 \
 kubectl apply -f platform/
 ```
 
-**4. Los Secrets**, que no están en el repo. El token de GHCR y la URL del
-webhook de Discord se piden con `read -rs`, que espera a que se pegue el
-valor y no lo enseña en pantalla ni lo deja en el historial.
-
-El token de GHCR es un token classic de GitHub con solo el permiso
-`read:packages`:
-
-```bash
-read -rs GHCR_TOKEN
-kubectl create secret docker-registry ghcr-pull -n project0 \
-  --docker-server=ghcr.io --docker-username=<usuario de GitHub> \
-  --docker-password="$GHCR_TOKEN"
-```
+**4. Los Secrets**, que no están en el repo. Las imágenes de GHCR son
+públicas, así que el clúster las descarga sin credenciales.
 
 La contraseña de PostgreSQL y lo de Riot salen del `.env`. El Riot ID no es
 secreto, pero va en el Secret de Riot para que no esté en el repo:
@@ -78,7 +67,8 @@ kubectl create secret generic grafana-admin -n monitoring \
   --from-literal=admin-password="$(openssl rand -hex 24)"
 ```
 
-La URL del webhook de Discord tampoco está en el `.env`:
+La URL del webhook de Discord tampoco está en el `.env`. `read -rs` la pide
+sin enseñarla en pantalla ni dejarla en el historial:
 
 ```bash
 read -rs DISCORD_WEBHOOK_URL

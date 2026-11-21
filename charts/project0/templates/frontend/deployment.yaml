@@ -16,8 +16,6 @@ spec:
       labels:
         app.kubernetes.io/name: frontend
     spec:
-      imagePullSecrets:
-        - name: ghcr-pull
       containers:
         - name: frontend
           image: ghcr.io/liamxcx/project0-frontend:{{ include "project0.imageTag" . }}

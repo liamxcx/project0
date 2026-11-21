@@ -26,8 +26,6 @@ spec:
             app.kubernetes.io/name: collector
         spec:
           restartPolicy: Never
-          imagePullSecrets:
-            - name: ghcr-pull
           containers:
             - name: collector
               image: ghcr.io/liamxcx/project0:{{ include "project0.imageTag" . }}

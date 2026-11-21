@@ -5,9 +5,6 @@ hace, se borra de aquí y pasa a la documentación.
 
 ## Con fecha
 
-- El token de GHCR con el que el clúster baja las imágenes caduca a mediados
-  de enero de 2027. Si la imagen sigue siendo privada, antes hay que crear uno
-  nuevo y volver a crear el Secret `ghcr-pull`.
 - En enero de 2027, con la temporada nueva, el resumen de la temporada puede
   salir de las partidas guardadas en vez de los totales de Riot de `/rank`.
   Hasta entonces, el héroe y el resto del perfil solo cuentan las partidas que
