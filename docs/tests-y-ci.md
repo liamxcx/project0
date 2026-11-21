@@ -178,3 +178,16 @@ Todos los jobs usan `ubuntu-latest`, que GitHub mueve a la siguiente
 versión LTS cuando sale. Se deja así porque del sistema solo se usa Docker.
 Python y Helm los instalan `setup-python` y `setup-helm` en la versión
 indicada, y lo demás va en contenedores con la imagen fijada.
+
+### Las Actions
+
+Cada Action va fijada por el SHA de un commit, así que no se actualiza sola.
+Para subirla de versión se busca el commit de la versión nueva en su repo y
+se cambian el SHA y el comentario de la línea:
+
+```bash
+git ls-remote --tags https://github.com/actions/checkout.git
+```
+
+Si la versión sale en dos líneas, el commit es el de la que acaba en `^{}`.
+La otra es el objeto del tag, no el commit.
