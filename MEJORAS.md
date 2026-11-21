@@ -61,6 +61,9 @@ hace, se borra de aquí y pasa a la documentación.
   quitan en los objetos que crea Helm, porque no llevan la anotación
   `last-applied-configuration` de `kubectl apply`. `helm diff` compara con la
   revisión anterior de la release.
+- Pasar gitleaks en el CI, para que un secreto subido por error pare el
+  pipeline en el mismo push. Hoy el historial se revisó una vez a mano antes
+  de hacer público el repo.
 - Arrancar en el CI la imagen que se acaba de construir y comprobar que la
   aplicación carga, por ejemplo con `python -c "import api"`. Hoy el CI solo
   comprueba que la imagen se construye, y así se coló una sin `refresh.py`,

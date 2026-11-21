@@ -1,13 +1,15 @@
 # project0
 
-Herramienta personal de estadísticas de League of Legends. Guarda las
+![CI](https://github.com/liamxcx/project0/actions/workflows/ci.yml/badge.svg?branch=main)
+
+Herramienta de estadísticas de League of Legends. Guarda las
 partidas de ranked solo/duo de los invocadores seguidos con la API de Riot y
 las enseña en una página con el rango, la evolución de LP, los campeones más
 jugados y el detalle de cada partida.
 
-Es un proyecto para aprender DevOps con una aplicación real, de punta a
-punta: contenedores con Docker y Compose, CI con GitHub Actions, despliegue
-en Kubernetes con Helm y monitorización con Prometheus y Grafana.
+Es un proyecto personal en el que llevo una aplicación real por todo el
+ciclo de DevOps: contenedores con Docker y Compose, CI con GitHub Actions,
+despliegue en Kubernetes con Helm y monitorización con Prometheus y Grafana.
 
 ![Perfil de un invocador en project0](docs/img/perfil.jpg)
 
@@ -25,7 +27,8 @@ en Kubernetes con Helm y monitorización con Prometheus y Grafana.
   momento, sin esperar a su hora.
 - **Tests y CI** — pytest contra un PostgreSQL y un Redis propios. GitHub
   Actions pasa Ruff, los tests y `helm lint`, construye las tres imágenes y,
-  en `main`, las sube a GitHub Container Registry.
+  en `main`, las sube a GitHub Container Registry. Las Actions van fijadas
+  por el SHA de su commit.
 - **Kubernetes** — todo corre en un clúster local con kind, instalado con un
   chart de Helm propio. Las migraciones van en un hook, PostgreSQL en un
   StatefulSet con un disco que se conserva, el collector en un CronJob y la
@@ -49,15 +52,20 @@ habilidades del jugador elegido.
 
 ## Arquitectura
 
-En el clúster, un CronJob lanza el collector cada hora. Pide a Riot las
-partidas nuevas y las guarda en PostgreSQL:
+En el clúster, el collector es un Job que pide a Riot las partidas nuevas y
+las guarda en PostgreSQL. Lo lanza un CronJob cada hora, o la API cuando
+alguien pulsa el botón de actualizar:
 
 ```
-CronJob collector  ──cada hora──▶  pod collector  ──▶  API de Riot
-                                        │              partidas, timeline
-                                        │              y rangos
-                                        └──▶  PostgreSQL
+CronJob collector  ──cada hora──┐
+                                ├──▶  Job collector  ──▶  API de Riot
+botón de la web  ──▶  API  ─────┘          │              partidas, timeline
+                                           │              y rangos
+                                           └──▶  PostgreSQL
 ```
+
+Cómo se limita lo que puede crear la API está en
+[docs/kubernetes.md](docs/kubernetes.md#permisos-de-la-api).
 
 Cuando alguien abre la página, todo entra por Traefik. Manda `/api/` a la
 API, quitándole el prefijo, y lo demás al frontend:
@@ -166,10 +174,6 @@ MEJORAS.md                lo que falta y la deuda técnica
 
 El código, las tablas y las rutas están en inglés. Los comentarios, los
 mensajes de consola y la documentación, en español.
-
-## Qué falta
-
-Lo que falta y la deuda técnica están en [MEJORAS.md](MEJORAS.md).
 
 ## Aviso legal
 
