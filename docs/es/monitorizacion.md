@@ -1,5 +1,7 @@
 # Monitorización
 
+[English](../en/monitoring.md) | Español
+
 Prometheus recoge las métricas del clúster y de la API, Grafana las dibuja y
 Alertmanager recibe las alertas. Se instalan juntos con el chart
 `kube-prometheus-stack` de prometheus-community, como la release

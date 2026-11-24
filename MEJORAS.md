@@ -156,3 +156,6 @@ hace, se borra de aquí y pasa a la documentación.
   los 30 s de gracia y muere con SIGKILL, con código 137, que se confunde
   con un `OOMKilled`. No se pierden datos, porque la partida a medias se
   deshace. Se arregla saliendo del programa al recibir `signal.SIGTERM`.
+- `fetch()`, en `collector.py`, también espera después del último intento
+  fallido. Con un fallo de red o un 5xx en los tres intentos, espera 4
+  segundos antes de rendirse sin que sirva de nada.

@@ -1,5 +1,7 @@
 # API
 
+[English](../en/api.md) | Español
+
 Servicio `api`, con FastAPI y uvicorn. Sirve lo que ha guardado el collector
 y no llama nunca a Riot, así que consultar las estadísticas no gasta
 peticiones.

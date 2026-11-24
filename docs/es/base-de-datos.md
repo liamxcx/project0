@@ -1,5 +1,7 @@
 # Base de datos
 
+[English](../en/database.md) | Español
+
 PostgreSQL 16, con el esquema versionado con Flyway. En Compose los datos
 viven en el volumen `datos_db`, que sobrevive a `docker compose down`. En el
 clúster, en el disco de `postgres-0` (ver
@@ -24,9 +26,9 @@ Seis tablas y una vista:
 - `participant_scores` — la vista con la nota y el sello de cada jugador
   (ver [La nota y los sellos](#la-nota-y-los-sellos))
 
-Todos esos datos, salvo el rango, vienen en la misma respuesta de MATCH-V5,
-así que guardarlos no cuesta ninguna petición extra a Riot. Cómo los pide el
-collector está en [collector.md](collector.md).
+Los datos de `matches` y `participants`, salvo el rango, vienen en la misma
+respuesta de MATCH-V5, así que guardarlos no cuesta ninguna petición extra a
+Riot. Cómo los pide el collector está en [collector.md](collector.md).
 
 El CS va en dos columnas, `minions_killed` y `neutral_minions_killed`,
 porque Riot lo da así. Sumarlas es cosa de la consulta:
@@ -105,7 +107,7 @@ Reglas de los sellos:
 - Sin nota no hay sello. Las partidas guardadas antes de tener a los diez
   jugadores o el daño tienen esas columnas a `NULL`, y su nota también.
 - La nota se redondea a un decimal al final, después de elegir el sello.
-  Redondeando antes, un 7,46 y un 7,44 empatarían en 7,4.
+  Redondeando antes, un 7,44 y un 7,36 empatarían en 7,4.
 
 `/matches` devuelve el sello del invocador en cada partida, y
 `/matches/{match_id}` la nota y el sello de los diez jugadores.

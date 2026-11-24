@@ -1,5 +1,7 @@
 # Frontend
 
+[English](../en/frontend.md) | Español
+
 Una página en `frontend/public/`, servida por nginx, que pide los datos a la
 API y los pinta. Todo lo que hay en esa carpeta es público, y lo que no está
 en ella no se sirve. En Compose se abre en `http://localhost:8080`, y en el

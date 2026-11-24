@@ -1,5 +1,7 @@
 # Desarrollo con Compose
 
+[English](../en/development.md) | Español
+
 Compose es el entorno de desarrollo. Levanta en la máquina los servicios de
 la aplicación, con la página y la configuración de nginx montadas
 desde el disco, así que un cambio en la página se ve recargando el navegador.

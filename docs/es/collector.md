@@ -1,5 +1,7 @@
 # Collector
 
+[English](../en/collector.md) | Español
+
 `collector.py` arranca, pide a Riot lo que le falta, lo guarda en PostgreSQL
 y termina. En el clúster lo lanza un CronJob cada hora (ver
 [kubernetes.md](kubernetes.md#collector)), y también el botón de actualizar

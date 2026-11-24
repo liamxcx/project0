@@ -1,5 +1,7 @@
 # Tests y CI
 
+[English](../en/tests-and-ci.md) | Español
+
 ## Tests
 
 Los tests están en `test_api.py` y `test_refresh.py`. Los de `test_api.py`

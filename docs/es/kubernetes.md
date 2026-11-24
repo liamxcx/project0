@@ -1,5 +1,7 @@
 # Kubernetes
 
+[English](../en/kubernetes.md) | Español
+
 Clúster local con kind, con un control plane y dos workers. Se crea con
 `kind create cluster --config kind-config.yaml`, y `kubectl get nodes` tiene
 que enseñar los tres nodos en `Ready`. Se borra con
@@ -360,7 +362,7 @@ de su plantilla. Las ValidatingAdmissionPolicy vienen con Kubernetes desde la
 1.30, así que no hay que instalar nada.
 
 Se comprueba haciéndose pasar por la ServiceAccount, con `--dry-run=server`
-para que no se guarde nada. La copia del collector se crea, y la misma copia
+para que no se guarde nada. La copia del collector se acepta, y la misma copia
 con otra imagen se rechaza:
 
 ```bash

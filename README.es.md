@@ -1,5 +1,7 @@
 # project0
 
+[English](README.md) | Español
+
 ![CI](https://github.com/liamxcx/project0/actions/workflows/ci.yml/badge.svg?branch=main)
 
 Herramienta de estadísticas de League of Legends. Guarda las
@@ -168,12 +170,12 @@ platform/                 lo que va fuera del chart: namespaces, StorageClass, G
 docker-compose.yml        el entorno de desarrollo
 docker-compose.test.yml   la base y el Redis de los tests
 kind-config.yaml          el clúster local
-docs/                     la documentación
-MEJORAS.md                lo que falta y la deuda técnica
+docs/                     la documentación, en docs/en y docs/es
+MEJORAS.md                lo que falta y la deuda técnica, en español
 ```
 
-El código, las tablas y las rutas están en inglés. Los comentarios, los
-mensajes de consola y la documentación, en español.
+El código, las tablas y las rutas están en inglés. Los comentarios y los
+mensajes de consola, en español. La documentación, en inglés y en español.
 
 ## Aviso legal
 
