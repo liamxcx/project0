@@ -246,4 +246,4 @@ estaba.
 
 El backup va en formato custom de `pg_dump` y la carpeta `backups/` está
 fuera de Git. Se hace a mano, y el backup automático está en
-[MEJORAS.md](../MEJORAS.md).
+[MEJORAS.md](../../MEJORAS.md).

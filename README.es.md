@@ -65,7 +65,7 @@ botón de la web  ──▶  API  ─────┘          │              p
 ```
 
 Cómo se limita lo que puede crear la API está en
-[docs/kubernetes.md](docs/kubernetes.md#permisos-de-la-api).
+[docs/es/kubernetes.md](docs/es/kubernetes.md#permisos-de-la-api).
 
 Cuando alguien abre la página, todo entra por Traefik. Manda `/api/` a la
 API, quitándole el prefijo, y lo demás al frontend:
@@ -131,25 +131,25 @@ docker compose up
 
 La página queda en `http://localhost:8080` y la API en
 `http://localhost:8000`. Las variables del `.env` y el resto de comandos
-están en [docs/desarrollo.md](docs/desarrollo.md).
+están en [docs/es/desarrollo.md](docs/es/desarrollo.md).
 
 En el clúster la página queda en `http://localhost`, y Grafana, Prometheus y
 Alertmanager en `http://grafana.localhost`, `http://prometheus.localhost` y
 `http://alertmanager.localhost`. La instalación desde cero está en
-[docs/kubernetes.md](docs/kubernetes.md#instalar-desde-cero).
+[docs/es/kubernetes.md](docs/es/kubernetes.md#instalar-desde-cero).
 
 ## Documentación
 
 | Fichero | Qué cuenta |
 |---|---|
-| [desarrollo.md](docs/desarrollo.md) | Requisitos, configuración, Compose y logs |
-| [collector.md](docs/collector.md) | Qué pide a Riot y cómo lo guarda |
-| [base-de-datos.md](docs/base-de-datos.md) | Las tablas, la nota y los sellos, las migraciones y los backups |
-| [api.md](docs/api.md) | Los endpoints, la caché y la ETag |
-| [frontend.md](docs/frontend.md) | La página, nginx, Data Dragon y la CSP |
-| [tests-y-ci.md](docs/tests-y-ci.md) | Los tests y el pipeline |
-| [kubernetes.md](docs/kubernetes.md) | Instalar, desplegar, volver atrás y cada pieza en el clúster |
-| [monitorizacion.md](docs/monitorizacion.md) | Prometheus, Grafana y Alertmanager, las métricas de la API, el dashboard y las alertas |
+| [desarrollo.md](docs/es/desarrollo.md) | Requisitos, configuración, Compose y logs |
+| [collector.md](docs/es/collector.md) | Qué pide a Riot y cómo lo guarda |
+| [base-de-datos.md](docs/es/base-de-datos.md) | Las tablas, la nota y los sellos, las migraciones y los backups |
+| [api.md](docs/es/api.md) | Los endpoints, la caché y la ETag |
+| [frontend.md](docs/es/frontend.md) | La página, nginx, Data Dragon y la CSP |
+| [tests-y-ci.md](docs/es/tests-y-ci.md) | Los tests y el pipeline |
+| [kubernetes.md](docs/es/kubernetes.md) | Instalar, desplegar, volver atrás y cada pieza en el clúster |
+| [monitorizacion.md](docs/es/monitorizacion.md) | Prometheus, Grafana y Alertmanager, las métricas de la API, el dashboard y las alertas |
 
 ## Estructura
 
