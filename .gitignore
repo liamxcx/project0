@@ -1,4 +1,7 @@
+# Cualquier variante del .env lleva secretos; solo se sube la plantilla
 .env
+.env.*
+!.env.example
 .venv/
 __pycache__/
 *.pyc
